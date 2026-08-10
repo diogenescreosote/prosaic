@@ -1931,6 +1931,18 @@ def suppresses_caption(meta: Dict) -> bool:
 ATTACHMENT_COVER_SHEETS = {"subp010", "subp025"}
 
 
+def form_display_id(form_id: str) -> str:
+    """`subp010` -> `SUBP-010`: the id a clerk, a caption, and the
+    Judicial Council itself use, rather than the registry's filename
+    spelling.
+
+    Registry ids are lowercase and unpunctuated because they are also
+    filenames; every JC id is letters then digits, so one rule restores
+    the hyphen for all of them.
+    """
+    return re.sub(r"^([A-Za-z]+)-?(\d+)$", r"\1-\2", form_id).upper()
+
+
 def is_form_attachment(meta: Dict) -> bool:
     """Whether this source is a continuation of a JC form item.
 
@@ -1939,7 +1951,7 @@ def is_form_attachment(meta: Dict) -> bool:
     sheet settles it regardless of title.
 
     Note what this deliberately does NOT catch: a declaration behind a
-    CIV-110. That is a distinct document incorporated by the request,
+    motion's own cover form. That is a distinct document incorporated by it,
     and California practice captions it normally. The rule here is
     about text that continues a form, not about everything that
     happens to sit behind one.
@@ -1978,7 +1990,8 @@ def require_attachment_has_no_caption(meta: Dict, source_name: str) -> None:
         f"An attachment continues the form; the form already carried the "
         f"caption. Add `no_caption: true` to the front matter.\n\n"
         f"If this really is a standalone document that merely travels "
-        f"behind a form (a declaration attached to a CIV-110, say), give it "
+        f"behind a form (a declaration attached to a motion's cover form, "
+           f"say), give it "
         f"a paper_title that does not begin \"ATTACHMENT\"."
     )
 
@@ -3330,7 +3343,7 @@ def main() -> None:
                 f"Unsupported cover_sheet value: {cover_sheet!r}. {exc}"
             )
         form_fill.prepend(output_path, cover_path)
-        print(f"Prepended {cover_sheet.upper()} cover sheet from {cover_path}")
+        print(f"Prepended {form_display_id(cover_sheet)} cover sheet from {cover_path}")
 
     # Consumer/employee notices ride alongside the document, not inside
     # it: each is served on a different person, with a copy of the
@@ -3349,7 +3362,7 @@ def main() -> None:
             stamp_draft_banner(Path(path), banner)
 
     for path in notices:
-        print(f"Wrote {CONSUMER_NOTICE_FORM.upper()} consumer notice {path}")
+        print(f"Wrote {form_display_id(CONSUMER_NOTICE_FORM)} consumer notice {path}")
 
     print(f"Wrote {output_path}")
     # The sidecar quotes the verbatim sealed text, so it accompanies only
