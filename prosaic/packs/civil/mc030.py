@@ -37,8 +37,6 @@ class DeclarationContext:
 
 
 def build_values(matter: Matter, context: DeclarationContext) -> dict[str, str | bool]:
-    if not isinstance(context, DeclarationContext):  # pragma: no cover - Form.fill checks first
-        raise TypeError(f"expected DeclarationContext, got {type(context).__name__}")
     declarant = matter.party(context.declarant_party_id)
 
     problems = caption_problems(matter, declarant)

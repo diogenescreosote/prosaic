@@ -60,10 +60,6 @@ class Form:
         return resources.files(self.package).joinpath(self.resource).read_bytes()
 
     def fill(self, matter: Matter, context: object) -> FilledForm:
-        if not isinstance(context, self.context_type):
-            raise FormContextError(
-                f"{self.number} takes a {self.context_type.__name__}, got {type(context).__name__}"
-            )
         values = self.build_values(matter, context)
         return FilledForm(
             number=self.number,
@@ -71,6 +67,39 @@ class Form:
             values=values,
             pdf=fill_acroform(self.blank(), values),
         )
+
+
+def define_form[C](
+    *,
+    number: str,
+    title: str,
+    package: str,
+    resource: str,
+    context_type: type[C],
+    build: Callable[[Matter, C], dict[str, str | bool]],
+) -> Form:
+    """Wrap a typed builder as a ``Form``.
+
+    The adapter is where static typing meets the registry: builders keep
+    their precise context parameter, and the runtime check here is what
+    makes calling through the type-erased ``Form`` safe.
+    """
+
+    def build_values(matter: Matter, context: object) -> dict[str, str | bool]:
+        if not isinstance(context, context_type):
+            raise FormContextError(
+                f"{number} takes a {context_type.__name__}, got {type(context).__name__}"
+            )
+        return build(matter, context)
+
+    return Form(
+        number=number,
+        title=title,
+        package=package,
+        resource=resource,
+        context_type=context_type,
+        build_values=build_values,
+    )
 
 
 @dataclass(frozen=True, slots=True)
