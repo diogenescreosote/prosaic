@@ -283,7 +283,7 @@ Additional YAML keys supported by `cover_sheet: mc030`:
   is `"See attached Declaration of <declarant_name>."`)
 
 The `court_county` field should hold just the county name
-(e.g. `"ALAMEDA"`) rather than `"COUNTY OF SAN FRANCISCO"` when used with
+(e.g. `"SAN FRANCISCO"`) rather than `"COUNTY OF SAN FRANCISCO"` when used with
 MC-030, because the form already prints the `"SUPERIOR COURT OF
 CALIFORNIA, COUNTY OF "` label. The generator accepts either form
 and strips the redundant prefix.
@@ -306,7 +306,7 @@ filer_email: "sally@sattlerlawgroup.example.com"
 filer_role: "Attorney for Petitioner JOHN SMITH"
 
 court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"
-court_county: "ALAMEDA"
+court_county: "SAN FRANCISCO"
 court_street_address: "400 McAllister Street"
 court_mailing_address: "400 McAllister Street"
 court_city_zip: "San Francisco, CA 94102"
@@ -368,7 +368,7 @@ Additional YAML keys supported by `cover_sheet: civ110`:
   `court_branch` — optional
 
 The `court_county` field should hold just the county name
-(e.g. `"ALAMEDA"`) rather than `"COUNTY OF EXAMPLE"`. The generator
+(e.g. `"SAN FRANCISCO"`) rather than `"COUNTY OF EXAMPLE"`. The generator
 accepts either form and strips the redundant prefix.
 
 Example:
@@ -386,7 +386,7 @@ filer_email: "jane.roe@example.com"
 filer_role: "Petitioner, In Pro Per"
 
 court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"
-court_county: "ALAMEDA"
+court_county: "SAN FRANCISCO"
 
 petitioner: "JANE ROE"
 respondent: "BAYSIDE MUNICIPAL TRANSIT DISTRICT"
@@ -470,7 +470,7 @@ filer_email: "jane.roe@example.com"
 filer_role: "Petitioner, In Pro Per"
 
 court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"
-court_county: "ALAMEDA"
+court_county: "SAN FRANCISCO"
 court_street_address: "400 McAllister Street"
 court_mailing_address: "400 McAllister Street"
 court_city_zip: "San Francisco, CA 94102"
@@ -545,7 +545,7 @@ which per-form keys it accepts are documented per field in the registry
 descriptor — see `sc form info <form_id>`.
 
 The `court_county` field should hold just the county name (e.g.
-`"ALAMEDA"`) rather than `"COUNTY OF EXAMPLE"`; the generator accepts
+`"SAN FRANCISCO"`) rather than `"COUNTY OF EXAMPLE"`; the generator accepts
 either form and strips the redundant prefix.
 
 ### Consumer/employee notices (`consumer_notices`)
@@ -644,7 +644,7 @@ paper_subtitle:
   public: "PUBLIC -- REDACTS MATERIALS FROM CONDITIONALLY SEALED RECORD"
 
 redactions:
-  "Robin Vance": "H.R."
+  "Robin Vance": "R.V."
 ```
 
 Build with `VARIANT=sealed` or `VARIANT=public` (or the underlying
@@ -1364,14 +1364,14 @@ Example:
 
 ```yaml
 redactions:
-  "Robin Vance": "H.R."
-  "Robin": "H.R."
-  "Robin's": "H.R.'s"
+  "Robin Vance": "R.V."
+  "Robin": "R.V."
+  "Robin's": "R.V.'s"
 ```
 
 ```md
-I am the father of \redact{Robin Vance}.
-Whitfield told me that \redact{Robin} missed me.
+The account was opened by \redact{Robin Vance}.
+Whitfield confirmed that \redact{Robin} was never notified.
 This phrase is \redact{fully stated in sealed form}{pared down in public form}.
 This phrase is \redact{sealed detail}{public summary}{C7 reputational harm; not required for public adjudication}.
 ```

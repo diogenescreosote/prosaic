@@ -24,7 +24,7 @@ def sample_pleading(paragraphs: int = 3) -> Pleading:
     return Pleading(
         title="Declaration of Jane Doe in Support of Motion to Compel",
         attorney_block=("Jane Doe", "123 Example Lane", "Oakland, CA 94601", "Self-represented"),
-        court_name="Superior Court of California, County of Alameda",
+        court_name="Superior Court of California, County of San Francisco",
         plaintiff_caption="Jane Doe",
         defendant_caption="Roe Logistics, Inc.",
         case_number="26CV012345",
@@ -67,7 +67,7 @@ def test_pleading_rejects_a_blank_title() -> None:
         Pleading(
             title="  ",
             attorney_block=("Jane Doe",),
-            court_name="Superior Court of California, County of Alameda",
+            court_name="Superior Court of California, County of San Francisco",
             plaintiff_caption="Jane Doe",
             defendant_caption="Roe Logistics, Inc.",
             case_number="26CV012345",
@@ -82,7 +82,7 @@ def test_pleading_rejects_an_oversized_attorney_block() -> None:
         Pleading(
             title="Answer",
             attorney_block=tuple(f"line {n}" for n in range(8)),
-            court_name="Superior Court of California, County of Alameda",
+            court_name="Superior Court of California, County of San Francisco",
             plaintiff_caption="Jane Doe",
             defendant_caption="Roe Logistics, Inc.",
             case_number="26CV012345",

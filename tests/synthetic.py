@@ -56,13 +56,13 @@ def doe_v_roe() -> Matter:
         title="Doe v. Roe Logistics, Inc.",
         case_number=Fact.from_document("26CV012345", document_id="doc-complaint", page=1),
         court=Court(
-            county="Alameda",
+            county="San Francisco",
             branch="Doe Memorial Courthouse",
             address=Address(
-                street="1000 Center Street",
-                city="Oakland",
+                street="400 McAllister Street",
+                city="San Francisco",
                 state="CA",
-                zip_code="94601",
+                zip_code="94102",
             ),
             department="99",
         ),
@@ -74,9 +74,9 @@ def doe_v_roe() -> Matter:
                 self_represented=True,
                 address=Address(
                     street="123 Example Lane",
-                    city="Oakland",
+                    city="San Francisco",
                     state="CA",
-                    zip_code="94601",
+                    zip_code="94102",
                 ),
             ),
             Party(
@@ -94,7 +94,7 @@ def doe_v_roe() -> Matter:
                 firm="Stone & Flint LLP",
                 address=Address(
                     street="500 Flint Plaza",
-                    city="Oakland",
+                    city="San Francisco",
                     state="CA",
                     zip_code="94612",
                 ),

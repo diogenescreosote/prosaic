@@ -20,7 +20,7 @@ def strip_county_prefix(county: str) -> str:
 
     JC forms print "SUPERIOR COURT OF CALIFORNIA, COUNTY OF" as static
     label text, so the field should receive only the county name
-    (e.g. ``"ALAMEDA"``), not the full phrase.
+    (e.g. ``"SAN FRANCISCO"``), not the full phrase.
     """
     county = (county or "").strip()
     upper = county.upper()

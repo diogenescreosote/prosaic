@@ -85,10 +85,10 @@ Sealing Exhibits \exhibit{note_first} through \exhibit{note_last} ...
 Sealing \exhibit{note_first} through \exhibit{note_last} ...
 
 # WRONG — renders "attached as Exhibit Exhibit F"
-A true and correct copy is attached as Exhibit \exhibit{records_request}.
+A true and correct copy is attached as Exhibit \exhibit{vendor_invoice}.
 
 # RIGHT
-A true and correct copy is attached as \exhibit{records_request}.
+A true and correct copy is attached as \exhibit{vendor_invoice}.
 ```
 
 Before finalizing any source file that references exhibits, check the
