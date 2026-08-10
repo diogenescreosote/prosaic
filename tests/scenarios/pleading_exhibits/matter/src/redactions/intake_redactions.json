@@ -1,0 +1,13 @@
+{
+  "_comment": "SCENARIO FIXTURE — fictional. Redacts the sentinel phrase from the generated intake_form.pdf exhibit.",
+  "source_pdf": "../../exhibits/intake_form.pdf",
+  "output_pdf": "../../build_cache/intake_redacted_build.pdf",
+  "redactions": [
+    {
+      "type": "redact_clause",
+      "description": "remove the unredacted intake sentinel",
+      "search_text": "SENTINEL-INTAKE-UNREDACTED",
+      "label": "[REDACTED]"
+    }
+  ]
+}

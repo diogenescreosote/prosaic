@@ -1,0 +1,22 @@
+# SCENARIO FIXTURE — fictional test matter shipped with prosaic.
+# All parties, case numbers, and facts are invented (Smith v. Roe,
+# 24CV00000). Exhibit binaries are generated at test setup.
+envelopes:
+  motion_packet:
+    sources:
+      - Declaration of Jane Roe.md
+      - file: Proposed Order.md
+        docx: true
+      - Memo of Points.md
+    copies:
+      - src: assets/static_notice.pdf
+        dest: notice_copy.pdf
+  sent_packet:
+    sent_on: 2026-01-15
+    sources:
+      - Proposed Order.md
+  redacted_packet:
+    sources:
+      - type: redacted_pdf
+        config: "redactions/intake_redactions.json"
+        dest: "intake_public.pdf"

@@ -1,0 +1,7 @@
+envelopes:
+  # A records subpoena plus the CCP §§ 1985.3/1985.6 notices it cannot
+  # lawfully be served without — one SUBP-025 per consumer, emitted from
+  # the source's own consumer_notices: list.
+  subpoena_package:
+    sources:
+      - Subpoena to Example Bank.md

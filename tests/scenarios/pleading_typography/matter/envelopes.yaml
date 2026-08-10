@@ -1,0 +1,11 @@
+envelopes:
+  typography:
+    sources:
+      - file: Declaration of Jane Roe.md
+        docx: true
+      - Proof of Electronic Service.md
+      - Proof of Service by Mail.md
+  negative_control:
+    sources:
+      - Spaced Dash Control.md
+      - Short Title Probe.md
