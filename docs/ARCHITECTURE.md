@@ -81,3 +81,75 @@ below it and adds no computation of its own.
   so no test depends on the network.
 - A leak guard walks every tracked file and every commit message for
   content that must not appear in this repository, and runs in CI.
+
+## The operational pipeline
+
+Operationally, prosaic is a pipeline that turns the scattered raw material of a
+legal case into an organized, searchable, AI-navigable matter
+directory, and turns Markdown drafting into filing-ready documents.
+
+```
+ external sources                 the matter directory                    outputs
+┌──────────────┐   connectors   ┌──────────────────────────────┐   build   ┌──────────────┐
+│ Gmail        │ ─────────────▶ │ inbox/  → assets/ + INDEX.md │ ────────▶ │ out/<envelope>│
+│ Portals      │   (scheduled   │ pleadings/   discovery/      │  (sc      │  pleading PDFs│
+│ MyCase       │    12-hourly)  │ KNOWLEDGE.md TODO.md         │   build)  │  + DOCX       │
+│ (yours here) │                │ QUESTIONS.md src/*.md        │           └──────────────┘
+└──────────────┘                └──────────────┬───────────────┘
+                                               │ AI triage (headless
+                                               │ Claude Code pass per sync)
+                                               ▼
+                                  catalogs, routing, knowledge updates
+```
+
+### The five layers
+
+1. **Matter layout** ([matter-layout.md](matter-layout.md)) — the
+   directory convention every other layer assumes. Plain files,
+   Markdown metadata, git-friendly.
+
+2. **Connectors** ([connectors.md](connectors.md)) — small modules
+   that pull external sources into the matter. Each conforms to a
+   one-page contract (invoke with the matter dir; print `NEW <path>`
+   lines; keep state in `.state/<name>.json`). Shipped: `gmail`,
+   `mycase`.
+
+3. **Sync + scheduling** ([scheduling.md](scheduling.md)) —
+   `sync/matter_sync.sh` runs every configured connector, then one AI
+   triage pass over everything new. A launchd agent fires it every 12
+   hours with catch-up-once semantics after downtime.
+
+4. **AI triage** ([triage.md](triage.md)) — a headless
+   [Claude Code](https://claude.com/claude-code) session, running
+   inside the matter directory under the matter's `CLAUDE.md`
+   contract, catalogs each new file, routes staged documents to their
+   homes, and folds case-significant facts into `KNOWLEDGE.md`.
+
+5. **Pleading generation**
+   ([../pleading/pleading_markdown_spec.md](../pleading/pleading_markdown_spec.md))
+   — Markdown + YAML front matter → California-style 28-line pleading
+   PDF (and DOCX), assembled into filing "envelopes" defined in
+   `envelopes.yaml`, plus Judicial Council form fillers and a PDF
+   redactor.
+
+### Data-flow invariants
+
+- **Originals in, derivatives beside.** Nothing ever modifies received
+  bytes; OCR layers, text sidecars, and transcripts are siblings.
+- **Everything lands in the index.** A connector or triage pass that
+  adds a file also adds the row describing it (INDEX.md, CATALOG.md).
+- **State is per-matter and disposable.** Connector state lives in the
+  matter's `.state/` (gitignored); deleting it means re-pulling, never
+  data loss, because pulls are idempotent (existing exports are
+  skipped by name or content hash).
+- **Failure is quiet and retried.** A failed connector logs, exits
+  nonzero, and leaves the sync guard un-advanced, so the next
+  scheduled firing retries; nothing half-writes the matter.
+
+### Repository ↔ matter separation
+
+The repo (this code) contains no case data. A matter directory
+contains no code — just config (`matter.yaml`, `envelopes.yaml`), a
+symlinked `Makefile`, and content. Multiple matters share one repo
+checkout; each schedules its own sync. This mirrors how the system is
+actually run across several concurrent live matters.

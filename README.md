@@ -91,12 +91,43 @@ the LLM operator against a serialized matter.
 - **Operator** — a tool loop giving the model exactly three capabilities:
   read the case model, compute a deadline through the engine, list the
   pack's forms.
+- **The matter directory** — a plain-files convention for a live case
+  (evidence, work product, knowledge notes) that the rest of the system
+  reads and writes: [docs/matter-layout.md](docs/matter-layout.md).
+- **Connectors and scheduled sync** — Gmail and law-firm client portals
+  pulled into the matter on a schedule, then catalogued by a headless
+  triage pass: [docs/connectors.md](docs/connectors.md),
+  [docs/scheduling.md](docs/scheduling.md), [docs/triage.md](docs/triage.md).
+- **Envelope builds** — Markdown sources with YAML front matter rendered
+  to 28-line pleading PDFs and DOCX, assembled with their exhibits and
+  cover forms into the filing packets named in `envelopes.yaml`, in
+  public and sealed variants: [docs/forms.md](docs/forms.md).
 
-113 tests, 97% line coverage, `mypy --strict` clean.
+368 tests, 97% line coverage on the `prosaic` package, `mypy --strict`
+clean.
 
 **Status:** 0.1.0. Young code: the engine and the six forms are tested
 against the statutes and the official blanks, but no filing produced by this
 codebase has been through a clerk's window yet. Treat it accordingly.
+
+## Documentation
+
+Start with [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — the layers and
+how they fit — or [docs/technical-overview.md](docs/technical-overview.md)
+for the end-to-end tour.
+
+| | |
+|---|---|
+| Running it | [install.md](docs/install.md) · [matter-layout.md](docs/matter-layout.md) · [scheduling.md](docs/scheduling.md) · [backup.md](docs/backup.md) |
+| Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) |
+| Getting documents out | [forms.md](docs/forms.md) · [FORM_PACKS.md](docs/FORM_PACKS.md) · [DEADLINES.md](docs/DEADLINES.md) |
+| Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
+| Working on it | [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) |
+
+Decisions are recorded twice, by scope: [docs/DECISIONS.md](docs/DECISIONS.md)
+holds the few that define what the engine is, and [design/](design/) holds
+the numbered ADRs for choices inside it. Component contracts — what each
+piece must accomplish, independent of how — live in [specs/](specs/).
 
 ## License
 
