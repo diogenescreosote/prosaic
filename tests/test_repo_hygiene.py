@@ -44,6 +44,18 @@ GENERIC_HOME_NAMES = frozenset(
     }
 )
 
+# Service accounts that CI runs as. The username check below asks "does
+# the author's account name appear in the tree?"; on a hosted runner the
+# answer is about a shared build account whose name is also an ordinary
+# English word ("runner" matches `runner.invoke`, `runner_shim.c`, and
+# every use of the word in prose). Skipping them costs nothing: a leak
+# of the author's username is what the check exists for, and that check
+# runs on the author's machine and in the pre-push hook.
+CI_ACCOUNT_NAMES = frozenset(
+    {"runner", "ubuntu", "vagrant", "circleci", "jenkins", "docker",
+     "admin", "build", "github", "travis", "buildkite"}
+)
+
 HOME_PATH = re.compile(r"/(?:Users|home)/([A-Za-z0-9._$<{-][^/\s\"'`,;:)\]}]*)")
 
 # Shape-matched credential prefixes. Deliberately narrow: a pattern
@@ -138,7 +150,7 @@ def test_no_current_username_anywhere(tracked_files: list[Path]) -> None:
     through an absolute path.
     """
     username = os.environ.get("USER") or os.environ.get("LOGNAME") or ""
-    if len(username) < 4 or username in GENERIC_HOME_NAMES:
+    if len(username) < 4 or username in GENERIC_HOME_NAMES | CI_ACCOUNT_NAMES:
         pytest.skip(f"username {username!r} too generic to match safely")
 
     pattern = re.compile(rf"\b{re.escape(username)}\b")
