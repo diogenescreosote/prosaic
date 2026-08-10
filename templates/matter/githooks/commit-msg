@@ -1,0 +1,31 @@
+#!/bin/sh
+#
+# Validate a matter commit message against the docket-shaped convention
+# (docs/commits.md, ADR-0014).
+#
+# Errors — an unknown or missing type — fail the commit; they cost one
+# word to fix. Warnings — a missing Source: or Filed: footer, an
+# overlong subject — print and let the commit through, because the
+# moment you are committing during a filing is not the moment to be
+# argued with by a hook.
+#
+# Installed by `sc hooks <matter>`; bypass with `git commit --no-verify`.
+
+set -e
+
+sc=""
+for candidate in \
+    "${PROSAIC_ROOT:+$PROSAIC_ROOT/cli/sc}" \
+    "$(git rev-parse --show-toplevel)/../prosaic/cli/sc" \
+    "$HOME/prosaic/cli/sc"; do
+  [ -n "$candidate" ] || continue
+  if [ -x "$candidate" ]; then sc="$candidate"; break; fi
+done
+
+if [ -z "$sc" ]; then
+  echo "commit-msg: prosaic not found; skipping the message check." >&2
+  echo "            Set PROSAIC_ROOT to enable it." >&2
+  exit 0
+fi
+
+exec "$sc" commit-check "$1"

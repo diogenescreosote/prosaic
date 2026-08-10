@@ -1,0 +1,39 @@
+#!/bin/sh
+#
+# Back the matter up after every commit.
+#
+# The threat is not disk failure so much as a stray `rm -rf`, a bad
+# `git checkout`, or a sync client eating the tree. A backup that
+# requires remembering to run it is a backup you find out about after
+# you needed it, so this runs on every commit.
+#
+# Deliberately non-fatal: a failed push must never fail a commit. The
+# commit is the record; the backup is a copy of it. Losing the copy is
+# recoverable by pushing later, and a hook that refuses commits when
+# the network is down would just be turned off.
+#
+# Configure the destination with a `backup:` block in matter.yaml, then
+# `sc backup init .`. With none configured, this exits quietly.
+
+repo_root=$(git rev-parse --show-toplevel)
+
+sc=""
+for candidate in \
+    "${PROSAIC_ROOT:+$PROSAIC_ROOT/cli/sc}" \
+    "$repo_root/../prosaic/cli/sc" \
+    "$HOME/prosaic/cli/sc"; do
+  [ -n "$candidate" ] || continue
+  if [ -x "$candidate" ]; then sc="$candidate"; break; fi
+done
+
+[ -n "$sc" ] || exit 0
+
+# No backup configured is the normal quiet case, not an error.
+grep -q '^backup:' "$repo_root/matter.yaml" 2>/dev/null || exit 0
+
+if ! "$sc" backup push "$repo_root"; then
+  echo "post-commit: backup push failed; the commit stands." >&2
+  echo "             Retry with: sc backup push $repo_root" >&2
+fi
+
+exit 0

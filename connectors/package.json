@@ -1,0 +1,14 @@
+{
+  "name": "prosaic-connectors",
+  "version": "0.1.0",
+  "private": true,
+  "description": "Source connectors for prosaic matters (gmail, mycase).",
+  "license": "MIT",
+  "dependencies": {
+    "@google-cloud/local-auth": "^3.0.1",
+    "cheerio": "^1.0.0",
+    "googleapis": "^148.0.0",
+    "js-yaml": "^4.1.0",
+    "puppeteer": "^24.0.0"
+  }
+}

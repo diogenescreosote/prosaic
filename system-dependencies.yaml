@@ -1,0 +1,178 @@
+# system-dependencies.yaml — the binaries prosaic shells out to.
+#
+# `pleading/requirements.txt` and `connectors/package.json` declare the
+# language dependencies. This file declares the rest: the programs the
+# pipeline invokes as subprocesses, which until now existed only as
+# prose in docs/ and were therefore discovered by a failing build.
+#
+# It is the single source for all of them. `sc deps` probes this list
+# and tells you what is missing; `sc deps --format apt` emits the
+# package list the Dockerfile installs; `tests/test_system_dependencies.py`
+# checks the list against what the code actually invokes, in both
+# directions, so a new subprocess call cannot land undeclared.
+#
+# Fields
+#   binary        what the code invokes, as it must appear on PATH
+#   why           what breaks without it, in one line
+#   used_by       the call sites, so the entry can be verified
+#   required      true = a documented workflow fails outright
+#   platforms     where the dependency applies at all
+#   apt / brew    package name per manager; null = not installable there
+#   in_container  whether the Linux image installs it
+#   no_package_reason  required only when no manager packages it at all,
+#                 so "nothing to install" is a stated fact rather than
+#                 an omission someone forgot to fill in
+#
+# Adding a subprocess call to the codebase means adding an entry here.
+# The test enforces it.
+
+dependencies:
+  - binary: python3
+    why: runs the CLI, the pleading generator, and the form fillers
+    used_by: [cli/sc, pleading/, sync/matter_sync.sh]
+    required: true
+    minimum_version: "3.10"
+    platforms: [darwin, linux]
+    apt: python3
+    brew: python@3.12
+    in_container: true
+
+  - binary: node
+    why: runs every connector; Puppeteer drives the portal logins
+    used_by: [connectors/, sync/matter_sync.sh]
+    required: true
+    minimum_version: "18"
+    platforms: [darwin, linux]
+    apt: nodejs
+    brew: node
+    in_container: true
+
+  - binary: npm
+    why: installs the connectors' Node dependencies
+    used_by: [Dockerfile, docs/technical-overview.md]
+    required: true
+    platforms: [darwin, linux]
+    # Bundled with Node nearly everywhere, which is exactly why it
+    # earns an entry: Debian packages it separately, so the image built
+    # fine and then failed at `npm ci`. Homebrew's node does include
+    # it, hence no brew package.
+    apt: npm
+    brew: null
+    in_container: true
+
+  - binary: git
+    why: a matter's history and provenance; ADR-0001 makes it the audit trail
+    used_by: [cli/sc init, matter conventions]
+    required: true
+    platforms: [darwin, linux]
+    apt: git
+    brew: git
+    in_container: true
+
+  - binary: pdftotext
+    why: writes the .txt sidecar beside every PDF the portal connectors pull
+    used_by: [pleading/tests/test_forms_adversarial.py]
+    required: true
+    platforms: [darwin, linux]
+    apt: poppler-utils
+    brew: poppler
+    in_container: true
+
+  - binary: ocrmypdf
+    why: adds a text layer to scanned pages on triage, without touching pages that have one
+    used_by: [pleading/ocr_supplement.py]
+    required: true
+    platforms: [darwin, linux]
+    # Pulls ghostscript, qpdf, unpaper and pngquant transitively on both
+    # managers. They are real dependencies but nothing here names them,
+    # so they get no entry of their own.
+    apt: ocrmypdf
+    brew: ocrmypdf
+    in_container: true
+
+  - binary: tesseract
+    why: the OCR engine ocrmypdf drives; a missing eng language pack fails at run time, not install time
+    used_by: [pleading/ocr_supplement.py, via ocrmypdf]
+    required: true
+    platforms: [darwin, linux]
+    apt: tesseract-ocr-eng
+    brew: tesseract
+    in_container: true
+
+  - binary: chromium
+    why: the browser Puppeteer drives for the portal connectors
+    used_by: [connectors/core/portal_common.js]
+    required: true
+    platforms: [linux]
+    # macOS gets Chrome from Puppeteer's own download, which works and
+    # is per-user. In the image that download needs a pile of shared
+    # libraries anyway, so install the distro browser and point
+    # Puppeteer at it (PUPPETEER_SKIP_DOWNLOAD in the Dockerfile).
+    apt: chromium
+    brew: null
+    in_container: true
+
+  - binary: security
+    why: reads credentials from the macOS Keychain under ADR-0012's keychain backend
+    used_by: [connectors/core/secrets.js]
+    required: false
+    platforms: [darwin]
+    apt: null
+    brew: null
+    no_package_reason: ships with macOS; elsewhere the env backend covers it
+    in_container: false
+
+  - binary: claude
+    why: the headless AI triage pass that routes inbox files into assets
+    used_by: [sync/matter_sync.sh, tests/harness/ai.py]
+    required: false
+    platforms: [darwin, linux]
+    # Everything except triage and the AI-judged tests works without
+    # it. Installed via npm, not a system package manager, and it needs
+    # credentials the image cannot carry.
+    apt: null
+    brew: null
+    npm: "@anthropic-ai/claude-code"
+    in_container: false
+
+  - binary: gh
+    why: creates and verifies the private GitHub repo a matter backs up to
+    used_by: [cli/sc backup]
+    required: false
+    platforms: [darwin, linux]
+    # Only needed for backup.kind "github"; the default local backend
+    # is plain git and needs nothing. Not in the image: it would carry
+    # no credentials there anyway.
+    apt: gh
+    brew: gh
+    in_container: false
+
+  - binary: rg
+    why: the matter conventions have agents verify em-dash spacing with it; Phase 3 search is built on it
+    used_by: [templates/matter/CLAUDE.md, docs/writing-style.md]
+    required: false
+    platforms: [darwin, linux]
+    apt: ripgrep
+    brew: ripgrep
+    in_container: true
+
+  - binary: ffmpeg
+    why: converts evidence audio to the 16 kHz mono WAV whisper expects
+    used_by: [docs/stt.md]
+    required: false
+    platforms: [darwin, linux]
+    apt: ffmpeg
+    brew: ffmpeg
+    # Transcription stays on the host: a Linux container on macOS runs
+    # in a VM that cannot reach Metal, so putting the speech stack in
+    # the image would produce a slow, silently worse transcript.
+    in_container: false
+
+  - binary: whisper-cli
+    why: local-only transcription of privileged audio; the recordings never leave the machine
+    used_by: [docs/stt.md]
+    required: false
+    platforms: [darwin, linux]
+    apt: null
+    brew: whisper-cpp
+    in_container: false

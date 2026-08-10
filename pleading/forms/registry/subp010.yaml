@@ -1,0 +1,563 @@
+# SUBP-010 — Deposition Subpoena for Production of Business Records
+#
+# A records-only subpoena: it commands a custodian of business records
+# to PRODUCE records to a deposition officer. There is no personal-
+# appearance option anywhere on this form — a witness who must also
+# testify needs SUBP-020 (records + appearance) or SUBP-030
+# (appearance at deposition). See agent_guide for the family.
+#
+# Every mapping below was verified empirically on the shipped blank
+# (fill each field with its own logical name, rasterize, look). Two
+# things that verification caught, and that reading names alone would
+# get wrong:
+#
+# 1. THE ITEM-1 FIELD NAMES ARE HEARING NAMES. The production block's
+#    widgets are named HearingDept_ft / HearingDate_dt / HearingTime_dt
+#    — recycled from the hearing-block of other JC forms. They are the
+#    deposition officer, the production date, and the production time.
+#    Nothing on SUBP-010 concerns a hearing.
+# 2. ITEM 3 IS A ONE-LINE FIELD. The records description looks like a
+#    paragraph-sized area on the printed form, but the widget is a
+#    single-line box ~12 pt tall (rect [50.7, 235.3, 574.4, 247.3]).
+#    Any real description overflows it, which is why the field carries
+#    fit: overflow_attachment and the form prints its own "Continued on
+#    Attachment 3." box right underneath.
+
+form: subp010
+title: Deposition Subpoena for Production of Business Records
+domain: ca/civil              # any CA civil action
+revision: "2012-01"           # form face: "SUBP-010 [Rev. January 1, 2012]"
+source_url: https://courts.ca.gov/documents/subp010.pdf
+blank: subp010.pdf
+
+# XFA: the blank is a LiveCycle hybrid (its /AcroForm carries an /XFA
+# packet). XFA-aware viewers would render the unfilled template, so the
+# engine strips /XFA after filling. Do not change this.
+technology: xfa
+
+# UI chrome under SUBP-010[0].#pageSet[0].LastPage[0].PXFooter[0].
+# FooterButtons[0] — Print/Save/Clear buttons and the "For your
+# protection and privacy…" banner, drawn on page 2. Stripped from
+# service copies.
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+fields:
+  # ---- Page 1: attorney/party block ----------------------------------
+  attorney_block:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].AttyPartyInfo[0].TextField1[0]"
+    page: 1
+    doc: >-
+      ATTORNEY OR PARTY WITHOUT ATTORNEY (Name, State Bar number, and
+      address) — one multiline box, not discrete lines; filled from
+      filer_name (+ SBN) and filer_address_lines.
+    auto: attorney_block
+    fit: shrink_wrap
+  phone:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+    fit: shrink
+  fax:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO. (optional)"
+    auto: fax
+    fit: shrink
+  email:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "E-MAIL ADDRESS"
+    auto: email
+    fit: shrink
+  attorney_for:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Name[0]"
+    page: 1
+    doc: >-
+      ATTORNEY FOR (Name) — despite the internal name "Name[0]", this is
+      the ATTORNEY FOR line (verified visually). The form prints the
+      label, so the value is the client only; self-represented filers
+      put their own role here.
+    auto: attorney_for
+    fit: shrink
+
+  # ---- Page 1: court block --------------------------------------------
+  court_county:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+    fit: shrink
+  court_street_address:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "STREET ADDRESS of the court"
+    auto: court_street_address
+    fit: shrink
+  court_mailing_address:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "MAILING ADDRESS of the court"
+    auto: court_mailing_address
+    fit: shrink
+  court_city_zip:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "CITY AND ZIP CODE of the court"
+    auto: court_city_zip
+    fit: shrink
+  court_branch:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME of the court"
+    auto: court_branch
+    fit: shrink
+
+  # ---- Page 1: caption party names + case number -----------------------
+  plaintiff:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name (bound to the petitioner meta key)"
+    auto: petitioner
+    fit: shrink
+  defendant:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name (bound to the respondent meta key)"
+    auto: respondent
+    fit: shrink
+  case_number:
+    map: "SUBP-010[0].Page1[0].P1Caption[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 1: the deponent (the subpoenaed custodian) -----------------
+  deponent:
+    map: "SUBP-010[0].Page1[0].People[0].FillText1[0]"
+    page: 1
+    doc: >-
+      "THE PEOPLE OF THE STATE OF CALIFORNIA, TO (name, address, and
+      telephone number of deponent, if known)" — the records custodian
+      being commanded, e.g. "Custodian of Records, Example Bank, N.A.,
+      500 Market Street, Example City, CA 90000, (555) 555-0199". One
+      single-line box: keep it to one line (it shrinks to 6 pt) and
+      abbreviate rather than newline it.
+    default: ""
+    fit: shrink
+    min_font_size: 6
+
+  # ---- Page 1, Item 1: production block --------------------------------
+  # Widget names here are recycled hearing names (see header note 1).
+  deposition_officer:
+    map: "SUBP-010[0].Page1[0].List1[0].Item[0].HearingDept_ft[0]"
+    page: 1
+    doc: >-
+      Item 1 "To (name of deposition officer)" — MISLEADING FIELD NAME
+      (HearingDept_ft): this is the deposition officer, not a
+      department. Name the professional photocopier / records service or
+      other qualified deposition officer who will receive the records
+      (CCP § 2020.420); the subpoenaing attorney may not be the officer.
+    default: ""
+    fit: shrink
+  production_date:
+    map: "SUBP-010[0].Page1[0].List1[0].Item[0].HearingDate_dt[0]"
+    page: 1
+    doc: >-
+      Item 1 "On (date)" — MISLEADING FIELD NAME (HearingDate_dt): the
+      production deadline, not a hearing date. Must be no sooner than 20
+      days after issuance or 15 days after service, whichever is later
+      (Item 2's own text; CCP § 2020.410(c)).
+    default: ""
+    fit: shrink
+  production_time:
+    map: "SUBP-010[0].Page1[0].List1[0].Item[0].HearingTime_dt[0]"
+    page: 1
+    doc: 'Item 1 "At (time)" — production time (e.g. "10:00 a.m."), not a hearing time'
+    default: ""
+    fit: shrink
+  production_location:
+    map: "SUBP-010[0].Page1[0].List1[0].Item[0].Location[0]"
+    page: 1
+    doc: >-
+      Item 1 "Location (address)" — where the records go: normally the
+      deposition officer's business address (method a/b), or the
+      witness's own business address when the original records are being
+      inspected on site (method c).
+    default: ""
+    fit: shrink
+
+  # ---- Page 1, Item 3: the records demanded ----------------------------
+  records_description:
+    map: "SUBP-010[0].Page1[0].List3[0].item3[0].FillText11[0]"
+    page: 1
+    doc: >-
+      Item 3 "The records to be produced are described as follows (if
+      electronically stored information is demanded, the form or forms in
+      which each type of information is to be produced may be
+      specified)". ONE-LINE widget (see header note 2): anything longer
+      than roughly one line becomes "See Attachment 3." plus an appended
+      MC-025 carrying the full demand, and the form's own "Continued on
+      Attachment 3." box is checked to match. Leave empty in the
+      cover-sheet flow, where the demand is the attached pages.
+    default: ""
+    fit: overflow_attachment
+    attachment_label: Attachment 3
+    overflow_checkbox: continued_on_attachment_3
+
+  # ---- Page 1: issuing-person block -----------------------------------
+  date_issued:
+    map: "SUBP-010[0].Page1[0].Sign[0].SigDate[0]"
+    page: 1
+    doc: >-
+      "Date issued:" — LEAVE BLANK. Issuance is the act of signing, and
+      the date issued starts the 20-day production clock; the issuer
+      dates it by hand when signing.
+    default: ""
+  issuer_print_name:
+    map: "SUBP-010[0].Page1[0].Sign[0].SigName[0]"
+    page: 1
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the issuing signature. An attorney of
+      record issues a deposition subpoena without any court order (CCP
+      § 2020.210(b)), so this is the filer — pre-filled from filer_name
+      (SBN suffix stripped) so only the signature and date remain for
+      the human. The signature line itself has no widget.
+    auto: filer_name_bare
+    fit: shrink
+  issuer_title:
+    map: "SUBP-010[0].Page1[0].Sign[0].FillText108[0]"
+    page: 1
+    doc: >-
+      "(TITLE)" under the signature line — the issuer's capacity, e.g.
+      "Attorney for Petitioner" or "Respondent, In Pro Per". Bound to
+      filer_role verbatim (unlike attorney_for, which drops a leading
+      "Attorney for" because that caption prints the label itself).
+    auto: filer_role
+    fit: shrink
+
+  # ---- Page 2: proof-of-service caption echo ---------------------------
+  # Independent widgets from page 1's caption; both copies must be filled.
+  plaintiff_p2:
+    map: "SUBP-010[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "PLAINTIFF/PETITIONER caption name (page 2 copy)"
+    auto: petitioner
+    fit: shrink
+  defendant_p2:
+    map: "SUBP-010[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "DEFENDANT/RESPONDENT caption name (page 2 copy)"
+    auto: respondent
+    fit: shrink
+  case_number_p2:
+    map: "SUBP-010[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "CASE NUMBER (page 2 copy)"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 2: PROOF OF SERVICE ----------------------------------------
+  # Mapped so a post-service workflow can fill them from known facts,
+  # but never auto-filled: the person who served the subpoena attests to
+  # these under penalty of perjury. A machine has no knowledge of them
+  # at issuance, and page 2 travels blank on the copy served.
+  pos_person_served:
+    map: "SUBP-010[0].Page2[0].List1[0].Lia[0].FillText6[0]"
+    page: 2
+    doc: >-
+      POS item 1a "Person served (name)" — LEAVE BLANK at issuance;
+      supplied by the server after personal delivery.
+    default: ""
+    fit: shrink
+  pos_address_served:
+    map: "SUBP-010[0].Page2[0].List1[0].Lib[0].FillText7[0]"
+    page: 2
+    doc: 'POS item 1b "Address where served" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink_wrap
+  pos_delivery_date:
+    map: "SUBP-010[0].Page2[0].List1[0].Lic[0].FillText8[0]"
+    page: 2
+    doc: 'POS item 1c "Date of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_delivery_time:
+    map: "SUBP-010[0].Page2[0].List1[0].Lid[0].TextField9[0]"
+    page: 2
+    doc: 'POS item 1d "Time of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_witness_fees_amount:
+    map: "SUBP-010[0].Page2[0].List1[0].Lie[0].SubListe[0].Li1[0].DecimalField3[0]"
+    page: 2
+    doc: >-
+      POS item 1e(1) witness-fee amount (dollars) — LEAVE BLANK at
+      issuance; pair with pos_witness_fees_paid when the server paid.
+    default: ""
+  pos_copying_fees_amount:
+    map: "SUBP-010[0].Page2[0].List1[0].Lie[0].SubListe[0].Li2[0].DecimalField2[0]"
+    page: 2
+    doc: >-
+      POS item 1e(2) copying-fee amount (dollars) — LEAVE BLANK at
+      issuance; pair with pos_copying_fees_paid.
+    default: ""
+  pos_service_fee:
+    map: "SUBP-010[0].Page2[0].List1[0].Lif[0].DecimalField1[0]"
+    page: 2
+    doc: 'POS item 1f "Fee for service" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+  pos_received_date:
+    map: "SUBP-010[0].Page2[0].List2[0].item2[0].FillText16[0]"
+    page: 2
+    doc: >-
+      POS item 2 "I received this subpoena for service on (date)" —
+      LEAVE BLANK at issuance (server fills).
+    default: ""
+    fit: shrink
+  pos_server_info:
+    map: "SUBP-010[0].Page2[0].List3[0].Lih[0].TextField65[0]"
+    page: 2
+    doc: >-
+      POS item 3h — server's name, address, telephone number, and (if a
+      registered process server) county of registration and number.
+      LEAVE BLANK at issuance; multiline box, filled by the server.
+    default: ""
+    fit: shrink_wrap
+  pos_sig_date:
+    map: "SUBP-010[0].Page2[0].Sign1[0].SigDate[0]"
+    page: 2
+    doc: >-
+      Date next to the server's perjury signature — LEAVE BLANK for the
+      server to hand-date when signing.
+    default: ""
+  pos_sheriff_sig_date:
+    map: "SUBP-010[0].Page2[0].Sign2[0].SigDate1[0]"
+    page: 2
+    doc: >-
+      Date in the "(For California sheriff or marshal use only)"
+      certification block — LEAVE BLANK; the sheriff/marshal dates it.
+    default: ""
+
+checkboxes:
+  # ---- Page 1, Item 1: how the records are to be produced -------------
+  # Exactly one of a/b/c. All three share the on-state "/1".
+  method_mail_to_officer:
+    map: "SUBP-010[0].Page1[0].List1[0].Lia[0].subp1[0]"
+    on_value: "/1"
+    doc: >-
+      Item 1a — produce a COPY by sealed inner wrapper (case title and
+      number, witness name, subpoena date on it), enclosed in an outer
+      envelope, MAILED to the deposition officer at the item 1 address.
+      The usual choice for records-only discovery.
+  method_copy_to_officer_at_witness_address:
+    map: "SUBP-010[0].Page1[0].List1[0].Lib[0].subp[0]"
+    on_value: "/1"
+    doc: >-
+      Item 1b — produce a COPY to the deposition officer at the
+      WITNESS'S address, on payment of the reasonable copying costs
+      (Evid. Code § 1563(b)). Used when the officer collects in person.
+  method_inspection_at_business_address:
+    map: "SUBP-010[0].Page1[0].List1[0].Lic[0].subp2[0]"
+    on_value: "/1"
+    doc: >-
+      Item 1c — make the ORIGINAL records available for inspection and
+      copying at the witness's own business address during normal
+      business hours. Item 1's Location should then be the witness's
+      address, not the officer's.
+
+  # ---- Page 1, Item 3 -------------------------------------------------
+  continued_on_attachment_3:
+    map: "SUBP-010[0].Page1[0].List3[0].item3[0].limited1[0]"
+    on_value: "/1"
+    doc: >-
+      "Continued on Attachment 3." — the records demand is on an
+      attachment rather than the one-line item-3 box. On by default,
+      which is right for the cover-sheet flow (the demand is the
+      attached pages) and for any description long enough to overflow;
+      the engine turns it off automatically when a short description
+      actually fits inline (overflow_checkbox linkage).
+    default: true
+
+  # ---- Page 2: PROOF OF SERVICE (server's attestations) ---------------
+  # All off by default. The server chooses; the machine never guesses.
+  pos_witness_fees_paid:
+    map: "SUBP-010[0].Page2[0].List1[0].Lie[0].SubListe[0].Li1[0].limited4[0]"
+    on_value: "/1"
+    doc: 'POS item 1e(1) "Witness fees were paid." — server only; pair with pos_witness_fees_amount'
+  pos_copying_fees_paid:
+    map: "SUBP-010[0].Page2[0].List1[0].Lie[0].SubListe[0].Li2[0].unlimited5[0]"
+    on_value: "/1"
+    doc: 'POS item 1e(2) "Copying fees were paid." — server only; pair with pos_copying_fees_amount'
+  pos_not_registered:
+    map: "SUBP-010[0].Page2[0].List3[0].Lia[0].CheckBox1[0]"
+    on_value: "/1"
+    doc: "POS item 3a — server is NOT a registered California process server"
+  pos_sheriff_or_marshal:
+    map: "SUBP-010[0].Page2[0].List3[0].Lib[0].CheckBox2[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3b — server is a California sheriff or marshal. Such a
+      server signs the "(For California sheriff or marshal use only)"
+      certification instead of the perjury declaration.
+  pos_registered_process_server:
+    map: "SUBP-010[0].Page2[0].List3[0].Lic[0].CheckBox3[0]"
+    on_value: "/1"
+    doc: "POS item 3c — server IS a registered California process server"
+  pos_process_server_employee:
+    map: "SUBP-010[0].Page2[0].List3[0].Lid[0].CheckBox4[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3d — server is an employee or independent contractor of a
+      registered California process server
+  pos_exempt_22350b:
+    map: "SUBP-010[0].Page2[0].List3[0].Lie[0].CheckBox5[0]"
+    on_value: "/1"
+    doc: "POS item 3e — exempt from registration under Bus. & Prof. Code § 22350(b)"
+  pos_registered_photocopier:
+    map: "SUBP-010[0].Page2[0].List3[0].Lif[0].CheckBox6[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 3f — server is a registered professional photocopier.
+      ON-STATE IS "/3", not "/1" like the boxes above it (verified
+      against the widget's appearance states); same for item 3g.
+  pos_exempt_22451:
+    map: "SUBP-010[0].Page2[0].List3[0].Lig[0].CheckBox7[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 3g — exempt from registration under Bus. & Prof. Code
+      § 22451. On-state "/3" (see item 3f).
+
+# Static gray under-rectangle at the bottom-left of page 2, where the
+# stripped privacy-banner widget used to sit. It is page content, not an
+# annotation, so removing the widget leaves the gray block behind; paint
+# it out. (Rect derived from the Warning widget's own rect, with a small
+# margin, and confirmed by rendering.)
+whiteouts:
+  - page: 2
+    rect: [35, 16, 249, 42]
+
+agent_guide: |
+  SUBP-010 is the mandatory Judicial Council form for a DEPOSITION
+  SUBPOENA FOR PRODUCTION OF BUSINESS RECORDS — the standard way to get
+  documents from a NON-PARTY (a bank, employer, school, hospital,
+  therapist, phone carrier) in any California civil action. It
+  commands a records custodian to deliver records to a
+  "deposition officer" by a date; nobody appears and nobody testifies.
+
+  PICK THE RIGHT FORM FIRST. This one is records-only:
+    - SUBP-010 — records only (this form)
+    - SUBP-020 — records AND the custodian's personal appearance
+    - SUBP-030 — personal appearance at a deposition (testimony)
+    - SUBP-001/002 — civil subpoena / subpoena duces tecum for
+      appearance at TRIAL or a hearing, not at a deposition
+  There is no personal-appearance checkbox on SUBP-010. If a filing
+  needs testimony, or needs documents produced at a hearing rather than
+  to a deposition officer, this is the wrong form — switch forms, do not
+  improvise a checkbox.
+
+  WHO ISSUES AND SERVES IT. An attorney of record issues (signs) a
+  deposition subpoena without any court order (CCP § 2020.210(b)); a
+  self-represented party has the clerk issue it. Service is on the
+  custodian, personally or as the statute allows, and the subpoenaing
+  party must also serve a copy on every other party. Page 2 is the proof
+  of that service and is completed by whoever served it, AFTER service.
+
+  USUAL INVOCATION — as a cover sheet on a subpoena source whose body is
+  the records demand:
+
+      cover_sheet: subp010
+
+  The caption fills from the standard front matter (filer_name /
+  filer_bar_number / filer_address_lines / filer_phone / filer_fax /
+  filer_email / filer_role, court_county / court_street_address /
+  court_mailing_address / court_city_zip / court_branch, petitioner,
+  respondent, case_number). In a civil case, put the plaintiff in
+  `petitioner` and the defendant in `respondent` — the form's caption
+  reads "PLAINTIFF/PETITIONER" and "DEFENDANT/RESPONDENT".
+
+  The subpoena-specific values have no caption source and must be
+  supplied per form:
+
+      forms:
+        subp010:
+          deponent: >-
+            Custodian of Records, Example Bank, N.A., 500 Market Street,
+            Example City, CA 90000, (555) 555-0199
+          deposition_officer: "Example Records Service, Inc."
+          production_date: "September 15, 2026"
+          production_time: "10:00 a.m."
+          production_location: "200 Commerce Way, Suite 300, Example City, CA 90000"
+          method_mail_to_officer: true
+          records_description: >-
+            All account statements for account no. 000-1234 for the
+            period January 1, 2024 through December 31, 2025.
+
+  COHERENT CHECKBOX COMBINATIONS. Item 1 offers three production
+  methods; check EXACTLY ONE:
+    - method_mail_to_officer (1a) — copies mailed to the deposition
+      officer in a sealed inner wrapper. The default choice for ordinary
+      records discovery; Location = the officer's address.
+    - method_copy_to_officer_at_witness_address (1b) — the officer picks
+      up copies at the witness's address and pays copying costs.
+    - method_inspection_at_business_address (1c) — the ORIGINALS stay
+      put and are inspected/copied at the witness's business address;
+      Location should then be the WITNESS'S address.
+  Checking none leaves the custodian no lawful way to comply; checking
+  two gives contradictory commands. Item 3's continued_on_attachment_3
+  is managed for you: on by default (the demand rides on the attachment)
+  and turned off automatically when a short records_description fits
+  inline.
+
+  ITEM 3 IS ONE LINE WIDE. The description widget holds about one line
+  of text. A real demand ("all account statements for …") overflows, and
+  the engine then writes "See Attachment 3." in the box and appends an
+  MC-025 carrying the full description — the Judicial Council's own
+  overflow mechanism, and the reason the form prints a "Continued on
+  Attachment 3." box. Never try to cram a demand into the box by
+  shrinking it; an illegible demand is an unenforceable one.
+
+  TIMING IS ON THE FORM'S FACE. The production date in item 1 must be no
+  sooner than 20 days after the subpoena is issued, or 15 days after it
+  is served, whichever is later (item 2; CCP § 2020.410(c)). Because
+  date_issued is left blank for hand-dating, nothing in this descriptor
+  can check that arithmetic — the human choosing production_date owns
+  it. Reasonable costs of locating, copying, and mailing the records are
+  recoverable by the witness (Evid. Code § 1563(b)), and the records
+  must arrive with a custodian's affidavit under Evid. Code § 1561.
+
+  CONSUMER AND EMPLOYEE RECORDS — THE BIG CAVEAT. Item 4 of the form
+  warns the custodian about CCP §§ 1985.3 and 1985.6. Those statutes put
+  duties on the SUBPOENAING PARTY that this form does not contain and
+  this descriptor cannot satisfy:
+    - Records about a "consumer" (§ 1985.3) or an "employee"
+      (§ 1985.6) — bank, medical, insurance, phone, school, personnel
+      records of an identifiable individual — require serving that
+      person with a NOTICE TO CONSUMER OR EMPLOYEE and a copy of the
+      subpoena (form SUBP-025), generally at least 10 days before the
+      production date and 5 days before serving the custodian, plus
+      proof of that service on the custodian.
+    - Medical/psychotherapy records may need the patient's written
+      authorization or a court order, and privacy objections are
+      routine.
+  Filling SUBP-010 alone for consumer or employee records produces an
+  invalid subpoena. SUBP-025 is registered: declare the recipients on
+  this source and the build emits one notice per person alongside the
+  subpoena —
+
+      consumer_notices:
+        - consumer: "JOHN SMITH"
+
+  with the shared values (requesting_party, production_date, witness)
+  in a `forms: subp025:` block. See that form's agent_guide for the
+  service clocks, and confirm the notice timing before service.
+
+  ALWAYS LEFT BLANK — do not fill:
+    - date_issued and the issuing signature (the signature line has no
+      widget at all; issuer_print_name and issuer_title ARE pre-filled,
+      so only the pen strokes and the date remain);
+    - every page-2 proof-of-service field and checkbox (pos_*). They are
+      mapped so a post-service workflow can complete them from real
+      service facts, but at issuance the server has not served anything
+      yet, and the copy served on the custodian carries page 2 blank.

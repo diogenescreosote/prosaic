@@ -1,0 +1,104 @@
+# MC-025 — Attachment to Judicial Council Form
+#
+# Field names verified empirically 2026-08-07 by filling each field
+# with its own logical name and rasterizing (MC-025's "FillText<N>"
+# AcroForm names carry no meaning).
+#
+# This form is ALSO the engine's overflow target: any field on any
+# form with `fit: overflow_attachment` that cannot fit its box gets
+# "See Attachment <N>." in the box and the full text spilled onto a
+# filled MC-025 appended to the output (form_fill._append_mc025_attachments).
+# The overflow path fills exactly two data fields — `attachment_number`
+# and `body` — so those logical names must never change; the short
+# caption resolves from the same `meta` via auto bindings.
+
+form: mc025
+title: Attachment to Judicial Council Form
+domain: ca/general            # "may be used with any Judicial Council form"
+revision: "2009-07"           # form face: "MC-025 [Rev. July 1, 2009]"
+source_url: https://courts.ca.gov/documents/mc025.pdf
+blank: mc025.pdf
+technology: acroform
+
+# Interactive-use chrome stripped from filing copies: privacy banners
+# and Save/Print/Clear buttons.
+chrome_fields: [WhiteOut, NoticeHeader1, NoticeFooter1, Save, Print, ResetForm]
+
+fields:
+  short_title:
+    map: FillText6
+    page: 1
+    doc: "SHORT TITLE — one-line case caption, e.g. 'Roe v. Smith'"
+    auto: short_title
+  case_number:
+    map: FillText5
+    page: 1
+    doc: "Case number"
+    auto: case_number
+  attachment_number:
+    map: FillText9
+    page: 1
+    doc: >-
+      'ATTACHMENT (Number):' — the item number on the parent form this
+      attachment continues (e.g. '3', '10c'). The overflow engine fills
+      this from the parent field's attachment_label.
+  body:
+    map: FillText4
+    page: 1
+    doc: >-
+      The attachment body — one large multiline area covering nearly
+      the whole page (the only body area on the form's single page).
+      Shrinks to fit but never below 8 pt; text that still cannot fit
+      needs a second MC-025 page, which the engine does not paginate
+      automatically.
+    fit: shrink_wrap
+    min_font_size: 8
+  page_number:
+    map: FillText8
+    page: 1
+    doc: "'Page __' — this attachment's page number; usually left blank for single-attachment filings"
+    default: ""
+    fit: shrink
+  page_total:
+    map: FillText7
+    page: 1
+    doc: "'of __' — total attachment pages; usually left blank for single-attachment filings"
+    default: ""
+    fit: shrink
+
+checkboxes: {}
+
+agent_guide: |
+  MC-025 is the universal continuation sheet: "This Attachment may be
+  used with any Judicial Council form." It carries only a short caption
+  (SHORT TITLE + CASE NUMBER), the parent item number, and one large
+  body area; the perjury recital at the foot is static form text (if
+  the parent item is signed under penalty of perjury, so is the
+  attachment — no extra signature line exists here).
+
+  Two ways it gets used:
+
+  1. AUTOMATIC (the common path): any descriptor field with
+     `fit: overflow_attachment` whose text cannot fit spills here. The
+     engine writes "See Attachment <N>." in the parent field and
+     appends this form filled with attachment_number=<N> and body=the
+     full text, passing the same meta through so short_title and
+     case_number resolve from the caption autos. Do not rename
+     `attachment_number` or `body` — the engine depends on them.
+
+  2. DIRECT: fill it yourself for a deliberate attachment:
+
+         forms:
+           mc025:
+             attachment_number: "10c"
+             body: |
+               The continued text...
+
+     short_title composes automatically as "<petitioner> v.
+     <respondent>" from the standard caption front matter; override
+     with an explicit `short_title` meta key if the case uses a
+     different short caption (e.g. "Estate of Roe").
+
+  page_number/page_total are only needed when a filing carries several
+  attachment pages; leave blank otherwise. There is no date or
+  signature line on this form.

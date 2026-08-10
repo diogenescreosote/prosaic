@@ -1,0 +1,5 @@
+# Demo envelope for the prosaic example matter.
+envelopes:
+  demo_declaration:
+    sources:
+      - Declaration of Jane Roe.md

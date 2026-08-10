@@ -1,0 +1,94 @@
+# Recognized top-level front-matter keys.
+#
+# Why this file exists: a key that nothing reads is indistinguishable,
+# to every reader of a source, from one that works. `plain: true` sat
+# in six sources across two matters for months doing nothing, and
+# produced captioned Judicial Council attachments on every rebuild —
+# the instruction was in the file, the file looked right, and the
+# renderer never looked at the key. Then it got copied into new files
+# as a demonstrated-correct example.
+#
+# So the generator warns on any top-level key absent from this list.
+# It is a **warning, never an error**: an unrecognized key means the
+# author expected something that will not happen, which is worth
+# saying out loud, but it is not a reason to refuse to build a filing.
+#
+# Nested keys are NOT linted. `forms:` holds a per-descriptor block
+# whose field names belong to the form registry, and `exhibits:` and
+# `redactions:` are lists of structured entries; those are validated by
+# the code that consumes them.
+#
+# Adding a key here without wiring it up recreates the exact problem
+# this file exists to prevent. Wire it first.
+
+# Caption: who is filing, in what court, in what case.
+filer:
+  - filer_name
+  - filer_bar_number
+  - filer_address_lines
+  - filer_phone
+  - filer_fax
+  - filer_email
+  - filer_role
+  - filer_attorney_for       # JC "ATTORNEY FOR (Name)" override
+
+court:
+  - court_name
+  - court_county
+  - court_street_address
+  - court_mailing_address
+  - court_city_zip
+  - court_branch
+  - judge
+  - hearing_date
+  - hearing_time
+  - hearing_dept
+
+case:
+  - case_number
+  - petitioner
+  - respondent
+  - caption_first_party_label
+  - caption_second_party_label
+  - caption_versus_label
+  - caption_divider_shift    # points to shift the ")" column right
+
+document:
+  - doctype                  # pleading | letter
+  - paper_title
+  - paper_subtitle
+  - short_title              # JC cover-sheet short title; never the footer
+  - declarant_name
+  - date
+  - statutory_basis
+  - authority
+  - no_caption               # form attachments: suppress the whole caption
+  - plain                    # deprecated spelling of no_caption; warns
+  - notreal                  # unfiled/unsent marker; prints as a red banner
+
+# Letters (doctype: letter) address a recipient rather than a court.
+letter:
+  - to_name
+  - to_address_lines
+
+exhibits:
+  - exhibits
+  - exhibit_label            # "Exhibit" vs "Attachment"
+  - exhibit_source           # resolve \exhibit{} against another file's list
+
+# Judicial Council forms and companion documents.
+forms:
+  - cover_sheet              # form id prepended ahead of the document
+  - forms                    # per-form field block, keyed by form id
+  - consumer_notices         # SUBP-025 recipients, one notice each
+
+service:
+  - proof_of_service
+  - service_method
+  - concurrent_filings
+
+# Sealed/public variants and redaction.
+redaction:
+  - redactions
+  - redaction_log_sources
+  - _redaction_log           # internal: populated during rendering

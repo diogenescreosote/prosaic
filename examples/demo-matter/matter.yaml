@@ -1,0 +1,6 @@
+case:
+  name: "Smith v. Roe (demo)"
+  number: "24CV00000"
+  court: "Superior Court of California, County of Example"
+  role: "Respondent"
+connectors: {}

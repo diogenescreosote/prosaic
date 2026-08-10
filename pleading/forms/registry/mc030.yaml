@@ -1,0 +1,149 @@
+# MC-030 — Declaration (Judicial Council of California)
+#
+# The reference descriptor: read this one first when learning the
+# format. Field names ("FillText35" etc.) are the blank's real AcroForm
+# identifiers, determined empirically by filling each field with its
+# own name and rendering — MC-030's field names carry no meaning.
+
+form: mc030
+title: Declaration
+domain: ca/general            # usable in any CA case type
+revision: "2006-01"           # form face: "MC-030 [Rev. January 1, 2006]"
+source_url: https://courts.ca.gov/documents/mc030.pdf
+blank: mc030.pdf
+technology: acroform
+
+# Interactive-use chrome stripped from filing copies: privacy banners
+# and Save/Print/Clear buttons.
+chrome_fields: [WhiteOut, NoticeHeader1, NoticeFooter1, Save, Print, ResetForm]
+
+fields:
+  attorney_line1:
+    map: FillText35
+    page: 1
+    doc: "Attorney/party block line 1 — name (and SBN)"
+    auto: attorney_line1
+  attorney_line2:
+    map: FillText34
+    page: 1
+    doc: "Attorney/party block line 2 — firm or street address"
+    auto: attorney_line2
+  attorney_line3:
+    map: FillText32
+    page: 1
+    doc: "Attorney/party block line 3"
+    auto: attorney_line3
+  attorney_line4:
+    map: FillText37
+    page: 1
+    doc: "Attorney/party block line 4"
+    auto: attorney_line4
+  phone:
+    map: FillText31
+    page: 1
+    doc: "Telephone no."
+    auto: phone
+  fax:
+    map: FillText30
+    page: 1
+    doc: "Fax no. (optional)"
+    auto: fax
+  email:
+    map: FillText36
+    page: 1
+    doc: "Email address"
+    auto: email
+  attorney_for:
+    map: FillText29
+    page: 1
+    doc: "ATTORNEY FOR (Name) — or the filer's own role if self-represented"
+    auto: attorney_for
+  court_county:
+    map: FillText27
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: FillText26
+    page: 1
+    auto: court_street_address
+    doc: "Court street address"
+  court_mailing_address:
+    map: FillText25
+    page: 1
+    auto: court_mailing_address
+    doc: "Court mailing address"
+  court_city_zip:
+    map: FillText24
+    page: 1
+    auto: court_city_zip
+    doc: "Court city and ZIP"
+  court_branch:
+    map: FillText23
+    page: 1
+    auto: court_branch
+    doc: "Court branch name"
+  plaintiff:
+    map: FillText22
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name"
+    auto: petitioner
+  defendant:
+    map: FillText21
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name"
+    auto: respondent
+  case_number:
+    map: FillText15
+    page: 1
+    auto: case_number
+    doc: "Case number"
+  body:
+    map: FillText19
+    page: 1
+    doc: >-
+      The declaration body. Practice commonly puts
+      "See attached Declaration of <name>." here (the default) and
+      attaches the full declaration; long text spills to an MC-025
+      automatically.
+    auto: see_attached_declaration
+    fit: overflow_attachment
+    attachment_label: Attachment 1
+  date:
+    map: FillText20
+    page: 1
+    doc: "Date — LEAVE BLANK for hand-dating at signature"
+    default: ""
+  print_name:
+    map: FillText18
+    page: 1
+    doc: "Type or print declarant's name"
+    auto: declarant_name
+  other_role_specify:
+    map: FillText1885
+    page: 1
+    doc: "'Other (Specify):' next to the role checkboxes — usually blank"
+    default: ""
+
+checkboxes: {}
+# The Attorney/Plaintiff/Petitioner/Defendant/Respondent/Other role
+# checkboxes are deliberately unmapped: the declarant checks the right
+# one by hand at signing time, like the date and signature.
+
+agent_guide: |
+  MC-030 is the general-purpose declaration cover form. prosaic's
+  usual pattern: set `cover_sheet: mc030` in a declaration source's
+  front matter and the build prepends this form with
+  "See attached Declaration of <declarant>." in the body.
+
+  To fill it directly, provide the standard caption front matter
+  (filer_*, court_*, petitioner, respondent, case_number) — every
+  caption field resolves automatically — plus optionally:
+
+      forms:
+        mc030:
+          body: "Custom body text instead of 'See attached…'"
+          print_name: "Declarant Name"     # else parsed from paper_title
+
+  Date, signature, and the role checkbox are ALWAYS left blank for the
+  human to complete at signing. Do not fill them.

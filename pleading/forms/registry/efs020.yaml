@@ -1,0 +1,261 @@
+# EFS-020 — Proposed Order (Cover Sheet) (Judicial Council of California)
+#
+# Required by Cal. Rules of Court 2.252 and 3.1312 when a proposed
+# order is electronically filed in a court that requires it: the cover
+# sheet identifies the proposed order and the proceeding it relates
+# to; an editable word-processing copy of the proposed order is sent
+# separately. LiveCycle (XFA) form with dotted hierarchical field
+# names, verified empirically against the blank (ported from
+# efs020_fill.py).
+
+form: efs020
+title: Proposed Order (Cover Sheet)
+domain: ca/general             # e-filing cover sheet; any CA case type
+revision: "2017-02"            # form revision this map was verified against
+source_url: https://courts.ca.gov/documents/efs020.pdf
+blank: efs020.pdf
+technology: xfa                # XFA layer is stripped; flat AcroForm is filled
+
+# Interactive-use chrome stripped from filing copies: Save/Print/Clear
+# buttons. (XFA leaf widget names carry an "[0]" index suffix.)
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]"]
+
+fields:
+  # -- Page 1: caption right column ---------------------------------------
+  case_number:
+    map: "EFS-020[0].Page1[0].p1Header[0].captionSub[0].CaseNumber[0].CaseNumber_ft[0]"
+    page: 1
+    doc: "Case number"
+    auto: case_number
+  judge:
+    map: "EFS-020[0].Page1[0].p1Header[0].captionSub[0].JudOfficer[0].JudOfficer_ft[0]"
+    page: 1
+    doc: "JUDICIAL OFFICER — no auto binding; supply via forms block (front-matter key 'judge' in the legacy filler)"
+    default: ""
+  hearing_dept:
+    map: "EFS-020[0].Page1[0].p1Header[0].captionSub[0].Dept[0].Department_ft[0]"
+    page: 1
+    doc: "DEPT — no auto binding; supply via forms block"
+    default: ""
+
+  # -- Page 1: attorney/party block ----------------------------------------
+  # Granular attorney block (separate name / bar / firm / street / city /
+  # state / zip boxes). Only the name has an auto binding; the rest must
+  # be supplied via the per-form block (forms: {efs020: {...}}).
+  attorney_name:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyName_ft[0]"
+    page: 1
+    doc: >-
+      NAME box of the attorney/party block. auto=attorney_line1 equals
+      filer_name for self-represented filers; when filer_bar_number is
+      set the auto appends "(SBN …)", so attorneys should override this
+      field via the forms block and put the bar number in
+      filer_bar_number instead.
+    auto: attorney_line1
+  filer_bar_number:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyBarNo_dc[0]"
+    page: 1
+    doc: "STATE BAR NO. — no auto binding; supply via forms block (blank for self-represented filers)"
+    default: ""
+  filer_firm:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyFirm_ft[0]"
+    page: 1
+    doc: "FIRM NAME — no auto binding; supply via forms block"
+    default: ""
+  filer_street_address:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyStreet_ft[0]"
+    page: 1
+    doc: "Filer STREET ADDRESS — no auto binding; supply via forms block"
+    default: ""
+  filer_city:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyCity_ft[0]"
+    page: 1
+    doc: "Filer CITY — no auto binding; supply via forms block"
+    default: ""
+  filer_state:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyState_ft[0]"
+    page: 1
+    doc: "Filer STATE (two-letter) — no auto binding; supply via forms block"
+    default: ""
+  filer_zip:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyZip_ft[0]"
+    page: 1
+    doc: "Filer ZIP CODE — no auto binding; supply via forms block"
+    default: ""
+  phone:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].Phone_ft[0]"
+    page: 1
+    doc: "Telephone number"
+    auto: phone
+  fax:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].Fax_ft[0]"
+    page: 1
+    doc: "Fax number (optional)"
+    auto: fax
+  email:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].Email_ft[0]"
+    page: 1
+    doc: "Email address"
+    auto: email
+  attorney_for:
+    map: "EFS-020[0].Page1[0].p1Header[0].AttyInfo[0].AttyFor_ft[0]"
+    page: 1
+    doc: "ATTORNEY FOR (Name) — or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Page 1: court block ----------------------------------------------
+  court_county:
+    map: "EFS-020[0].Page1[0].p1Header[0].CourtInfo[0].CrtCounty_ft[0]"
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: "EFS-020[0].Page1[0].p1Header[0].CourtInfo[0].Street_ft[0]"
+    page: 1
+    doc: "Court street address"
+    auto: court_street_address
+  court_mailing_address:
+    map: "EFS-020[0].Page1[0].p1Header[0].CourtInfo[0].MailingAdd_ft[0]"
+    page: 1
+    doc: "Court mailing address"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "EFS-020[0].Page1[0].p1Header[0].CourtInfo[0].CityZip_ft[0]"
+    page: 1
+    doc: "Court city and ZIP"
+    auto: court_city_zip
+  court_branch:
+    map: "EFS-020[0].Page1[0].p1Header[0].CourtInfo[0].Branch_ft[0]"
+    page: 1
+    doc: "Court branch name"
+    auto: court_branch
+
+  # -- Page 1: caption parties ---------------------------------------------
+  plaintiff:
+    map: "EFS-020[0].Page1[0].p1Header[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name"
+    auto: petitioner
+  defendant:
+    map: "EFS-020[0].Page1[0].p1Header[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name"
+    auto: respondent
+  other_party:
+    map: "EFS-020[0].Page1[0].p1Header[0].TitlePartyName[0].Party3[0]"
+    page: 1
+    doc: "OTHER caption name (usually blank)"
+    auto: other_party
+
+  # -- Page 1: items 1–3 -----------------------------------------------------
+  efs020_party_name:
+    map: "EFS-020[0].Page1[0].List1[0].li1[0].FillText20[0]"
+    page: 1
+    doc: >-
+      Item 1 — name of the party submitting the proposed order.
+      Defaults to the filer (attorney block line 1), the natural value
+      for a self-represented filer; represented parties should override
+      via the forms block with the party's own name.
+    auto: attorney_line1
+    fit: shrink
+  efs020_title:
+    map: "EFS-020[0].Page1[0].List2[0].li1[0].FillText21[0]"
+    page: 1
+    doc: "Item 2 — title of the proposed order; defaults to paper_title"
+    auto: paper_title
+    fit: shrink
+  efs020_proceeding_description:
+    map: "EFS-020[0].Page1[0].List3[0].lia[0].FillText22[0]"
+    page: 1
+    doc: >-
+      Item 3.a — description of the proceeding to which the proposed
+      order relates (e.g. the motion heard). No auto binding; supply
+      via forms block. May be blank/'N/A' for orders that resolve the
+      action without a hearing (e.g. a stipulated dismissal).
+    default: ""
+    fit: shrink
+  efs020_proceeding_datetime:
+    map: "EFS-020[0].Page1[0].List3[0].lib[0].FillText23[0]"
+    page: 1
+    doc: >-
+      Item 3.b — date and time of the proceeding, e.g.
+      "August 1, 2026, 9:00 a.m.". No auto binding; supply via forms
+      block (the legacy filler built this from hearing_date +
+      hearing_time).
+    default: ""
+    fit: shrink
+  efs020_proceeding_place:
+    map: "EFS-020[0].Page1[0].List3[0].lic[0].FillText24[0]"
+    page: 1
+    doc: >-
+      Item 3.c — place of the proceeding, e.g. "Dept. 18". No auto
+      binding; supply via forms block (the legacy filler built
+      "Dept. <n>" from hearing_dept).
+    default: ""
+    fit: shrink_wrap
+  print_name:
+    map: "EFS-020[0].Page1[0].printName[0]"
+    page: 1
+    doc: "Type-or-print name under the page-1 signature — LEAVE BLANK for hand completion at filing"
+    default: ""
+
+  # -- Page 2: caption echo (Proof of Electronic Service) ------------------
+  case_number_p2:
+    map: "EFS-020[0].Page2[0].PxCaption[0].CaseNumber_ft[0]"
+    page: 2
+    doc: "Page-2 caption echo of the case number"
+    auto: case_number
+  case_name:
+    map: "EFS-020[0].Page2[0].PxCaption[0].CaseName_ft[0]"
+    page: 2
+    doc: >-
+      Page-2 CASE NAME. No auto binding for the composed form; supply
+      "<petitioner> v. <respondent>" via the forms block (the legacy
+      filler composed it automatically).
+    default: ""
+    fit: shrink
+
+checkboxes: {}
+# The single checkbox (page 2, electronic-service-on-additional-persons
+# attachment) belongs to the Proof of Electronic Service, which is left
+# entirely blank for the filer or the e-filing service provider to
+# complete — like the rest of page 2's POS fields, which are
+# deliberately unmapped.
+
+agent_guide: |
+  EFS-020 is the mandatory cover sheet for an electronically filed
+  proposed order (Cal. Rules of Court 2.252, 3.1312) in courts that
+  require it. prosaic's usual pattern: prepend it to a [Proposed]
+  Order produced from a pleading source, via `cover_sheet: efs020` in
+  the source's front matter or a direct fill. Remember the rule also
+  requires an editable word-processing copy of the proposed order to
+  be submitted separately.
+
+  The standard caption front matter (filer_*, court_*, petitioner,
+  respondent, case_number, paper_title) resolves the caption, item 1
+  (party submitting — defaults to the filer) and item 2 (title of the
+  proposed order — defaults to paper_title) automatically. Everything
+  else this form wants is supplied per form:
+
+      forms:
+        efs020:
+          judge: "Hon. Example Judge"
+          hearing_dept: "18"
+          efs020_proceeding_description: "Respondent's motion to seal"
+          efs020_proceeding_datetime: "August 1, 2026, 9:00 a.m."
+          efs020_proceeding_place: "Dept. 18"
+          case_name: "SMITH v. ROE"      # page-2 caption echo
+          # attorneys/granular address (no auto parsing):
+          filer_street_address: "123 Main St"
+          filer_city: "Springfield"
+          filer_state: "CA"
+          filer_zip: "90000"
+
+  For a proposed order that resolves the action without any hearing
+  (e.g. on a stipulated dismissal), item 3's fields may be left blank
+  or given "N/A"-style values.
+
+  ALWAYS left blank: the page-1 date and signature (print_name stays
+  empty for hand completion) and the whole of page 2 (Proof of
+  Electronic Service) — the filer or the court's e-filing service
+  provider completes it. Do not fill them.

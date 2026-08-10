@@ -1,0 +1,220 @@
+# CIV-110 — Request for Dismissal (Judicial Council of California)
+#
+# LiveCycle (XFA) form with dotted hierarchical field names; the map
+# below uses the full qualified names, verified empirically against the
+# blank (ported from civ110_fill.py, whose FIELD constants carry the
+# same verification). The descriptor fills the caption only; every
+# dismissal-type/pleading-type choice, date, and signature is left for
+# the parties to complete by hand at signing — a CIV-110 for a
+# stipulated dismissal is signed by both sides.
+
+form: civ110
+title: Request for Dismissal
+domain: ca/civil
+revision: "2025-01"            # form revision this map was verified against
+source_url: https://courts.ca.gov/documents/civ110.pdf
+blank: civ110.pdf
+technology: xfa                # XFA layer is stripped; flat AcroForm is filled
+
+# Interactive-use chrome stripped from filing copies: privacy banner,
+# Save/Print/Clear buttons, and the courts.ca.gov footer link button.
+# (XFA leaf widget names carry an "[0]" index suffix.)
+chrome_fields: ["Warning[0]", "Print[0]", "Save[0]", "Reset[0]", "CourtLink[0]"]
+
+fields:
+  # -- Page 1: attorney/party block ------------------------------------
+  # This form has a granular attorney block (separate name / bar-number /
+  # firm / street / city / state / zip boxes). Only the name has an auto
+  # binding; the rest have no auto equivalent of the legacy filler's
+  # filer_address_lines parsing and must be supplied via the per-form
+  # block (forms: {civ110: {...}}) when needed.
+  attorney_name:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].Name[0]"
+    page: 1
+    doc: >-
+      NAME box of the attorney/party block. auto=attorney_line1 equals
+      filer_name for self-represented filers; when filer_bar_number is
+      set the auto appends "(SBN …)", so attorneys should override this
+      field via the forms block and put the bar number in
+      filer_bar_number instead.
+    auto: attorney_line1
+  filer_bar_number:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].AttyBarNo[0]"
+    page: 1
+    doc: "STATE BAR NUMBER — no auto binding; supply via forms block (blank for self-represented filers)"
+    default: ""
+  filer_firm:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].AttyFirm[0]"
+    page: 1
+    doc: "FIRM NAME — no auto binding; supply via forms block"
+    default: ""
+  filer_street_address:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].Street[0]"
+    page: 1
+    doc: "Filer STREET ADDRESS — no auto binding; supply via forms block"
+    default: ""
+  filer_city:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].City[0]"
+    page: 1
+    doc: "Filer CITY — no auto binding; supply via forms block"
+    default: ""
+  filer_state:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].State[0]"
+    page: 1
+    doc: "Filer STATE (two-letter) — no auto binding; supply via forms block"
+    default: ""
+  filer_zip:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].Zip[0]"
+    page: 1
+    doc: "Filer ZIP CODE — no auto binding; supply via forms block"
+    default: ""
+  phone:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "Telephone number"
+    auto: phone
+  fax:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "Fax number (optional)"
+    auto: fax
+  email:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "Email address"
+    auto: email
+  attorney_for:
+    map: "CIV-110[0].Page1[0].p1Caption[0].AttyPartyInfo[0].AttyFor[0]"
+    page: 1
+    doc: "ATTORNEY FOR (Name) — or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Page 1: court block ----------------------------------------------
+  court_county:
+    map: "CIV-110[0].Page1[0].p1Caption[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: "CIV-110[0].Page1[0].p1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "Court street address"
+    auto: court_street_address
+  court_mailing_address:
+    map: "CIV-110[0].Page1[0].p1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "Court mailing address"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "CIV-110[0].Page1[0].p1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "Court city and ZIP"
+    auto: court_city_zip
+  court_branch:
+    map: "CIV-110[0].Page1[0].p1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "Court branch name"
+    auto: court_branch
+
+  # -- Page 1: caption parties + case number ------------------------------
+  plaintiff:
+    map: "CIV-110[0].Page1[0].p1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name"
+    auto: petitioner
+  defendant:
+    map: "CIV-110[0].Page1[0].p1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name"
+    auto: respondent
+  case_number:
+    map: "CIV-110[0].Page1[0].p1Caption[0].CaptionSub[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "Case number"
+    auto: case_number
+
+  # -- Page 1: signature blocks (items 2 and 3) — hand-completed ----------
+  item2_date:
+    map: "CIV-110[0].Page1[0].List2[0].DateTimeField1[0]"
+    page: 1
+    doc: "Item 2 date — LEAVE BLANK for hand-dating at signature"
+    default: ""
+  item2_print_name:
+    map: "CIV-110[0].Page1[0].List2[0].Sig1Name[0]"
+    page: 1
+    doc: >-
+      Item 2 'type or print name' of the requesting attorney/party —
+      LEAVE BLANK by default (completed at signing); may be set via the
+      forms block if a typed name is wanted.
+    default: ""
+  item3_date:
+    map: "CIV-110[0].Page1[0].Item3[0].DateTimeField1[0]"
+    page: 1
+    doc: "Item 3 (consent to dismissal) date — LEAVE BLANK for hand-dating"
+    default: ""
+  item3_print_name:
+    map: "CIV-110[0].Page1[0].Item3[0].YourName_ft[0]"
+    page: 1
+    doc: >-
+      Item 3 'type or print name' of the consenting attorney/party —
+      LEAVE BLANK by default (completed at signing); may be set via the
+      forms block if a typed name is wanted.
+    default: ""
+
+  # -- Page 2: caption echo -----------------------------------------------
+  plaintiff_p2:
+    map: "CIV-110[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "Page-2 caption echo of the plaintiff/petitioner"
+    auto: petitioner
+  defendant_p2:
+    map: "CIV-110[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "Page-2 caption echo of the defendant/respondent"
+    auto: respondent
+  case_number_p2:
+    map: "CIV-110[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "Page-2 caption echo of the case number"
+    auto: case_number
+
+checkboxes: {}
+# All of CIV-110's checkboxes and radio groups are deliberately
+# unmapped: item 1.a (with prejudice / without prejudice / § 664.6),
+# item 1.b (complaint / petition / cross-complaint / entire action /
+# other), the attorney-vs-party and plaintiff/defendant/cross-complainant
+# role boxes under each signature, the item 2 'did / did not' fee-waiver
+# boxes, and everything the clerk completes (items 4–7) or that belongs
+# to the page-2 fee-recovery declaration. The parties check the correct
+# boxes by hand at signing, like the dates and signatures.
+
+agent_guide: |
+  CIV-110 is the Request for Dismissal used in California civil
+  practice. prosaic's usual pattern: a stipulated dismissal — the
+  CIV-110 is prepended as a cover to a Stipulation for Dismissal (and
+  any [Proposed] Order), with the dismissal-type/pleading-type boxes
+  checked and both sides' dates and signatures added BY HAND at
+  signing. Invoke via `cover_sheet: civ110` in a pleading source's
+  front matter, or fill directly.
+
+  The standard caption front matter (filer_*, court_*, petitioner,
+  respondent, case_number) resolves the caption automatically on both
+  pages. This form's attorney block is granular; the pieces with no
+  auto binding are supplied per form:
+
+      forms:
+        civ110:
+          filer_street_address: "123 Main St"
+          filer_city: "Springfield"
+          filer_state: "CA"
+          filer_zip: "90000"
+          # attorneys also set:
+          filer_bar_number: "123456"
+          filer_firm: "Firm LLP"
+          attorney_name: "Sally Sattler"   # override the (SBN …) auto
+
+  ALWAYS left blank for hand completion: the item 1.a and 1.b choice
+  boxes, dates, signatures, printed names (item2_/item3_* fields
+  default to blank but accept a typed name via the forms block), the
+  role checkboxes, items 4–7 (clerk's use only), and all of page 2
+  (court-fee declaration). Do not fill them.

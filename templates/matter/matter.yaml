@@ -1,0 +1,30 @@
+# matter.yaml — prosaic matter configuration.
+
+case:
+  name: "Smith v. Smith"            # caption shorthand
+  number: ""                        # court case number, once assigned
+  court: ""                         # e.g. Superior Court of California, County of X
+  role: ""                          # your role: Petitioner / Respondent / Plaintiff / Defendant
+
+# Where this matter backs itself up. Without this the entire history of
+# the case exists in one place; the threat is `rm -rf`, not disk
+# failure. `sc backup init .` sets the remote up; the post-commit hook
+# keeps it current. See prosaic docs/backup.md.
+backup:
+  kind: local                       # local (no account needed) | github
+  # path: ~/backups/smith.git       # local: defaults under `sc paths data-dir`
+  # repo: youraccount/smith-matter  # github: MUST be a private repo; checked every push
+
+# Source connectors. Only configured connectors run during `sc sync`.
+# See prosaic docs/connectors.md for each connector's options.
+connectors: {}
+#  gmail:
+#    addresses:                     # plain address, bare domain, or bounded entry
+#      - opposing.party@example.com
+#      - opposingfirm.com           # bare domain matches the whole firm
+#      - address: expartner@example.com
+#        after: 2024/04/01          # Gmail search bounds (optional)
+#    initial_from: 2026-01-01       # first pull window start
+#  mycase:
+#    portal_url: https://your-firm.mycase.com
+#    credential: prosaic.mycase

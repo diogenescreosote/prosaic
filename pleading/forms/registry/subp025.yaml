@@ -1,0 +1,667 @@
+# SUBP-025 — Notice to Consumer or Employee and Objection
+#
+# The companion a records subpoena is INVALID without whenever the
+# records belong to an identifiable individual: CCP § 1985.3 (consumer
+# records) and § 1985.6 (employment records) require the subpoenaing
+# party to serve this notice, with a copy of the subpoena, on the
+# consumer/employee before the custodian may produce anything.
+#
+# One notice per consumer. A subpoena that reaches three people's
+# records needs three separately addressed SUBP-025s, which is why the
+# pleading build emits them from a ``consumer_notices:`` list rather
+# than from a single per-form block (see agent_guide, and
+# pleading/pleading_markdown_spec.md).
+#
+# Every mapping below was verified empirically on the shipped blank
+# (fill each field with its own logical name, rasterize, look). Three
+# things verification settled that names alone would get wrong:
+#
+# 1. THE FORM IS TWO DOCUMENTS IN ONE. Page 1's top half is the notice
+#    the SUBPOENAING PARTY signs; its bottom half ("OBJECTION BY
+#    NON-PARTY TO PRODUCTION OF RECORDS") is a reply form the CONSUMER
+#    fills in and serves. Page 2 carries two unrelated proofs of
+#    service — one for the notice, one for the objection. Only the
+#    caption and the eight notice fields are ever machine-filled.
+# 2. THE OBJECTION CHECKBOXES DO NOT SHARE AN ON-STATE. "I object to
+#    all of my records" is "/1"; "I object only to the following
+#    specified records" is "/2" — as are the "Mail" boxes throughout
+#    page 2, whose "Personal Service" siblings are "/1". Assuming "/1"
+#    everywhere would leave half the boxes silently unchecked.
+# 3. THE ROLE BOXES BY THE SIGNATURE ARE POSITIONAL. Ch1[0] (x≈396) is
+#    REQUESTING PARTY and Ch1[1] (x≈498) is ATTORNEY; the widget names
+#    carry no hint of it. Both default off — who signs is the signer's
+#    declaration, not the machine's.
+
+form: subp025
+title: Notice to Consumer or Employee and Objection
+domain: ca/civil              # any CA civil action
+revision: "2008-01"           # form face: "SUBP-025 [Rev. January 1, 2008]"
+source_url: https://courts.ca.gov/documents/subp025.pdf
+blank: subp025.pdf
+
+# XFA: the blank is a LiveCycle hybrid (its /AcroForm carries an /XFA
+# packet). XFA-aware viewers would render the unfilled template, so the
+# engine strips /XFA after filling. Do not change this.
+technology: xfa
+
+# UI chrome under SUBP-025[0].#pageSet[0].LastPage[0].PXFooter[0].
+# FooterButtons[0] — Print/Save/Clear buttons and the "For your
+# protection and privacy…" banner, drawn on page 2. Stripped from
+# service copies.
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+fields:
+  # ---- Page 1: attorney/party block ----------------------------------
+  attorney_block:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Add1[0]"
+    page: 1
+    doc: >-
+      ATTORNEY OR PARTY WITHOUT ATTORNEY (Name, State Bar number, and
+      address) — one multiline box, not discrete lines; filled from
+      filer_name (+ SBN) and filer_address_lines. The consumer is told
+      to contact this person (item 3), so it must be a live address.
+    auto: attorney_block
+    fit: shrink_wrap
+  phone:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+    fit: shrink
+  fax:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO. (optional)"
+    auto: fax
+    fit: shrink
+  email:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "E-MAIL ADDRESS (optional)"
+    auto: email
+    fit: shrink
+  attorney_for:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].AttyPartyInfo[0].AttyFor[0]"
+    page: 1
+    doc: >-
+      ATTORNEY FOR (Name) — the form prints the label, so the value is
+      the client only; self-represented filers put their own role here.
+    auto: attorney_for
+    fit: shrink
+
+  # ---- Page 1: court block --------------------------------------------
+  court_county:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+    fit: shrink
+  court_street_address:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "STREET ADDRESS of the court"
+    auto: court_street_address
+    fit: shrink
+  court_mailing_address:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "MAILING ADDRESS of the court"
+    auto: court_mailing_address
+    fit: shrink
+  court_city_zip:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "CITY AND ZIP CODE of the court"
+    auto: court_city_zip
+    fit: shrink
+  court_branch:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME of the court"
+    auto: court_branch
+    fit: shrink
+
+  # ---- Page 1: caption party names + case number -----------------------
+  plaintiff:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name (bound to the petitioner meta key)"
+    auto: petitioner
+    fit: shrink
+  defendant:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name (bound to the respondent meta key)"
+    auto: respondent
+    fit: shrink
+  case_number:
+    map: "SUBP-025[0].Page1[0].P1Caption[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 1: THE NOTICE (items 1–3) ----------------------------------
+  consumer:
+    map: "SUBP-025[0].Page1[0].SubTitle1[0].FillText1[0]"
+    page: 1
+    doc: >-
+      "TO (name):" — the consumer or employee whose records are sought,
+      i.e. the person this copy of the notice is addressed to. One
+      notice per person; where the consumer is represented in this
+      action, the customary value names both ("JOHN SMITH and his
+      attorney of record, PAT COUNSEL"). Supplied per notice by the
+      ``consumer_notices:`` front-matter list.
+    default: ""
+    fit: shrink
+  requesting_party:
+    map: "SUBP-025[0].Page1[0].List1[0].item1[0].TextField1[0]"
+    page: 1
+    doc: >-
+      Item 1 "PLEASE TAKE NOTICE THAT REQUESTING PARTY (name)" — the
+      party who issued the subpoena (not that party's attorney, and not
+      the deposition officer).
+    default: ""
+    fit: shrink
+  production_date:
+    map: "SUBP-025[0].Page1[0].List1[0].item1[0].DateField1[0]"
+    page: 1
+    doc: >-
+      Item 1 "SEEKS YOUR RECORDS FOR EXAMINATION by the parties to this
+      action on (specify date)" — the SAME production date stated in
+      item 1 of the subpoena (SUBP-010's production_date). It is the
+      date the consumer's clock runs to: an objection must be served
+      before it, and a motion to quash noticed at least five days
+      before it. A date that does not match the subpoena is a defect.
+    default: ""
+    fit: shrink
+  witness:
+    map: "SUBP-025[0].Page1[0].List1[0].item1[0].TextField2[0]"
+    page: 1
+    doc: >-
+      Item 1 "The records are described in the subpoena directed to
+      witness (specify name and address of person or entity from whom
+      records are sought)" — the records custodian named as deponent on
+      the subpoena, with address. One single-line box: keep it to one
+      line (it shrinks to 6 pt) and abbreviate rather than newline it.
+    default: ""
+    fit: shrink
+    min_font_size: 6
+  notice_date:
+    map: "SUBP-025[0].Page1[0].Sign1[0].Date1[0]"
+    page: 1
+    doc: >-
+      "Date:" above the notice signature — LEAVE BLANK; hand-dated when
+      signed. The date signed is evidence of when the statutory service
+      clocks started.
+    default: ""
+  notice_signer:
+    map: "SUBP-025[0].Page1[0].Sign1[0].PrintName1[0]"
+    page: 1
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the notice signature — the requesting
+      party or that party's attorney, pre-filled from filer_name (SBN
+      suffix stripped), so only the pen strokes, the date, and the
+      REQUESTING PARTY / ATTORNEY box remain for the human. The
+      signature line itself has no widget.
+    auto: filer_name_bare
+    fit: shrink
+
+  # ---- Page 1: OBJECTION BY NON-PARTY (the consumer's reply form) ------
+  # Printed on the same page but addressed to the recipient. Mapped so a
+  # consumer-side workflow could complete it; never filled by the party
+  # serving the notice.
+  objection_records:
+    map: "SUBP-025[0].Page1[0].Lis2[0].ite2[0].TextField6[0]"
+    page: 1
+    doc: >-
+      Objection item 2 "I object only to the production of the following
+      specified records" — LEAVE BLANK; the consumer writes it.
+    default: ""
+    fit: shrink
+  objection_grounds:
+    map: "SUBP-025[0].Page1[0].Lis3[0].ite3[0].TextField7[0]"
+    page: 1
+    doc: >-
+      Objection item 3 "The specific grounds for my objection are as
+      follows" — LEAVE BLANK; the consumer writes it.
+    default: ""
+    fit: shrink
+  objection_date:
+    map: "SUBP-025[0].Page1[0].Sign2[0].Date2[0]"
+    page: 1
+    doc: "Date above the objection signature — LEAVE BLANK (the consumer dates it)"
+    default: ""
+  objection_signer:
+    map: "SUBP-025[0].Page1[0].Sign2[0].PrintName2[0]"
+    page: 1
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the objection signature — LEAVE
+      BLANK; the objecting consumer prints their own name.
+    default: ""
+    fit: shrink
+
+  # ---- Page 2: caption echo --------------------------------------------
+  # Independent widgets from page 1's caption; both copies must be filled.
+  plaintiff_p2:
+    map: "SUBP-025[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "PLAINTIFF/PETITIONER caption name (page 2 copy)"
+    auto: petitioner
+    fit: shrink
+  defendant_p2:
+    map: "SUBP-025[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "DEFENDANT/RESPONDENT caption name (page 2 copy)"
+    auto: respondent
+    fit: shrink
+  case_number_p2:
+    map: "SUBP-025[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "CASE NUMBER (page 2 copy)"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 2: PROOF OF SERVICE OF THE NOTICE --------------------------
+  # The subpoenaing side's own proof — but sworn by whoever served the
+  # notice, after service. Mapped for a post-service workflow; never
+  # auto-filled, and blank on the copy served.
+  pos_notice_personal_name:
+    map: "SUBP-025[0].Page2[0].List2[0].Lia[0].SubLia[0].Li1[0].TextField11[0]"
+    page: 2
+    doc: >-
+      Notice POS item 2a(1) "Name of person served" (personal service) —
+      LEAVE BLANK at issuance; the server fills it.
+    default: ""
+    fit: shrink
+  pos_notice_personal_address:
+    map: "SUBP-025[0].Page2[0].List2[0].Lia[0].SubLia[0].Li2[0].TextField12[0]"
+    page: 2
+    doc: 'Notice POS item 2a(2) "Address where served" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_personal_date:
+    map: "SUBP-025[0].Page2[0].List2[0].Lia[0].SubLia[0].Li3[0].DateField13[0]"
+    page: 2
+    doc: 'Notice POS item 2a(3) "Date served" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_personal_time:
+    map: "SUBP-025[0].Page2[0].List2[0].Lia[0].SubLia[0].Li4[0].TextField14[0]"
+    page: 2
+    doc: 'Notice POS item 2a(4) "Time served" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_mail_name:
+    map: "SUBP-025[0].Page2[0].List2[0].Lib[0].SubLib[0].Li1[0].TextField15[0]"
+    page: 2
+    doc: 'Notice POS item 2b(1) "Name of person served" (mail) — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_mail_address:
+    map: "SUBP-025[0].Page2[0].List2[0].Lib[0].SubLib[0].Li2[0].TextField16[0]"
+    page: 2
+    doc: 'Notice POS item 2b(2) "Address" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_mail_date:
+    map: "SUBP-025[0].Page2[0].List2[0].Lib[0].SubLib[0].Li3[0].DateField17[0]"
+    page: 2
+    doc: 'Notice POS item 2b(3) "Date of mailing" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_mail_place:
+    map: "SUBP-025[0].Page2[0].List2[0].Lib[0].SubLib[0].Li4[0].TextField18[0]"
+    page: 2
+    doc: >-
+      Notice POS item 2b(4) "Place of mailing (city and state)" — LEAVE
+      BLANK (server fills).
+    default: ""
+    fit: shrink
+  pos_notice_server_address:
+    map: "SUBP-025[0].Page2[0].List2[0].Lic[0].TextField19[0]"
+    page: 2
+    doc: 'Notice POS item 2c "My residence or business address is" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_server_phone:
+    map: "SUBP-025[0].Page2[0].List2[0].Lid[0].TextField20[0]"
+    page: 2
+    doc: 'Notice POS item 2d "My phone number is" — LEAVE BLANK (server fills)'
+    default: ""
+    fit: shrink
+  pos_notice_sig_date:
+    map: "SUBP-025[0].Page2[0].Sign3[0].Date3[0]"
+    page: 2
+    doc: >-
+      Date next to the notice server's perjury signature — LEAVE BLANK
+      for the server to hand-date when signing.
+    default: ""
+  pos_notice_server_name:
+    map: "SUBP-025[0].Page2[0].Sign3[0].PrintName3[0]"
+    page: 2
+    doc: >-
+      "(TYPE OR PRINT NAME OF PERSON WHO SERVED)" for the notice — LEAVE
+      BLANK; the server prints their own name. The server must be 18 or
+      older and not a party.
+    default: ""
+    fit: shrink
+
+  # ---- Page 2: PROOF OF SERVICE OF THE OBJECTION -----------------------
+  # The CONSUMER's proof, sworn by the consumer's server: item 2a serves
+  # the requesting party, item 2b serves the witness. Nothing on this
+  # half ever belongs to the subpoenaing side.
+  pos_obj_party_personal_name:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii1[0].SubLii1[0].item1[0].TextField21[0]"
+    page: 2
+    doc: >-
+      Objection POS 2a(1)(i) "Name of person served" — personal service
+      ON THE REQUESTING PARTY. LEAVE BLANK (the consumer's server fills).
+    default: ""
+    fit: shrink
+  pos_obj_party_personal_address:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii1[0].SubLii1[0].item2[0].TextField22[0]"
+    page: 2
+    doc: 'Objection POS 2a(1)(ii) "Address where served" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_party_personal_date:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii1[0].SubLii1[0].item3[0].DateField18[0]"
+    page: 2
+    doc: 'Objection POS 2a(1)(iii) "Date served" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_party_personal_time:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii1[0].SubLii1[0].item4[0].TextField24[0]"
+    page: 2
+    doc: 'Objection POS 2a(1)(iv) "Time served" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_party_mail_name:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii2[0].SubLii2[0].item1[0].TextField25[0]"
+    page: 2
+    doc: 'Objection POS 2a(2)(i) "Name of person served" — mail to the requesting party. LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_party_mail_address:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii2[0].SubLii2[0].item2[0].TextField26[0]"
+    page: 2
+    doc: 'Objection POS 2a(2)(ii) "Address" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_party_mail_date:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii2[0].SubLii2[0].item3[0].DateField19[0]"
+    page: 2
+    doc: 'Objection POS 2a(2)(iii) "Date of mailing" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_party_mail_place:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii2[0].SubLii2[0].item4[0].TextField28[0]"
+    page: 2
+    doc: 'Objection POS 2a(2)(iv) "Place of mailing (city and state)" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_personal_name:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii1[0].SubLii1[0].item1[0].TextField29[0]"
+    page: 2
+    doc: >-
+      Objection POS 2b(1)(i) "Name of person served" — personal service
+      ON THE WITNESS (the records custodian). LEAVE BLANK.
+    default: ""
+    fit: shrink
+  pos_obj_witness_personal_address:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii1[0].SubLii1[0].item2[0].TextField30[0]"
+    page: 2
+    doc: 'Objection POS 2b(1)(ii) "Address where served" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_personal_date:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii1[0].SubLii1[0].item3[0].DateField20[0]"
+    page: 2
+    doc: 'Objection POS 2b(1)(iii) "Date served" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_personal_time:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii1[0].SubLii1[0].item4[0].TextField32[0]"
+    page: 2
+    doc: 'Objection POS 2b(1)(iv) "Time served" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_mail_name:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii2[0].SubLii2[0].item1[0].TextField33[0]"
+    page: 2
+    doc: 'Objection POS 2b(2)(i) "Name of person served" — mail to the witness. LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_mail_address:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii2[0].SubLii2[0].item2[0].TextField34[0]"
+    page: 2
+    doc: 'Objection POS 2b(2)(ii) "Address" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_mail_date:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii2[0].SubLii2[0].item3[0].DateField21[0]"
+    page: 2
+    doc: 'Objection POS 2b(2)(iii) "Date of mailing" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_witness_mail_place:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii2[0].SubLii2[0].item4[0].TextField36[0]"
+    page: 2
+    doc: 'Objection POS 2b(2)(iv) "Place of mailing (city and state)" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_server_address:
+    map: "SUBP-025[0].Page2[0].Li3[0].item3[0].TextField37[0]"
+    page: 2
+    doc: 'Objection POS item 3 "My residence or business address is" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_server_phone:
+    map: "SUBP-025[0].Page2[0].Li4[0].item4[0].TextField38[0]"
+    page: 2
+    doc: 'Objection POS item 4 "My phone number is" — LEAVE BLANK'
+    default: ""
+    fit: shrink
+  pos_obj_sig_date:
+    map: "SUBP-025[0].Page2[0].Sign4[0].Date4[0]"
+    page: 2
+    doc: >-
+      Date next to the objection server's perjury signature — LEAVE
+      BLANK for that server to hand-date when signing.
+    default: ""
+  pos_obj_server_name:
+    map: "SUBP-025[0].Page2[0].Sign4[0].PrintName4[0]"
+    page: 2
+    doc: >-
+      "(TYPE OR PRINT NAME OF PERSON WHO SERVED)" for the objection —
+      LEAVE BLANK; the consumer's server prints their own name.
+    default: ""
+    fit: shrink
+
+checkboxes:
+  # ---- Page 1: who is signing the notice -------------------------------
+  # Positional, not name-derived (header note 3). Both off by default:
+  # the capacity in which a person signs is that person's declaration.
+  signed_by_requesting_party:
+    map: "SUBP-025[0].Page1[0].Sign1[0].Ch1[0]"
+    on_value: "/1"
+    doc: >-
+      "(SIGNATURE OF ☐ REQUESTING PARTY …)" — check when the party
+      signs the notice personally (self-represented filers).
+  signed_by_attorney:
+    map: "SUBP-025[0].Page1[0].Sign1[0].Ch1[1]"
+    on_value: "/1"
+    doc: >-
+      "(SIGNATURE OF … ☐ ATTORNEY)" — check when counsel of record
+      signs the notice. Exactly one of these two, chosen by the signer.
+
+  # ---- Page 1: the consumer's objection --------------------------------
+  # Never set by the serving party; here so a consumer-side workflow can.
+  object_all_records:
+    map: "SUBP-025[0].Page1[0].Lis1[0].ite1[0].Ch2[0]"
+    on_value: "/1"
+    doc: >-
+      Objection item 1 "I object to the production of all of my records
+      specified in the subpoena." Consumer-owned.
+  object_specified_records:
+    map: "SUBP-025[0].Page1[0].Lis2[0].ite2[0].Ch2[0]"
+    on_value: "/2"
+    doc: >-
+      Objection item 2 "I object only to the production of the following
+      specified records" — pair with objection_records. ON-STATE IS
+      "/2", not "/1" like item 1 above it (header note 2).
+      Consumer-owned.
+
+  # ---- Page 2: proof of service of the NOTICE (server's attestations) --
+  # All off by default. The server chooses; the machine never guesses.
+  pos_notice_personal_service:
+    map: "SUBP-025[0].Page2[0].SubTitle3[0].Ch4[0]"
+    on_value: "/1"
+    doc: >-
+      Notice POS heading "☐ Personal Service" — the banner box; pair
+      with pos_notice_method_personal at item 2a.
+  pos_notice_by_mail:
+    map: "SUBP-025[0].Page2[0].SubTitle3[0].Ch4[1]"
+    on_value: "/2"
+    doc: >-
+      Notice POS heading "☐ Mail" — on-state "/2". Pair with
+      pos_notice_method_mail at item 2b.
+  pos_notice_method_personal:
+    map: "SUBP-025[0].Page2[0].List2[0].Lia[0].ch20[0]"
+    on_value: "/1"
+    doc: 'Notice POS item 2a "Personal service. I personally delivered…" — server only'
+  pos_notice_method_mail:
+    map: "SUBP-025[0].Page2[0].List2[0].Lib[0].ch20[0]"
+    on_value: "/2"
+    doc: >-
+      Notice POS item 2b "Mail. I deposited … in the United States
+      mail…" — on-state "/2"; server only.
+
+  # ---- Page 2: proof of service of the OBJECTION (consumer's side) -----
+  pos_obj_personal_service:
+    map: "SUBP-025[0].Page2[0].SubTitle4[0].Ch8[0]"
+    on_value: "/1"
+    doc: 'Objection POS heading "☐ Personal Service" — consumer-side server only'
+  pos_obj_by_mail:
+    map: "SUBP-025[0].Page2[0].SubTitle4[0].Ch8[1]"
+    on_value: "/2"
+    doc: 'Objection POS heading "☐ Mail" — on-state "/2"; consumer-side server only'
+  pos_obj_party_personal:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii1[0].Ch9[0]"
+    on_value: "/1"
+    doc: 'Objection POS 2a(1) personal service ON THE REQUESTING PARTY — consumer-side'
+  pos_obj_party_mail:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lia[0].SubLia[0].Lii2[0].Ch9[0]"
+    on_value: "/2"
+    doc: >-
+      Objection POS 2a(2) service by mail ON THE REQUESTING PARTY —
+      on-state "/2"; consumer-side.
+  pos_obj_witness_personal:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii1[0].Ch10[0]"
+    on_value: "/1"
+    doc: 'Objection POS 2b(1) personal service ON THE WITNESS — consumer-side'
+  pos_obj_witness_mail:
+    map: "SUBP-025[0].Page2[0].Li2[0].Lib[0].SubLib[0].Lii2[0].Ch10[0]"
+    on_value: "/2"
+    doc: >-
+      Objection POS 2b(2) service by mail ON THE WITNESS — on-state
+      "/2"; consumer-side.
+
+# Static gray under-rectangle at the bottom-left of page 2, where the
+# stripped privacy-banner widget used to sit. It is page content, not an
+# annotation, so removing the widget leaves the gray block behind; paint
+# it out. (Rect derived from the Warning widget's own rect, with a small
+# margin, and confirmed by rendering.)
+whiteouts:
+  - page: 2
+    rect: [35, 1, 249, 27]
+
+agent_guide: |
+  SUBP-025 is the mandatory Judicial Council form for the NOTICE TO
+  CONSUMER OR EMPLOYEE AND OBJECTION — the notice that CCP §§ 1985.3 and
+  1985.6 require a subpoenaing party to serve on the individual whose
+  records a subpoena reaches. It is a companion document, never a
+  standalone one: it travels with a copy of the subpoena.
+
+  WHEN IT IS REQUIRED. Whenever a subpoena (SUBP-010, SUBP-020, or a
+  civil subpoena duces tecum) seeks records of an identifiable
+  individual held by someone else:
+    - § 1985.3 "consumer" records — a natural person's (or their
+      guardian's) medical, dental, psychotherapy, insurance, banking,
+      credit-card, phone/utility, school, or professional-service
+      records held by a "witness" such as a bank, hospital, therapist,
+      carrier, school, or licensed professional;
+    - § 1985.6 "employment" records — personnel and employment records
+      of an employee held by their employer.
+  A records subpoena for such records is INVALID without this notice:
+  the custodian may not lawfully produce, and the production is subject
+  to being quashed and to sanctions. If in doubt whether the records
+  are consumer records, serve the notice — it costs a mailing.
+
+  WHO GETS SERVED, AND WHEN. Serve the notice, with a copy of the
+  subpoena, on the consumer or employee (and on that person's attorney
+  of record, if they have one in this action) — personally or by mail —
+  at least 10 days before the date of production stated in the
+  subpoena, and at least 5 days before the subpoena is served on the
+  custodian, plus the extension Code Civ. Proc. § 1013 adds for mail.
+  Then serve the custodian with the subpoena AND proof that the notice
+  was served (§ 1985.3(c)); without that proof the custodian must not
+  produce. Every other party must also be served with the subpoena.
+  Working backward from the production date is the only safe order of
+  operations: the 20/15-day floor on the subpoena and the 10/5-day
+  floors on this notice interlock.
+
+  WHAT THE CONSUMER CAN DO — the bottom half of page 1 is theirs. A
+  non-party consumer objects by serving a written objection on the
+  requesting party and the witness BEFORE the production date (the
+  objection is NOT filed with the court); a consumer who IS a party
+  must instead move to quash under § 1987.1 and give notice of the
+  motion to the witness and the deposition officer at least five days
+  before the production date. Nothing in the objection block or in the
+  second proof of service on page 2 is ever filled by the subpoenaing
+  side — it is a reply form the recipient completes.
+
+  USUAL INVOCATION — declare the notices on the subpoena source and let
+  the build emit one filled SUBP-025 per recipient alongside it:
+
+      cover_sheet: subp010
+      forms:
+        subp010:
+          deponent: "Custodian of Records, Example Bank, N.A., …"
+          production_date: "September 15, 2026"
+        subp025:                       # shared across every notice
+          requesting_party: "JANE ROE, Respondent"
+          production_date: "September 15, 2026"
+          witness: >-
+            Custodian of Records, Example Bank, N.A., 500 Market
+            Street, Example City, CA 90000
+      consumer_notices:
+        - consumer: "JOHN SMITH"
+        - consumer: "MARY MAJOR"
+          slug: mary_major
+          witness: "Custodian of Records, Example Employer, Inc., …"
+
+  Each list entry names one recipient and may override any SUBP-025
+  field or checkbox for that recipient; everything else comes from the
+  shared ``forms.subp025`` block and the standard caption front matter
+  (filer_*, court_*, petitioner, respondent, case_number). Outputs land
+  next to the subpoena PDF as
+  ``<source stem>.subp025.<slug>.pdf``. The schema is specified in
+  pleading/pleading_markdown_spec.md.
+
+  FILLING IT DIRECTLY (``sc form fill subp025``) needs only four
+  values: consumer, requesting_party, production_date, witness. The
+  production_date MUST equal the production date on the subpoena's face
+  — a mismatch misstates the consumer's deadline and invites a motion.
+
+  ALWAYS LEFT BLANK — do not fill:
+    - notice_date and the notice signature (the signature line has no
+      widget; notice_signer IS pre-filled, so only the pen strokes, the
+      date, and the REQUESTING PARTY / ATTORNEY capacity box remain);
+    - the entire objection block (objection_*) and its checkboxes —
+      that half of page 1 belongs to the recipient;
+    - every page-2 proof-of-service field and checkbox (pos_*). They
+      are mapped so post-service workflows can complete them from real
+      service facts, but at issuance nothing has been served, and the
+      copy served on the consumer carries page 2 blank.

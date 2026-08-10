@@ -1,0 +1,752 @@
+#!/usr/bin/env python3
+"""sc — the prosaic operations command line.
+
+Thin dispatcher over the repo's components; run `sc <command> -h` for
+details. Commands:
+
+  init <dir>              scaffold a new matter directory
+  sync <dir>              run configured connectors + AI triage now
+  build <envelope>        build a filing envelope (from a matter dir)
+  list                    list envelopes (from a matter dir)
+  clean [dir]             report stale files in out/ (--apply removes them)
+  ocr <pdf> <outdir>      OCR-supplement one PDF
+  connectors              list available connectors
+  backup <action> [dir]   init/push/status a matter's backup upstream
+  commit-check [file]     validate a matter commit message
+  hooks <dir>             install the matter git hooks
+  deps                    report which system dependencies are present
+  schedule <dir>          install the 12-hourly background sync (macOS)
+"""
+
+from __future__ import annotations
+
+import argparse
+import json
+import os
+import shutil
+import subprocess
+import sys
+from pathlib import Path
+
+ROOT = Path(__file__).resolve().parent.parent
+
+MATTER_DIRS = [
+    "inbox",
+    "processed_files",
+    "assets",
+    "assets/gmail",
+    "pleadings",
+    "discovery",
+    "src",
+    "memos",
+    "lawyer_drafts",
+    "unfiled",
+]
+
+
+APP = "prosaic"
+
+#: Where prosaic keeps things, by kind. This is the *only*
+#: implementation of that policy in the repo: the shell helpers and the
+#: Node connectors call `sc paths <kind>` rather than reimplementing
+#: it, so the copies cannot drift because there are no copies. Callers
+#: that spawn children export the answer (PROSAIC_*_DIR), so the
+#: usual path costs no subprocess at all.
+PATH_KINDS = ("log-dir", "data-dir", "cache-dir")
+
+
+def _platform() -> str:
+    return os.environ.get("PROSAIC_PLATFORM") or sys.platform
+
+
+def _xdg(env_name: str, fallback: str) -> Path:
+    """$XDG_<X>_HOME if set and absolute, else ~/<fallback>.
+
+    The absolute check is the spec's: XDG says a relative value is
+    invalid and must be ignored rather than resolved against the cwd,
+    which would scatter files wherever a process happened to start.
+    """
+    from_env = os.environ.get(env_name)
+    if from_env and os.path.isabs(from_env):
+        return Path(from_env) / APP
+    return Path.home() / fallback / APP
+
+
+def app_path(kind: str) -> Path:
+    """Resolve one application directory."""
+    override = {
+        "log-dir": "PROSAIC_LOG_DIR",
+        "data-dir": "PROSAIC_DATA_DIR",
+        "cache-dir": "PROSAIC_CACHE_DIR",
+    }.get(kind)
+    if override is None:
+        raise ValueError(f"unknown path kind {kind!r} (expected one of {', '.join(PATH_KINDS)})")
+    from_env = os.environ.get(override)
+    if from_env:
+        return Path(from_env)
+
+    darwin = _platform().startswith(("darwin", "Darwin"))
+    if kind == "log-dir":
+        # Logs: human-readable, disposable, safe to delete.
+        if darwin:
+            return Path.home() / "Library/Logs" / APP
+        return _xdg("XDG_STATE_HOME", ".local/state") / "logs"
+    if kind == "data-dir":
+        # Durable data — browser profiles, downloaded models. Pinned to
+        # the XDG location on macOS too, because that is where it
+        # already is: relocating it would invalidate live portal
+        # sessions. An idiomatic move needs a migration.
+        return _xdg("XDG_DATA_HOME", ".local/share")
+    if darwin:
+        return Path.home() / "Library/Caches" / APP
+    return _xdg("XDG_CACHE_HOME", ".cache")
+
+
+def cmd_paths(args: argparse.Namespace) -> int:
+    print(app_path(args.kind))
+    return 0
+
+
+def cmd_init(args: argparse.Namespace) -> int:
+    dest = Path(args.matter_dir).expanduser().resolve()
+    dest.mkdir(parents=True, exist_ok=True)
+    template = ROOT / "templates" / "matter"
+    for d in MATTER_DIRS:
+        (dest / d).mkdir(parents=True, exist_ok=True)
+    for f in template.rglob("*"):
+        if f.is_dir():
+            continue
+        rel = f.relative_to(template)
+        if rel.name == "processed_files_MANIFEST.md":
+            target = dest / "processed_files" / "MANIFEST.md"
+        else:
+            target = dest / rel
+        if target.exists() and not args.force:
+            print(f"  keep existing {target.relative_to(dest)}")
+            continue
+        target.parent.mkdir(parents=True, exist_ok=True)
+        shutil.copy(f, target)
+        print(f"  wrote {target.relative_to(dest)}")
+    makefile = dest / "Makefile"
+    if not makefile.exists():
+        makefile.symlink_to(ROOT / "pleading" / "Makefile")
+        print("  linked Makefile")
+    if args.git and not (dest / ".git").exists():
+        subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
+        print("  git init")
+    if (dest / ".git").exists():
+        # On by default rather than a per-clone ritual: the commit
+        # convention is only worth anything if it is there from the
+        # first commit.
+        cmd_hooks(argparse.Namespace(matter_dir=str(dest)))
+    print(f"Matter scaffolded at {dest}. Next: edit matter.yaml, then `sc sync {dest}`.")
+    return 0
+
+
+def cmd_sync(args: argparse.Namespace) -> int:
+    cmd = ["/bin/bash", str(ROOT / "sync" / "matter_sync.sh"), str(Path(args.matter_dir).resolve())]
+    if args.scheduled:
+        cmd.append("--scheduled")
+    return subprocess.run(cmd).returncode
+
+
+def _build(argv: list[str]) -> int:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "pleading" / "build_envelope.py"), *argv]
+    ).returncode
+
+
+def cmd_build(args: argparse.Namespace) -> int:
+    extra = []
+    if args.force:
+        extra.append("--force")
+    if args.variant:
+        extra += ["--variant", args.variant]
+    if args.sign:
+        extra += ["--sign", args.sign]
+    return _build([args.envelope, *extra])
+
+
+def cmd_list(_args: argparse.Namespace) -> int:
+    return _build(["--list"])
+
+
+def cmd_ocr(args: argparse.Namespace) -> int:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "pleading" / "ocr_supplement.py"), args.pdf, args.outdir]
+    ).returncode
+
+
+def cmd_clean(args: argparse.Namespace) -> int:
+    """Report — and optionally remove — files in out/ the config cannot produce.
+
+    Stale build output is not merely untidy in a matter. An old PDF in
+    `out/` is indistinguishable from a current one, and it is the thing
+    someone attaches to an email. The two hand-assembled `.packet.pdf`
+    files that prompted this were months out of date, carried captions
+    the current build no longer produces, and nothing regenerated them.
+
+    Reporting is the default and deleting is opt-in, because the
+    expected-output set is computed from config and a bug there would
+    delete real work. Tracked files are called out separately: git can
+    give those back, and nothing else can.
+    """
+    matter = Path(args.matter_dir).expanduser().resolve()
+    out_root = matter / "out"
+    if not out_root.is_dir():
+        print(f"No out/ directory in {matter}.")
+        return 0
+
+    listing = subprocess.run(
+        [sys.executable, str(ROOT / "pleading" / "build_envelope.py"), "--list-outputs"],
+        cwd=matter, capture_output=True, text=True,
+    )
+    if listing.returncode != 0:
+        print(f"could not read the envelope config:\n{listing.stderr}", file=sys.stderr)
+        return 1
+    expected = set()
+    protected_dirs = set()
+    for line in listing.stdout.splitlines():
+        line = line.strip()
+        if not line:
+            continue
+        if line.endswith("/*"):
+            protected_dirs.add(line[:-2])
+        else:
+            expected.add(line)
+
+    tracked = set()
+    rev = subprocess.run(["git", "ls-files", "out"], cwd=matter,
+                         capture_output=True, text=True)
+    if rev.returncode == 0:
+        tracked = set(rev.stdout.split("\n"))
+
+    stale = []
+    for path in sorted(out_root.rglob("*")):
+        if not path.is_file():
+            continue
+        rel = str(path.relative_to(matter))
+        if rel in expected:
+            continue
+        if any(rel.startswith(d + "/") for d in protected_dirs):
+            continue
+        stale.append((rel, rel in tracked))
+
+    if not stale:
+        print("out/ is clean — every file is one the current config produces.")
+        return 0
+
+    for rel, is_tracked in stale:
+        print(f"  {'tracked  ' if is_tracked else 'untracked'}  {rel}")
+    n_tracked = sum(1 for _, t in stale if t)
+    print(f"\n{len(stale)} stale file(s); {n_tracked} tracked, "
+          f"{len(stale) - n_tracked} untracked.")
+
+    if not args.apply:
+        print("\nNothing deleted. Re-run with --apply to remove them.")
+        if n_tracked:
+            print("Tracked files are recoverable from git history; "
+                  "untracked ones are not.")
+        return 0
+
+    for rel, _ in stale:
+        (matter / rel).unlink()
+    print(f"\nRemoved {len(stale)} file(s). Commit the deletions to record them.")
+    return 0
+
+
+def cmd_form(args: argparse.Namespace) -> int:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "pleading" / "form_fill.py"), *args.rest]
+    ).returncode
+
+
+def cmd_connectors(_args: argparse.Namespace) -> int:
+    for manifest in sorted((ROOT / "connectors").glob("*/manifest.json")):
+        m = json.loads(manifest.read_text())
+        print(f"{m['name']:<10} {m['description']}")
+        print(f"{'':<10} auth: {m['auth']}")
+        print(f"{'':<10} output: {m['output']}")
+    return 0
+
+
+#: The system binaries the pipeline shells out to, declared in one
+#: place so they stop being prose in docs/ that you discover by way of
+#: a failed build. The Dockerfile installs from this list and the
+#: suite checks it against the code's actual subprocess calls.
+DEPS_FILE = ROOT / "system-dependencies.yaml"
+
+
+def load_dependencies() -> list[dict]:
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        raise SystemExit(
+            "sc deps needs PyYAML.  pip install -r pleading/requirements.txt"
+        )
+    return yaml.safe_load(DEPS_FILE.read_text())["dependencies"]
+
+
+def _this_platform() -> str:
+    return "darwin" if _platform().startswith(("darwin", "Darwin")) else "linux"
+
+
+def _applies_here(dep: dict) -> bool:
+    return _this_platform() in (dep.get("platforms") or ["darwin", "linux"])
+
+
+def _version_of(binary: str) -> tuple[int, ...] | None:
+    """Best-effort `--version` probe. Unparseable is not a failure.
+
+    Nothing here should reject a working install because its version
+    string had an unusual shape — the check exists to catch a distro
+    Node too old for Puppeteer, not to be a version policy.
+    """
+    import re
+
+    try:
+        out = subprocess.run(
+            [binary, "--version"], capture_output=True, text=True, timeout=10
+        )
+    except (OSError, subprocess.SubprocessError):
+        return None
+    m = re.search(r"(\d+)\.(\d+)(?:\.(\d+))?", (out.stdout or "") + (out.stderr or ""))
+    if not m:
+        return None
+    return tuple(int(g) for g in m.groups() if g is not None)
+
+
+def cmd_deps(args: argparse.Namespace) -> int:
+    deps = load_dependencies()
+
+    if args.format == "apt":
+        # What the Linux image installs. Entries excluded from the
+        # container (transcription, the Keychain, the triage CLI) are
+        # excluded here by construction rather than by a second list.
+        pkgs = {d["apt"] for d in deps if d.get("apt") and d.get("in_container")}
+        print(" ".join(sorted(pkgs)))
+        return 0
+
+    if args.format == "brew":
+        pkgs = {
+            d["brew"]
+            for d in deps
+            if d.get("brew") and "darwin" in (d.get("platforms") or [])
+        }
+        print(" ".join(sorted(pkgs)))
+        return 0
+
+    here = _this_platform()
+    missing_required: list[str] = []
+    for dep in deps:
+        if not _applies_here(dep):
+            continue
+        binary, required = dep["binary"], dep.get("required", False)
+        found = shutil.which(binary)
+        note = ""
+        if found:
+            mark = "ok "
+            want = dep.get("minimum_version")
+            if want:
+                have = _version_of(binary)
+                wanted = tuple(int(p) for p in str(want).split("."))
+                if have and have[: len(wanted)] < wanted:
+                    mark = "OLD"
+                    note = f"have {'.'.join(map(str, have))}, need {want}+"
+                    if required:
+                        missing_required.append(binary)
+        else:
+            mark = "MISSING" if required else "--"
+            hint = dep.get("brew") if here == "darwin" else dep.get("apt")
+            manager = "brew install" if here == "darwin" else "apt install"
+            note = f"{manager} {hint}" if hint else dep.get("npm", "") or "not packaged"
+            if required:
+                missing_required.append(binary)
+        print(f"  {mark:<8} {binary:<14} {note or dep['why']}")
+
+    if missing_required:
+        print(
+            "\nMissing required: " + ", ".join(missing_required),
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+#: Commit types for a matter, taken from what a docket records rather
+#: than from what a build system records. The distinction that earns
+#: the vocabulary is `draft` vs `docket`: a final-looking PDF in out/
+#: is identical whether or not it was ever filed, and only the history
+#: can say which. See docs/commits.md and ADR-0014.
+COMMIT_TYPES = {
+    "intake": "material arrived; nothing evaluated yet",
+    "triage": "material became evidence: OCR, sidecars, INDEX row",
+    "draft": "work product written or revised; not filed",
+    "build": "outputs regenerated from sources; no decisions inside",
+    "docket": "a real-world event: filed, served, lodged, received",
+    "discovery": "requests, responses, subpoenas, productions",
+    "record": "durable case knowledge (KNOWLEDGE, TODO, QUESTIONS)",
+    "config": "matter machinery (matter.yaml, envelopes.yaml, Makefile)",
+    "chore": "housekeeping with no case meaning",
+}
+
+#: Types that assert something happened outside this folder, and the
+#: footer that has to say what. An agent may never supply these from
+#: inference — only from the document itself or the user's statement.
+DOCKET_FOOTERS = ("Filed", "Served", "Lodged", "Received")
+
+#: Types where provenance is the question a reader will actually have.
+SOURCE_REQUIRED = ("intake", "triage", "docket")
+
+COMMIT_SUBJECT_MAX = 72
+
+
+def _check_commit_message(text: str) -> tuple[list[str], list[str]]:
+    """Return (errors, warnings) for one commit message."""
+    import re
+
+    errors: list[str] = []
+    warnings: list[str] = []
+
+    lines = [ln.rstrip() for ln in text.splitlines()]
+    # Ignore the comment block git appends in an editor session.
+    lines = [ln for ln in lines if not ln.startswith("#")]
+    while lines and not lines[0].strip():
+        lines.pop(0)
+    if not lines:
+        return (["empty commit message"], warnings)
+
+    subject = lines[0]
+    m = re.match(r"^(?P<type>[a-z]+)(?:\((?P<scope>[^)]+)\))?(?P<bang>!)?: (?P<rest>.+)$",
+                 subject)
+    if not m:
+        errors.append(
+            f"subject must read `type(scope): summary` — got {subject!r}.\n"
+            f"  types: {', '.join(sorted(COMMIT_TYPES))}"
+        )
+        return (errors, warnings)
+
+    ctype = m.group("type")
+    if ctype not in COMMIT_TYPES:
+        errors.append(
+            f"unknown type {ctype!r}. Types and what they mean:\n  "
+            + "\n  ".join(f"{k:<10} {v}" for k, v in sorted(COMMIT_TYPES.items()))
+        )
+
+    if len(subject) > COMMIT_SUBJECT_MAX:
+        warnings.append(
+            f"subject is {len(subject)} chars; keep it under {COMMIT_SUBJECT_MAX}"
+        )
+    if m.group("rest").endswith("."):
+        warnings.append("subject should not end with a period")
+    if m.group("rest")[:1].isupper() and not m.group("rest").split()[0].isupper():
+        warnings.append("subject should start lowercase")
+
+    body = "\n".join(lines[1:])
+    footers = {
+        fm.group(1)
+        for fm in re.finditer(r"^([A-Z][A-Za-z-]*):\s*\S", body, re.MULTILINE)
+    }
+
+    if ctype == "docket" and not (set(DOCKET_FOOTERS) & footers):
+        warnings.append(
+            "a `docket:` commit asserts something happened in the world — add "
+            f"one of {', '.join(f + ':' for f in DOCKET_FOOTERS)} with the date, "
+            "or use `draft:` if it has not gone out"
+        )
+    if ctype in SOURCE_REQUIRED and "Source" not in footers:
+        warnings.append(
+            f"`{ctype}:` should carry `Source:` — where the material came from "
+            "is the question you will be asked about it"
+        )
+
+    return (errors, warnings)
+
+
+def cmd_commit_check(args: argparse.Namespace) -> int:
+    if args.list_types:
+        for name, meaning in sorted(COMMIT_TYPES.items()):
+            print(f"  {name:<10} {meaning}")
+        return 0
+
+    text = Path(args.message_file).read_text() if args.message_file else sys.stdin.read()
+    errors, warnings = _check_commit_message(text)
+
+    for w in warnings:
+        print(f"commit-check: {w}", file=sys.stderr)
+    for e in errors:
+        print(f"commit-check: {e}", file=sys.stderr)
+    if errors:
+        print(
+            "\nSee docs/commits.md. To commit anyway: git commit --no-verify",
+            file=sys.stderr,
+        )
+        return 1
+    return 0
+
+
+def cmd_hooks(args: argparse.Namespace) -> int:
+    """Install the matter-side git hooks into a matter directory."""
+    dest = Path(args.matter_dir).expanduser().resolve()
+    if not (dest / ".git").exists():
+        print(f"{dest} is not a git repository; run `git init` there first.",
+              file=sys.stderr)
+        return 1
+    hooks_src = ROOT / "templates" / "matter" / "githooks"
+    hooks_dir = dest / ".githooks"
+    hooks_dir.mkdir(exist_ok=True)
+    for hook in hooks_src.iterdir():
+        target = hooks_dir / hook.name
+        shutil.copy(hook, target)
+        target.chmod(0o755)
+        print(f"  installed {target.relative_to(dest)}")
+    subprocess.run(["git", "config", "core.hooksPath", ".githooks"],
+                   cwd=dest, check=True)
+    print("  git config core.hooksPath .githooks")
+    return 0
+
+
+#: Git remote a matter backs itself up to. Never "origin": a matter has
+#: no upstream it was cloned from, and reusing the name invites the
+#: muscle memory of `git push` reaching somewhere it should not.
+BACKUP_REMOTE = "backup"
+
+
+def _matter_config(matter_dir: Path) -> dict:
+    try:
+        import yaml
+    except ModuleNotFoundError:
+        raise SystemExit("sc backup needs PyYAML.  pip install -r pleading/requirements.txt")
+    cfg = matter_dir / "matter.yaml"
+    if not cfg.exists():
+        raise SystemExit(f"no matter.yaml in {matter_dir}")
+    return yaml.safe_load(cfg.read_text()) or {}
+
+
+def _github_repo_is_private(repo: str) -> bool:
+    """Ask GitHub, every time — never trust the config's word for it.
+
+    This is the check the whole GitHub backend hangs on. A matter is
+    privileged material; the difference between a private repo and a
+    public one is the difference between a backup and a disclosure, and
+    a repo's visibility can be changed after `sc backup init` ran.
+    """
+    out = subprocess.run(
+        ["gh", "repo", "view", repo, "--json", "isPrivate"],
+        capture_output=True, text=True,
+    )
+    if out.returncode != 0:
+        raise SystemExit(
+            f"could not read {repo} from GitHub: {out.stderr.strip()}\n"
+            f"Check `gh auth status`."
+        )
+    return bool(json.loads(out.stdout).get("isPrivate"))
+
+
+def _backup_destination(matter_dir: Path, cfg: dict) -> tuple[str, str]:
+    """Return (kind, git-url) for this matter's backup, or exit saying why not."""
+    backup = cfg.get("backup") or {}
+    kind = str(backup.get("kind") or "local")
+
+    if kind == "local":
+        path = backup.get("path")
+        if path:
+            dest = Path(str(path)).expanduser()
+        else:
+            dest = app_path("data-dir") / "backups" / f"{matter_dir.name}.git"
+        return ("local", str(dest))
+
+    if kind == "github":
+        repo = backup.get("repo")
+        if not repo:
+            raise SystemExit(
+                'backup.kind is "github" but backup.repo is not set '
+                '(expected "owner/name" in matter.yaml).'
+            )
+        if not shutil.which("gh"):
+            raise SystemExit("backup.kind is \"github\" but the `gh` CLI is not installed.")
+        if not _github_repo_is_private(str(repo)):
+            raise SystemExit(
+                f"REFUSING: {repo} is a PUBLIC GitHub repository.\n"
+                f"A matter is privileged material and is never pushed to a "
+                f"public repo. Make it private, or use backup.kind: local."
+            )
+        return ("github", f"https://github.com/{repo}.git")
+
+    raise SystemExit(f'unknown backup.kind {kind!r} (expected "local" or "github")')
+
+
+def cmd_backup(args: argparse.Namespace) -> int:
+    matter_dir = Path(args.matter_dir).expanduser().resolve()
+    if not (matter_dir / ".git").exists():
+        print(f"{matter_dir} is not a git repository.", file=sys.stderr)
+        return 1
+    cfg = _matter_config(matter_dir)
+
+    if args.action == "status":
+        backup = cfg.get("backup") or {}
+        if not backup:
+            print("No backup configured. Add a `backup:` block to matter.yaml, "
+                  "then run `sc backup init`.")
+            return 0
+        kind, url = _backup_destination(matter_dir, cfg)
+        print(f"  kind      {kind}")
+        print(f"  target    {url}")
+        remote = subprocess.run(
+            ["git", "remote", "get-url", BACKUP_REMOTE],
+            cwd=matter_dir, capture_output=True, text=True,
+        )
+        if remote.returncode != 0:
+            print(f"  remote    not configured — run `sc backup init {matter_dir}`")
+            return 0
+        print(f"  remote    {remote.stdout.strip()}")
+        branch = subprocess.run(
+            ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+            cwd=matter_dir, capture_output=True, text=True, check=True,
+        ).stdout.strip()
+        ahead = subprocess.run(
+            ["git", "rev-list", "--count", f"{BACKUP_REMOTE}/{branch}..HEAD"],
+            cwd=matter_dir, capture_output=True, text=True,
+        )
+        if ahead.returncode != 0:
+            print("  unpushed  unknown — nothing pushed to this remote yet")
+        else:
+            n = ahead.stdout.strip()
+            print("  unpushed  none" if n == "0" else f"  unpushed  {n} commit(s)")
+        return 0
+
+    kind, url = _backup_destination(matter_dir, cfg)
+
+    if args.action == "init":
+        if kind == "local":
+            dest = Path(url)
+            if not dest.exists():
+                dest.parent.mkdir(parents=True, exist_ok=True)
+                subprocess.run(["git", "init", "--bare", "-q", str(dest)], check=True)
+                print(f"  created bare repository {dest}")
+            else:
+                print(f"  using existing {dest}")
+        else:
+            print(f"  target {url} (verified private)")
+        existing = subprocess.run(
+            ["git", "remote", "get-url", BACKUP_REMOTE],
+            cwd=matter_dir, capture_output=True, text=True,
+        )
+        verb = "set-url" if existing.returncode == 0 else "add"
+        subprocess.run(["git", "remote", verb, BACKUP_REMOTE, url],
+                       cwd=matter_dir, check=True)
+        print(f"  remote {BACKUP_REMOTE} -> {url}")
+        hook = matter_dir / ".githooks" / "post-commit"
+        if not hook.exists():
+            print("  note: no post-commit hook — run `sc hooks` to back up "
+                  "automatically after each commit")
+        return 0
+
+    # push
+    branch = subprocess.run(
+        ["git", "rev-parse", "--abbrev-ref", "HEAD"],
+        cwd=matter_dir, capture_output=True, text=True, check=True,
+    ).stdout.strip()
+    result = subprocess.run(
+        ["git", "push", BACKUP_REMOTE, branch],
+        cwd=matter_dir, capture_output=True, text=True,
+    )
+    if result.returncode != 0:
+        print(f"backup push failed: {result.stderr.strip()}", file=sys.stderr)
+        return 1
+    print(f"  backed up {branch} -> {url}")
+    return 0
+
+
+def cmd_schedule(args: argparse.Namespace) -> int:
+    cmd = ["/bin/bash", str(ROOT / "sync" / "install_schedule.sh"), str(Path(args.matter_dir).resolve())]
+    if args.times:
+        cmd += args.times
+    return subprocess.run(cmd).returncode
+
+
+def main() -> int:
+    p = argparse.ArgumentParser(prog="sc", description=__doc__,
+                                formatter_class=argparse.RawDescriptionHelpFormatter)
+    sub = p.add_subparsers(dest="command", required=True)
+
+    sp = sub.add_parser("init", help="scaffold a new matter directory")
+    sp.add_argument("matter_dir")
+    sp.add_argument("--force", action="store_true", help="overwrite existing template files")
+    sp.add_argument("--git", action="store_true", help="git init the matter")
+    sp.set_defaults(func=cmd_init)
+
+    sp = sub.add_parser("sync", help="run configured connectors + AI triage now")
+    sp.add_argument("matter_dir")
+    sp.add_argument("--scheduled", action="store_true", help=argparse.SUPPRESS)
+    sp.set_defaults(func=cmd_sync)
+
+    sp = sub.add_parser("build", help="build a filing envelope (run from the matter dir)")
+    sp.add_argument("envelope")
+    sp.add_argument("--force", action="store_true")
+    sp.add_argument("--variant")
+    sp.add_argument("--sign", metavar="NAME")
+    sp.set_defaults(func=cmd_build)
+
+    sp = sub.add_parser("list", help="list envelopes (run from the matter dir)")
+    sp.set_defaults(func=cmd_list)
+
+    sp = sub.add_parser("ocr", help="OCR-supplement one PDF into an output dir")
+    sp.add_argument("pdf")
+    sp.add_argument("outdir")
+    sp.set_defaults(func=cmd_ocr)
+
+    sp = sub.add_parser("form", help="JC form operations: list, info, fill, fields")
+    sp.add_argument("rest", nargs=argparse.REMAINDER,
+                    help="passed through to pleading/form_fill.py")
+    sp.set_defaults(func=cmd_form)
+
+    sp = sub.add_parser("connectors", help="list available connectors")
+    sp.set_defaults(func=cmd_connectors)
+
+    sp = sub.add_parser("paths", help="print an application directory")
+    sp.add_argument("kind", choices=PATH_KINDS)
+    sp.set_defaults(func=cmd_paths)
+
+    sp = sub.add_parser("clean", help="report stale files in out/ (--apply removes)")
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--apply", action="store_true",
+                    help="actually delete them (default: report only)")
+    sp.set_defaults(func=cmd_clean)
+
+    sp = sub.add_parser("backup", help="back a matter up to its configured upstream")
+    sp.add_argument("action", choices=("init", "push", "status"))
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.set_defaults(func=cmd_backup)
+
+    sp = sub.add_parser("commit-check", help="validate a matter commit message")
+    sp.add_argument("message_file", nargs="?",
+                    help="file holding the message (default: stdin)")
+    sp.add_argument("--list-types", action="store_true",
+                    help="print the commit types and what they mean")
+    sp.set_defaults(func=cmd_commit_check)
+
+    sp = sub.add_parser("hooks", help="install the matter git hooks")
+    sp.add_argument("matter_dir")
+    sp.set_defaults(func=cmd_hooks)
+
+    sp = sub.add_parser("deps", help="report or list the system dependencies")
+    sp.add_argument(
+        "--format",
+        choices=("check", "apt", "brew"),
+        default="check",
+        help="check what's installed (default), or emit a package list",
+    )
+    sp.set_defaults(func=cmd_deps)
+
+    sp = sub.add_parser("schedule", help="install the 12-hourly background sync (macOS)")
+    sp.add_argument("matter_dir")
+    sp.add_argument("times", nargs="*", help="two HH:MM firing times (default 08:00 20:00)")
+    sp.set_defaults(func=cmd_schedule)
+
+    args = p.parse_args()
+    return args.func(args)
+
+
+if __name__ == "__main__":
+    raise SystemExit(main())

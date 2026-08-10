@@ -1,0 +1,10 @@
+# envelopes.yaml — filing "envelopes": groups of pleading source files
+# (src/*.md) built together into out/<envelope>/ by `sc build <name>`.
+# See prosaic pleading/pleading_markdown_spec.md for source format.
+
+envelopes: {}
+#  responsive_declaration:
+#    sources:
+#      - Declaration of Jane Roe.md
+#      - file: Memorandum of Points and Authorities.md
+#        docx: true                 # also emit .docx
