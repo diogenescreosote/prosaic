@@ -746,6 +746,7 @@ dev = [
     { name = "pytest" },
     { name = "pytest-cov" },
     { name = "ruff" },
+    { name = "types-reportlab" },
 ]
 
 [package.metadata]
@@ -763,6 +764,7 @@ dev = [
     { name = "pytest", specifier = ">=8.2" },
     { name = "pytest-cov", specifier = ">=5.0" },
     { name = "ruff", specifier = ">=0.5" },
+    { name = "types-reportlab", specifier = ">=4.5.1.20260807" },
 ]
 
 [[package]]
@@ -999,6 +1001,15 @@ dependencies = [
 sdist = { url = "https://files.pythonhosted.org/packages/ae/40/4a3db7990d1f62a53182aa96eaef57aeb2886a27f90a195bc66713565d31/typer-0.27.1.tar.gz", hash = "sha256:a79bef8469a79c45498e7b814ecf8d603cc7644e9acbd9e19cac0334240b18df", size = 203994, upload-time = "2026-08-03T14:41:03.438Z" }
 wheels = [
     { url = "https://files.pythonhosted.org/packages/43/89/9518bc0c3929bee36b3a4a8e3daddd6e03f92f9961c66d4983b837160543/typer-0.27.1-py3-none-any.whl", hash = "sha256:53150287edd11baeb4e4722c8e394fcdf8181c0ae89485cba8d25c778d5edd56", size = 122874, upload-time = "2026-08-03T14:41:04.391Z" },
+]
+
+[[package]]
+name = "types-reportlab"
+version = "4.5.1.20260807"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/ed/05/528a606d545ffb1b683fb1a8fb0173300dffb03aa7d237e43e51569f5ab2/types_reportlab-4.5.1.20260807.tar.gz", hash = "sha256:879b1dccd85daf6ec15bfa9c293a2ab0190a73666d0f7df54fb512b3b6c1c7b5", size = 72806, upload-time = "2026-08-07T04:17:09.743Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/f2/56/dedb438964c691e69c3dcfc939db74c618bd5683a797bc42a14b95fc180d/types_reportlab-4.5.1.20260807-py3-none-any.whl", hash = "sha256:5f5081bf2ecfa7b2694336d446649048f93872ac9b296b9977f5bc9afba6bf39", size = 113194, upload-time = "2026-08-07T04:17:08.563Z" },
 ]
 
 [[package]]
