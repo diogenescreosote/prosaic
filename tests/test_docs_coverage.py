@@ -22,6 +22,7 @@ from __future__ import annotations
 
 import re
 import subprocess
+import sys
 from pathlib import Path
 
 import pytest
@@ -129,3 +130,29 @@ def test_system_dependencies_are_documented_not_only_declared():
     install = read("docs/install.md")
     for expected in ("sc deps", "system-dependencies.yaml"):
         assert expected in install, f"docs/install.md does not mention {expected}"
+
+
+def test_readme_test_count_is_current():
+    """The README quotes a test count, so the number has to be true.
+
+    A figure like "370 tests" is doing the work an adjective would
+    otherwise do, which means a reader may check it — and a reader who
+    runs the suite and gets a different number learns the opposite of
+    what the sentence was for.
+    """
+    claimed = re.search(r"(\d[\d,]*) tests, ", read("README.md"))
+    assert claimed, "README no longer states a test count"
+
+    proc = subprocess.run(
+        [sys.executable, "-m", "pytest", "--collect-only", "--no-cov",
+         "-p", "no:cacheprovider"],
+        cwd=REPO_ROOT, capture_output=True, text=True,
+    )
+    found = re.search(r"(\d+) tests? collected", proc.stdout)
+    assert found, f"could not read a collection count:\n{proc.stdout[-800:]}"
+
+    stated, collected = int(claimed.group(1).replace(",", "")), int(found.group(1))
+    assert stated == collected, (
+        f"README says {stated} tests; the suite collects {collected}. "
+        "Update the README."
+    )

@@ -4,7 +4,7 @@
 
 prosaic is organized around one boundary: **the model classifies, extracts,
 and drafts prose; the engine computes, validates, and renders.** Everything
-below `prosaic/agent/` is deterministic — same inputs, same bytes out. The
+below `prosaic/agent/` is deterministic: same inputs, same bytes out. The
 agent layer can act on the engine only through typed tools, and no tool
 exists that accepts model-generated dates as authority for anything.
 
@@ -13,7 +13,7 @@ exists that accepts model-generated dates as authority for anything.
 ```
 prosaic/
   deadlines/    statutory date computation. Pure functions over dates, a
-                service-method enum, and a court calendar. Stdlib only —
+                service-method enum, and a court calendar. Stdlib only:
                 no pydantic, no I/O except loading packaged holiday data.
   model/        the case model: matter, parties, counsel, court, documents,
                 exhibits, service events, docket entries. Pydantic v2.
@@ -41,7 +41,7 @@ below it and adds no computation of its own.
 
 ## Data flow
 
-1. **Ingest.** A `RecordSource` yields `FetchedDocument`s — raw bytes plus a
+1. **Ingest.** A `RecordSource` yields `FetchedDocument`s: raw bytes plus a
    locator. `ingest()` hashes each one; the SHA-256 is the identity, so the
    same PDF arriving from two sources joins the matter once. Original bytes
    are never modified.
@@ -51,7 +51,7 @@ below it and adds no computation of its own.
    internally consistent. Values that flow into filings or deadline
    computation are `Fact[T]` with provenance.
 3. **Compute.** Deadline rules take facts (a date, a method) and a
-   `CourtCalendar`, and return a `Deadline` — date, citation, description.
+   `CourtCalendar`, and return a `Deadline`: date, citation, description.
    Calendars carry an explicit coverage window and raise on dates outside
    it. See [DEADLINES.md](DEADLINES.md).
 4. **Render.** A pack's form module turns `(Matter, context)` into exact
@@ -76,8 +76,8 @@ below it and adds no computation of its own.
   monotonicity, backward/forward round-trip).
 - Form modules have golden-file tests: exact expected field values
   committed as JSON, plus read-back from the rendered PDF.
-- The operator loop is tested against a scripted client — including
-  malformed tool input, unknown tools, refusals, and the turn budget —
+- The operator loop is tested against a scripted client (malformed tool
+  input, unknown tools, refusals, the turn budget)
   so no test depends on the network.
 - A leak guard walks every tracked file and every commit message for
   content that must not appear in this repository, and runs in CI.
@@ -104,22 +104,22 @@ directory, and turns Markdown drafting into filing-ready documents.
 
 ### The five layers
 
-1. **Matter layout** ([matter-layout.md](matter-layout.md)) — the
+1. **Matter layout** ([matter-layout.md](matter-layout.md)). The
    directory convention every other layer assumes. Plain files,
    Markdown metadata, git-friendly.
 
-2. **Connectors** ([connectors.md](connectors.md)) — small modules
+2. **Connectors** ([connectors.md](connectors.md)). Small modules
    that pull external sources into the matter. Each conforms to a
    one-page contract (invoke with the matter dir; print `NEW <path>`
    lines; keep state in `.state/<name>.json`). Shipped: `gmail`,
    `mycase`.
 
-3. **Sync + scheduling** ([scheduling.md](scheduling.md)) —
+3. **Sync + scheduling** ([scheduling.md](scheduling.md)).
    `sync/matter_sync.sh` runs every configured connector, then one AI
    triage pass over everything new. A launchd agent fires it every 12
    hours with catch-up-once semantics after downtime.
 
-4. **AI triage** ([triage.md](triage.md)) — a headless
+4. **AI triage** ([triage.md](triage.md)). A headless
    [Claude Code](https://claude.com/claude-code) session, running
    inside the matter directory under the matter's `CLAUDE.md`
    contract, catalogs each new file, routes staged documents to their
@@ -127,7 +127,7 @@ directory, and turns Markdown drafting into filing-ready documents.
 
 5. **Pleading generation**
    ([../pleading/pleading_markdown_spec.md](../pleading/pleading_markdown_spec.md))
-   — Markdown + YAML front matter → California-style 28-line pleading
+   converts Markdown + YAML front matter into California-style pleading
    PDF (and DOCX), assembled into filing "envelopes" defined in
    `envelopes.yaml`, plus Judicial Council form fillers and a PDF
    redactor.
@@ -149,7 +149,7 @@ directory, and turns Markdown drafting into filing-ready documents.
 ### Repository ↔ matter separation
 
 The repo (this code) contains no case data. A matter directory
-contains no code — just config (`matter.yaml`, `envelopes.yaml`), a
+contains no code, just config (`matter.yaml`, `envelopes.yaml`), a
 symlinked `Makefile`, and content. Multiple matters share one repo
 checkout; each schedules its own sync. This mirrors how the system is
 actually run across several concurrent live matters.
