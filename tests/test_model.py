@@ -79,3 +79,47 @@ def test_exhibit_page_range_must_be_ordered() -> None:
     broken["exhibits"][0]["last_page"] = 5
     with pytest.raises(ValidationError, match="page range is inverted"):
         Matter.model_validate(broken)
+
+
+def test_service_event_must_reference_known_party() -> None:
+    matter = doe_v_roe()
+    broken = matter.model_dump()
+    broken["service_events"][0]["served_on"] = "nobody"
+    with pytest.raises(ValidationError, match="unknown party"):
+        Matter.model_validate(broken)
+
+
+def test_docket_entry_references_are_checked() -> None:
+    matter = doe_v_roe()
+    broken = matter.model_dump()
+    broken["docket"][0]["document_id"] = "doc-nonexistent"
+    with pytest.raises(ValidationError, match="unknown document"):
+        Matter.model_validate(broken)
+    broken = matter.model_dump()
+    broken["docket"][0]["filed_by"] = "nobody"
+    with pytest.raises(ValidationError, match="unknown party"):
+        Matter.model_validate(broken)
+
+
+def test_exhibit_must_reference_known_document() -> None:
+    matter = doe_v_roe()
+    broken = matter.model_dump()
+    broken["exhibits"][0]["document_id"] = "doc-nonexistent"
+    with pytest.raises(ValidationError, match="unknown document"):
+        Matter.model_validate(broken)
+
+
+def test_duplicate_document_ids_rejected() -> None:
+    matter = doe_v_roe()
+    broken = matter.model_dump()
+    broken["documents"].append(broken["documents"][0])
+    with pytest.raises(ValidationError, match="duplicate document ids"):
+        Matter.model_validate(broken)
+
+
+def test_lookups_raise_key_error_for_unknown_ids() -> None:
+    matter = doe_v_roe()
+    with pytest.raises(KeyError):
+        matter.party("nobody")
+    with pytest.raises(KeyError):
+        matter.document("doc-nonexistent")

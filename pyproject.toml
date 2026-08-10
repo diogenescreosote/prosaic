@@ -59,4 +59,8 @@ plugins = ["pydantic.mypy"]
 
 [tool.pytest.ini_options]
 testpaths = ["tests"]
-addopts = "-q"
+addopts = "-q --cov=prosaic --cov-report=term-missing"
+
+[tool.coverage.report]
+fail_under = 95
+show_missing = true
