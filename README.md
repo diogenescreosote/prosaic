@@ -5,6 +5,8 @@
 
 **Matter-of-fact tooling for self-represented civil litigants.**
 
+[![ci](https://github.com/diogenescreosote/prosaic/actions/workflows/ci.yml/badge.svg)](https://github.com/diogenescreosote/prosaic/actions/workflows/ci.yml)
+
 The name works twice: "pro se" sits inside it, and *prosaic* — plain,
 unadorned, matter-of-fact — is the right aspiration for legal drafting and
 for the software that produces it.
