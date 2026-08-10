@@ -4,9 +4,14 @@ prosaic has three layers of dependency and one file for each:
 
 | Layer | Declared in | Installed with |
 |---|---|---|
-| Python | `pleading/requirements.txt` | `pip install -r pleading/requirements.txt` |
+| Python | `pyproject.toml` (+ `uv.lock`) | `uv sync` |
 | Node | `connectors/package.json` | `cd connectors && npm ci` |
 | System binaries | `system-dependencies.yaml` | `sc deps` tells you |
+
+`pleading/requirements.txt` still lists what the pleading pipeline
+alone needs, so that tree stays installable on its own — the container
+uses it, and it is a subset of what `uv sync` gives you. `uv sync` is
+the supported path for the repository as a whole.
 
 The third one is the one that used to bite. The pipeline shells out to
 ocrmypdf, tesseract, poppler's `pdftotext`, and a browser; none of

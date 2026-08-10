@@ -122,7 +122,8 @@ for the end-to-end tour.
 | Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) |
 | Getting documents out | [forms.md](docs/forms.md) · [FORM_PACKS.md](docs/FORM_PACKS.md) · [DEADLINES.md](docs/DEADLINES.md) |
 | Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
-| Working on it | [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) |
+| Working on it | [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [CLAUDE.md](CLAUDE.md) |
+| Where it's going | [ROADMAP.md](ROADMAP.md) |
 
 Decisions are recorded twice, by scope: [docs/DECISIONS.md](docs/DECISIONS.md)
 holds the few that define what the engine is, and [design/](design/) holds

@@ -178,7 +178,7 @@ API data dict. Unknown keys in data are *reported*, not ignored.
 5. **Write the `agent_guide`** while the form's semantics are fresh:
    the guide is what makes the descriptor usable by someone (or
    something) that has never seen the form.
-6. **Run the tests** (`python -m pytest pleading/tests -q`). The suite
+6. **Run the tests** (`uv run pytest pleading/tests -q --no-cov`). The suite
    checks every descriptor against its blank (names, checkbox states),
    smoke-fills every form, and exercises fit/overflow behavior.
 7. **Proofread a real fill** before first courtroom use. Tests catch

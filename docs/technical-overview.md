@@ -82,14 +82,14 @@ examples/     A fictional demo matter
 tests/        Scenario test harness (fixture matters + AI-judged checks)
 specs/        What each component must accomplish (teleological specs)
 design/       Architecture Decision Records — how it's built and why
-docs/         The manual — start with docs/architecture.md
+docs/         The manual — start with docs/ARCHITECTURE.md
 ```
 
 ## Quickstart
 
 ```bash
 git clone <this repo> && cd prosaic
-pip install -r pleading/requirements.txt   # reportlab, pyyaml, pypdf, …
+uv sync                                    # reportlab, pypdf, pydantic, …
 (cd connectors && npm install)             # puppeteer, googleapis, …
 ./cli/sc deps                              # what else you need, and how to get it
 
@@ -110,7 +110,7 @@ cd ~/cases/smith-v-smith && sc build responsive_declaration
 ```
 
 Requirements: macOS (Linux mostly works, scheduling docs are macOS-
-first), Python 3.10+, and Node 18+. Everything else the pipeline
+first), Python 3.12+, and Node 18+. Everything else the pipeline
 shells out to is declared in `system-dependencies.yaml` and reported
 by `sc deps`, which prints the install command for your platform —
 that list, not this paragraph, is the authority. Two things are

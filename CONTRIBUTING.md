@@ -18,9 +18,11 @@ Thanks for helping build client-side litigation infrastructure.
 - **Docs are load-bearing.** The AI triage layer reads the same
   conventions humans do; a behavior change without a doc/template
   change is half a change.
-- Python: 3.10+, stdlib + the deps in `pleading/requirements.txt`.
+- Python: 3.12+, deps in `pyproject.toml`, installed with `uv sync`.
   Node: 18+, deps in `connectors/package.json`. Match the style of
-  the file you're editing.
+  the file you're editing — especially in the ported operational
+  trees, which keep their upstream style deliberately (see
+  [CLAUDE.md](CLAUDE.md)).
 
 ## Specs, design, tests
 
@@ -32,7 +34,7 @@ nonblocking test protocol — is in [docs/development.md](docs/development.md)
   for cross-cutting choices, an ADR in `design/` (what we decided and
   why). Code that contradicts an accepted spec or ADR needs the
   document changed first.
-- Run the test harness: `python -m pytest -q` (see docs/testing.md;
+- Run the test harness: `uv run pytest` (see docs/testing.md;
   AI-judged checks need the `claude` CLI and are skipped without it).
   New features come with scenario coverage — deterministic checks
   first, AI judgments for the properties only judgment can see.

@@ -120,7 +120,7 @@ def test_every_doc_is_reachable_from_somewhere():
     ]
     assert not orphans, (
         f"nothing links to these docs: {orphans}. Link them from README.md, "
-        f"docs/architecture.md, or wherever a reader would start looking."
+        f"docs/ARCHITECTURE.md, or wherever a reader would start looking."
     )
 
 

@@ -3,9 +3,10 @@
 prosaic's harness has three layers, all run by pytest:
 
 ```bash
-python -m pytest -q                      # everything (AI checks included if claude CLI present)
-PROSAIC_AI_TESTS=0 python -m pytest   # deterministic only
-python -m pytest -m ai                   # only the AI-judged checks
+uv run pytest                       # everything (AI checks included if claude CLI present)
+PROSAIC_AI_TESTS=0 uv run pytest    # deterministic only
+uv run pytest -m ai                 # only the AI-judged checks
+uv run pytest -q --no-cov <path>    # a narrow selection; --no-cov spares the 95% floor
 ```
 
 ## 1. Unit/component tests (`pleading/tests/`)
