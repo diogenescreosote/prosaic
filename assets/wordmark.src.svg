@@ -1,0 +1,16 @@
+<!-- Source for the committed wordmarks. The committed assets/wordmark*.svg
+     carry outlined paths generated from this design with Courier New Bold
+     glyph outlines (assets/README.md has the regeneration note), because
+     Courier New is absent on many Linux and Android systems and a fallback
+     font shifts the metrics out from under the cursor. -->
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 304 80" width="304" height="80"
+     role="img" aria-label="prosaic.">
+  <g fill="#111111">
+    <text x="6" y="56" font-family="Courier New, Courier, monospace"
+          font-size="52" font-weight="700" letter-spacing="1">prosaic.</text>
+    <rect x="267.6" y="50" width="28" height="6">
+      <animate attributeName="opacity" values="1;1;0;0" keyTimes="0;0.49;0.5;1"
+               dur="1.06s" calcMode="discrete" repeatCount="indefinite"/>
+    </rect>
+  </g>
+</svg>
