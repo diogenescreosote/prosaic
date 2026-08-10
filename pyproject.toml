@@ -15,6 +15,7 @@ dependencies = [
     "typer>=0.12",
     "pypdf[crypto]>=4.2",
     "reportlab>=4.1",
+    "anthropic>=0.121.0",
 ]
 
 [dependency-groups]
