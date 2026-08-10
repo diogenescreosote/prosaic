@@ -49,6 +49,30 @@ class ComputeDeadlineInput(BaseModel):
     service_method: ServiceMethod = ServiceMethod.PERSONAL
 
 
+def run_rule(
+    rule: DeadlineRuleName,
+    trigger: datetime.date,
+    method: ServiceMethod,
+    calendar: CourtCalendar,
+) -> Deadline:
+    """Dispatch a named rule to the engine. The CLI and the toolkit share this."""
+    match rule:
+        case DeadlineRuleName.DEMURRER:
+            return demurrer_deadline(trigger, method, calendar)
+        case DeadlineRuleName.MOTION_FILING:
+            return motion_filing_deadline(trigger, method, calendar)
+        case DeadlineRuleName.EARLIEST_MOTION_HEARING:
+            return earliest_motion_hearing(trigger, method, calendar)
+        case DeadlineRuleName.OPPOSITION:
+            return opposition_deadline(trigger, calendar)
+        case DeadlineRuleName.REPLY:
+            return reply_deadline(trigger, calendar)
+        case DeadlineRuleName.COMPLAINT_SERVICE:
+            return complaint_service_deadline(trigger, calendar)
+        case DeadlineRuleName.CASE_MANAGEMENT_STATEMENT:
+            return case_management_statement_deadline(trigger, calendar)
+
+
 @dataclass(frozen=True, slots=True)
 class ToolResult:
     """What a handler produced: text for the model, and whether it failed."""
@@ -186,7 +210,9 @@ class Toolkit:
         except ValidationError as error:
             return ToolResult(f"invalid compute_deadline input: {error}", is_error=True)
         try:
-            deadline = self._run_rule(parsed)
+            deadline = run_rule(
+                parsed.rule, parsed.trigger_date, parsed.service_method, self.calendar
+            )
         except ValueError as error:
             return ToolResult(f"the date engine rejected the computation: {error}", is_error=True)
         return ToolResult(
@@ -198,25 +224,6 @@ class Toolkit:
                 }
             )
         )
-
-    def _run_rule(self, parsed: ComputeDeadlineInput) -> Deadline:
-        calendar = self.calendar
-        trigger = parsed.trigger_date
-        match parsed.rule:
-            case DeadlineRuleName.DEMURRER:
-                return demurrer_deadline(trigger, parsed.service_method, calendar)
-            case DeadlineRuleName.MOTION_FILING:
-                return motion_filing_deadline(trigger, parsed.service_method, calendar)
-            case DeadlineRuleName.EARLIEST_MOTION_HEARING:
-                return earliest_motion_hearing(trigger, parsed.service_method, calendar)
-            case DeadlineRuleName.OPPOSITION:
-                return opposition_deadline(trigger, calendar)
-            case DeadlineRuleName.REPLY:
-                return reply_deadline(trigger, calendar)
-            case DeadlineRuleName.COMPLAINT_SERVICE:
-                return complaint_service_deadline(trigger, calendar)
-            case DeadlineRuleName.CASE_MANAGEMENT_STATEMENT:
-                return case_management_statement_deadline(trigger, calendar)
 
     def _list_forms(self) -> list[dict[str, object]]:
         return [

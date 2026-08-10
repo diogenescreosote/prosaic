@@ -18,6 +18,9 @@ dependencies = [
     "anthropic>=0.121.0",
 ]
 
+[project.scripts]
+prosaic = "prosaic.cli.main:app"
+
 [dependency-groups]
 dev = [
     "pytest>=8.2",
