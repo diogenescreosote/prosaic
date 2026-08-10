@@ -17,6 +17,10 @@ dependencies = [
     "pypdf[crypto]>=4.2",
     "reportlab>=4.1",
     "anthropic>=0.121.0",
+    "pyyaml>=6.0.3",
+    "python-docx>=1.2.0",
+    "pillow>=12.3.0",
+    "pymupdf>=1.28.2",
 ]
 
 [project.scripts]
@@ -42,6 +46,28 @@ packages = ["prosaic"]
 [tool.ruff]
 line-length = 100
 target-version = "py312"
+# The operational trees (pleading/, connectors/, sync/, cli/, templates/)
+# are ported from this project's private predecessor and keep its style so
+# upstream fixes keep merging as clean diffs; they are exercised by their
+# own test suite rather than by these linters. The same holds for the tests
+# that came over with them: the scenario suite, its harness, and the
+# repository-invariant checks. Everything native to prosaic — the package
+# and tests/test_*.py written here — is linted normally.
+extend-exclude = [
+    "pleading",
+    "connectors",
+    "sync",
+    "cli",
+    "templates",
+    "specs",
+    "design",
+    "tests/harness",
+    "tests/scenarios",
+    "tests/test_docs_coverage.py",
+    "tests/test_platform_seams.py",
+    "tests/test_repo_hygiene.py",
+    "tests/test_system_dependencies.py",
+]
 
 [tool.ruff.lint]
 select = [
@@ -62,10 +88,15 @@ select = [
 strict = true
 python_version = "3.12"
 plugins = ["pydantic.mypy"]
+# Same boundary as the ruff excludes above: the ported trees keep upstream
+# style so upstream fixes merge cleanly. Exclusions apply because CI passes
+# `tests` as a directory, not as a list of files.
+exclude = ["^tests/(harness|scenarios)/", "^tests/test_(docs_coverage|platform_seams|repo_hygiene|system_dependencies)\\.py$"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests"]
+testpaths = ["tests", "pleading/tests"]
 addopts = "-q --cov=prosaic --cov-report=term-missing"
+markers = ["ai: judged by a headless LLM; skipped when unavailable"]
 
 [tool.coverage.report]
 fail_under = 95

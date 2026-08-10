@@ -29,7 +29,9 @@ FORBIDDEN_PATTERNS = [
     re.compile(rb"GC-\d{3}"),
     re.compile(rb"OurFamilyWizard", re.IGNORECASE),
     re.compile(rb"Family\s+Code", re.IGNORECASE),
-    re.compile(rb"custod", re.IGNORECASE),
+    # (?!ian) spares "custodian of records", the statutory term in civil
+    # subpoena practice (CCP 1985.3, 2020.410); custody/custodial still match.
+    re.compile(rb"custod(?!ian)", re.IGNORECASE),
     re.compile(rb"visitation", re.IGNORECASE),
     re.compile(rb"co-?parent", re.IGNORECASE),
     re.compile(rb"minor\s+child", re.IGNORECASE),

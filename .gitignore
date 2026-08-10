@@ -15,3 +15,9 @@ out/
 
 # Local-only leak-guard denylist (personal names); never committed.
 .leakguard.local
+
+# Local porting notes; never committed.
+.porting-map.md
+
+# Node connectors
+node_modules/
