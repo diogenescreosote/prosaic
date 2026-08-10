@@ -1,0 +1,8 @@
+{
+ "SUM-100[0].Page1[0].Info[0].CaseNumber[0].FillText26[0]": "26CV012345",
+ "SUM-100[0].Page1[0].Info[0].FillText2[0]": "County of Alameda, 1000 Center Street, Oakland, CA 94601",
+ "SUM-100[0].Page1[0].Info[0].FillText30[0]": "Jane Doe, 123 Example Lane, Oakland, CA 94601",
+ "SUM-100[0].Page1[0].Info[0].FillText3[0]": "Superior Court of California,",
+ "SUM-100[0].Page1[0].Notice[0].FillText180[0]": "Jane Doe",
+ "SUM-100[0].Page1[0].Notice[0].FillText25[0]": "Roe Logistics, Inc."
+}
