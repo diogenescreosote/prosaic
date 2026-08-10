@@ -60,6 +60,41 @@ def caption_problems(matter: Matter, filer: Party) -> list[str]:
     return problems
 
 
+def attorney_block_fields(prefix: str, matter: Matter, filer: Party) -> dict[str, str | bool]:
+    """The itemized AttyPartyInfo caption block CM-010 and CM-110 share.
+
+    Field subnames under ``prefix`` are identical on both forms; only the
+    prefix differs.
+    """
+    caption = caption_for(matter, filer)
+    counsel = _counsel_for(matter, filer.id)
+    address = counsel.address if counsel is not None else filer.address
+    return {
+        f"{prefix}.Name[0]": counsel.name if counsel is not None else filer.name.value,
+        f"{prefix}.AttyBarNo[0]": counsel.bar_number if counsel is not None else "",
+        f"{prefix}.AttyFirm[0]": counsel.firm if counsel is not None else "",
+        f"{prefix}.Street[0]": address.street if address is not None else "",
+        f"{prefix}.City[0]": address.city if address is not None else "",
+        f"{prefix}.State[0]": address.state if address is not None else "",
+        f"{prefix}.Zip[0]": address.zip_code if address is not None else "",
+        f"{prefix}.Phone[0]": caption.telephone,
+        f"{prefix}.Fax[0]": caption.fax,
+        f"{prefix}.Email[0]": caption.email,
+        f"{prefix}.AttyFor[0]": caption.attorney_for,
+    }
+
+
+def court_block_fields(prefix: str, caption: Caption) -> dict[str, str | bool]:
+    """The CourtInfo caption block shared by CM-010, CM-110, and POS-010."""
+    return {
+        f"{prefix}.CrtCounty[0]": caption.court_county,
+        f"{prefix}.CrtStreet[0]": caption.court_street,
+        f"{prefix}.CrtMailingAdd[0]": caption.court_mailing,
+        f"{prefix}.CrtCityZip[0]": caption.court_city_zip,
+        f"{prefix}.CrtBranch[0]": caption.court_branch,
+    }
+
+
 def caption_for(matter: Matter, filer: Party) -> Caption:
     """Caption values for a filing by ``filer``.
 

@@ -16,7 +16,12 @@ from enum import StrEnum
 
 from prosaic.forms.pack import FormValidationError
 from prosaic.model import Matter
-from prosaic.packs.civil.caption import caption_for, caption_problems
+from prosaic.packs.civil.caption import (
+    attorney_block_fields,
+    caption_for,
+    caption_problems,
+    court_block_fields,
+)
 
 NUMBER = "CM-010"
 TITLE = "Civil Case Cover Sheet"
@@ -188,36 +193,12 @@ def build_values(matter: Matter, context: CoverSheetContext) -> dict[str, str | 
         raise FormValidationError(NUMBER, problems)
 
     caption = caption_for(matter, filer)
-    city, state, zip_code = "", "", ""
-    address = filer.address if filer.address else None
     counsel = next((c for c in matter.counsel if filer.id in c.represents), None)
-    if counsel is not None:
-        address = counsel.address
-    if address is not None:
-        city, state, zip_code = address.city, address.state, address.zip_code
 
     index, state_name = _CASE_TYPE_STATE[context.case_type]
     values: dict[str, str | bool] = {
-        f"{_CAPTION}.AttyPartyInfo[0].Name[0]": (
-            counsel.name if counsel is not None else filer.name.value
-        ),
-        f"{_CAPTION}.AttyPartyInfo[0].AttyBarNo[0]": (
-            counsel.bar_number if counsel is not None else ""
-        ),
-        f"{_CAPTION}.AttyPartyInfo[0].AttyFirm[0]": counsel.firm if counsel is not None else "",
-        f"{_CAPTION}.AttyPartyInfo[0].Street[0]": address.street if address is not None else "",
-        f"{_CAPTION}.AttyPartyInfo[0].City[0]": city,
-        f"{_CAPTION}.AttyPartyInfo[0].State[0]": state,
-        f"{_CAPTION}.AttyPartyInfo[0].Zip[0]": zip_code,
-        f"{_CAPTION}.AttyPartyInfo[0].Phone[0]": caption.telephone,
-        f"{_CAPTION}.AttyPartyInfo[0].Fax[0]": caption.fax,
-        f"{_CAPTION}.AttyPartyInfo[0].Email[0]": caption.email,
-        f"{_CAPTION}.AttyPartyInfo[0].AttyFor[0]": caption.attorney_for,
-        f"{_CAPTION}.CourtInfo[0].CrtCounty[0]": caption.court_county,
-        f"{_CAPTION}.CourtInfo[0].CrtStreet[0]": caption.court_street,
-        f"{_CAPTION}.CourtInfo[0].CrtMailingAdd[0]": caption.court_mailing,
-        f"{_CAPTION}.CourtInfo[0].CrtCityZip[0]": caption.court_city_zip,
-        f"{_CAPTION}.CourtInfo[0].CrtBranch[0]": caption.court_branch,
+        **attorney_block_fields(f"{_CAPTION}.AttyPartyInfo[0]", matter, filer),
+        **court_block_fields(f"{_CAPTION}.CourtInfo[0]", caption),
         f"{_CAPTION}.TitlePartyName[0].Party1[0]": matter.title,
         f"{_CAPTION}.csn[0].CaseNumber[0]": caption.case_number,
         f"{_CAPTION}.HearingInfo[0].HearingDept[0]": matter.court.department,
