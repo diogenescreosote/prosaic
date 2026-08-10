@@ -14,12 +14,12 @@ Each `Form` is created with `define_form`:
 
 ```python
 define_form(
-    number="MC-030",                      # the form's official number
+    number="MC-030",  # the form's official number
     title="Declaration",
-    package="prosaic.packs.civil",        # where the blank PDF is packaged
+    package="prosaic.packs.civil",  # where the blank PDF is packaged
     resource="blanks/mc030.pdf",
-    context_type=DeclarationContext,      # the per-filing decisions
-    build=mc030.build_values,             # (Matter, context) -> field values
+    context_type=DeclarationContext,  # the per-filing decisions
+    build=mc030.build_values,  # (Matter, context) -> field values
 )
 ```
 
