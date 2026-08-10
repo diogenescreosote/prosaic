@@ -13,7 +13,7 @@ classifiers = ["Private :: Do Not Upload"]
 dependencies = [
     "pydantic>=2.7",
     "typer>=0.12",
-    "pypdf>=4.2",
+    "pypdf[crypto]>=4.2",
     "reportlab>=4.1",
 ]
 
