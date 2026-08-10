@@ -12,6 +12,12 @@ htmlcov/
 .pytest_cache/
 .hypothesis/
 out/
+.DS_Store
+
+# Per-matter connector state, and the AI judge's verdict cache: both are
+# regenerable, and neither belongs to the repository.
+.state/
+.ai_cache/
 
 # Local-only leak-guard denylist (personal names); never committed.
 .leakguard.local
