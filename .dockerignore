@@ -1,0 +1,21 @@
+# Keep the build context small and free of anything machine-local.
+#
+# node_modules is excluded so the image installs its own for the
+# container's platform — a macOS build tree would otherwise ship
+# darwin binaries into a Linux image. package-lock.json is NOT
+# excluded: `npm ci` in the Dockerfile depends on it.
+
+.git
+.githooks
+node_modules
+**/node_modules
+__pycache__
+**/__pycache__
+*.pyc
+.pytest_cache
+.ai_cache
+.DS_Store
+out/
+**/out/
+.state/
+**/.state/

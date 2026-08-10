@@ -1,0 +1,41 @@
+#!/bin/sh
+#
+# Refuse to push machine-specific paths, credential material, or
+# content from the author's prior matter.
+#
+# The suite already enforces all three (tests/test_repo_hygiene.py,
+# tests/test_leak_guard.py); the hook exists because push is the
+# moment a leak stops being local. Belt and suspenders, and it costs
+# about a second.
+#
+# Enable once per clone:
+#     git config core.hooksPath .githooks
+#
+# Bypass in an emergency with --no-verify, then fix it immediately:
+# the check is cheap, so a bypass almost always means the finding is
+# real.
+
+set -e
+
+repo_root=$(git rev-parse --show-toplevel)
+cd "$repo_root"
+
+CHECKS="tests/test_repo_hygiene.py tests/test_leak_guard.py"
+
+# uv owns the environment for this repo; fall back to a python that
+# already has pytest, for clones driven some other way.
+if command -v uv >/dev/null 2>&1; then
+  exec uv run --no-sync pytest $CHECKS -q --no-header --no-cov
+fi
+
+for py in "${PROSAIC_PYTHON:-}" python3 python; do
+  [ -n "$py" ] || continue
+  command -v "$py" >/dev/null 2>&1 || continue
+  if "$py" -c "import pytest" >/dev/null 2>&1; then
+    exec "$py" -m pytest $CHECKS -q --no-header --no-cov
+  fi
+done
+
+echo "pre-push: no uv and no python with pytest; hygiene check SKIPPED." >&2
+echo "          Install uv, or set PROSAIC_PYTHON." >&2
+exit 0
