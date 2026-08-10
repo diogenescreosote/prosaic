@@ -11,15 +11,15 @@ The name works twice: "pro se" sits inside it, and *prosaic* — plain,
 unadorned, matter-of-fact — is the right aspiration for legal drafting and
 for the software that produces it.
 
-prosaic is a document-assembly and records-synchronization engine for civil
-litigation, driven by an LLM operator. It ingests records from mail and
-filesystem sources, normalizes them into a structured case model where every
-extracted fact carries provenance to its source page, computes filing
-deadlines from statutory rules, and renders schema-valid California court
-documents. Form knowledge lives in pluggable packs, so the engine itself is
-jurisdiction-agnostic. It is built by a law-office-study student for use on
-one's own case — not a practice tool for lawyers, and not a substitute for
-one.
+prosaic is a document-assembly engine for civil litigation, driven by an
+LLM operator. It ingests records from mail and filesystem sources into a
+structured case model built around fact-level provenance — a value that
+flows onto a filing or into a deadline carries a pointer to its source
+document and page — computes filing deadlines from statutory rules, and
+renders California court documents from the official forms. Form knowledge
+lives in pluggable packs, so the engine itself is jurisdiction-agnostic.
+It is built by a law-office-study student for use on one's own case — not
+a practice tool for lawyers, and not a substitute for one.
 
 > **This is a document-assembly utility, not legal advice.** Using it creates
 > no attorney-client relationship. Every date it computes and every document
@@ -80,7 +80,9 @@ the LLM operator against a serialized matter.
 - **California civil form pack** — CM-010, CM-110, SUM-100, POS-010,
   MC-030, MC-031, filled into the official Judicial Council AcroForms and
   verified by golden-file tests that read the values back out of the
-  produced PDFs. Other forms are not yet implemented.
+  produced PDFs. Scope is stated per module: CM-110 completes the caption
+  and the core items (1a, 2a, 3a, 4a, 5, mediation willingness, signature),
+  and POS-010 covers personal service. Other forms are not yet implemented.
 - **Pleading paper and exhibits** — 28-line numbered pleading paper per
   CRC 2.100–2.119, and exhibit assembly with slip sheets and a table of
   exhibits.
