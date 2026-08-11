@@ -445,6 +445,90 @@ def test_body_baselines_align_to_grid_on_later_pages(decl_pdf):
 
 
 # ---------------------------------------------------------------------------
+# Block quotes
+# ---------------------------------------------------------------------------
+
+def _lines_by_baseline(pdf_path):
+    """Map every page's text ops to {y: (min_x, joined_text)}, so a wrapped
+    block's left edge can be measured against the body margin."""
+    from pypdf import PdfReader
+    pages = []
+    for page in PdfReader(str(pdf_path)).pages:
+        items = []
+
+        def visit(text, cm, tm, font_dict, font_size, _acc=items):
+            if text.strip():
+                _acc.append((round(tm[5], 1), tm[4], text))
+
+        page.extract_text(visitor_text=visit)
+        lines = {}
+        for y, x, text in items:
+            if x < 95:          # margin line-number column
+                continue
+            min_x, chunks = lines.get(y, (x, []))
+            lines[y] = (min(min_x, x), chunks + [(x, text)])
+        # Words arrive as separate ops; join on single spaces so phrase
+        # matches and length measurements mean what they look like.
+        pages.append({
+            y: (min_x,
+                " ".join("".join(t for _, t in sorted(chunks)).split()))
+            for y, (min_x, chunks) in lines.items()
+        })
+    return pages
+
+
+def test_block_quote_renders_indented_without_quote_marks(decl_pdf, decl_text):
+    """Consecutive `>` lines merge into one block indented 36 pt from the
+    body margin, with no bullet, no `>` glyph, and no quotation marks added
+    (spec: pleading/pleading_markdown_spec.md, "Block quotes")."""
+    flat = _flat_body(decl_text)
+    for tk in ("TKBQ1", "TKBQ2", "TKBQ3"):
+        assert tk in flat, f"{tk} missing — block quote truncated"
+    assert ">" not in decl_text, "raw '>' marker leaked into the artifact"
+
+    # The generator must not wrap the extract in quotation marks.
+    assert '“On receipt of a response' not in flat
+    assert 'without merit or too general (TKBQ2).”' not in flat
+
+    quote_x, body_x = [], []
+    for lines in _lines_by_baseline(decl_pdf):
+        for _, (min_x, text) in lines.items():
+            if "On receipt of a response" in text or "TKBQ2" in text:
+                quote_x.append(min_x)
+            if "TKBQ3" in text or "statute's text governs" in text:
+                body_x.append(min_x)
+    assert quote_x, "no block-quote lines located in the artifact"
+    assert body_x, "no adjacent body lines located in the artifact"
+
+    indent = min(quote_x) - min(body_x)
+    assert 30 <= indent <= 42, (
+        f"block quote indent was {indent:.1f} pt, expected ~36 "
+        f"(quote left edge {min(quote_x):.1f}, body {min(body_x):.1f})")
+
+
+def test_block_quote_merges_consecutive_source_lines(decl_pdf, built):
+    """Consecutive `>` lines are one block, not one block per line. The
+    fixture deliberately breaks the extract at ~28 characters; if the
+    renderer honored those breaks the rendered lines would be just as short,
+    so a rendered line materially longer than the longest source line is the
+    falsifiable proof that the block was merged and rewrapped."""
+    src = (built / "src" / "Declaration of Jane Roe.md").read_text()
+    quoted = [ln[1:].strip() for ln in src.splitlines() if ln.startswith(">")]
+    assert quoted, "fixture lost its block quote"
+    longest_source = max(len(ln) for ln in quoted)
+
+    rendered = []
+    for lines in _lines_by_baseline(decl_pdf):
+        for _, (min_x, text) in lines.items():
+            if min_x > 130 and any(ln and ln in text for ln in quoted):
+                rendered.append(len(text))
+    assert rendered, "no block-quote lines located in the artifact"
+    assert max(rendered) > longest_source + 10, (
+        f"longest rendered block-quote line was {max(rendered)} chars vs "
+        f"{longest_source} in the source — the block was not rewrapped")
+
+
+# ---------------------------------------------------------------------------
 # Negative control: the alarms above can actually fire
 # ---------------------------------------------------------------------------
 

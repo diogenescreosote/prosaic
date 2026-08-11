@@ -1603,9 +1603,15 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         numbered_lines = []
         numbered_level = 0
 
-    def flush_para() -> None:
+    def flush_para(keep_blockquote: bool = False) -> None:
         nonlocal para_lines
-        flush_blockquote()
+        # A ``>`` line flushes the paragraph it interrupts but must NOT
+        # flush the block quote it is still accumulating -- otherwise every
+        # source line becomes its own Block and the quote renders one short
+        # line per source line, each followed by the trailing blank a Block
+        # emits (i.e. double-spaced). Consecutive ``>`` lines merge.
+        if not keep_blockquote:
+            flush_blockquote()
         flush_numbered()
         if para_lines:
             raw = normalize_whitespace(" ".join(para_lines))
@@ -1703,7 +1709,7 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
             blocks.append(Block("heading", heading_text, spans=spans, level=len(m.group(1))))
             continue
         if re.match(r"^>\s?", line):
-            flush_para()
+            flush_para(keep_blockquote=True)
             bq_lines.append(re.sub(r"^>\s?", "", line))
             continue
         if bq_lines:

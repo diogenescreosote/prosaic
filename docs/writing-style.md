@@ -57,6 +57,95 @@ January 23--March 3, 2026
 - `§` — type the Unicode section sign directly (Option+6 on macOS).
   Do not write "Section" when you mean the symbol.
 
+## The pilcrow (¶) is narrower than it looks
+
+**The only situation where using the pilcrow is conventional in
+California legal pleadings is inside parenthetical citations at the end
+of a sentence, to reference specific paragraphs in a supporting
+document.** Type it directly (Option+7 on macOS) when that situation
+arises.
+
+```
+# RIGHT — a parenthetical cite to another document's paragraphs
+# (note `--` for the range, per the en-dash rule above)
+The exchange schedule was fixed by stipulation. (Roe Decl., ¶¶ 4--6.)
+
+# WRONG — running text is not a parenthetical citation
+As set out in ¶ 4 of the stipulated order, ...
+# write: As set out in paragraph 4 of the stipulated order, ...
+
+# WRONG — "paragraph ¶" says paragraph twice
+... and paragraph ¶ 4 of the stipulated order.
+```
+
+In body prose, write the word: "paragraph 4," "paragraphs 4 through 6."
+Never pair the word and the symbol. This is the opposite of the rule for
+`§`, which is conventional wherever a statute is cited, running text
+included.
+
+## Emphasis
+
+- `*italic*` for case names, Latin phrases, and other conventionally
+  italicized text: `*Doe v. Roe* (2024) 100 Cal.App.5th 123`,
+  `*see* also`, `*inter alia*`.
+- `**bold**` for emphasis — sparingly. In legal writing, bold in body
+  prose reads as shouting; let sentence structure carry the weight.
+- `***bold italic***` only when both are genuinely needed.
+
+## Citation format
+
+California style. **Italicize the case name only** — not the reporter,
+the year, or the pin cite:
+
+```md
+*Doe v. Roe* (2024) 100 Cal.App.5th 123, 130.
+```
+
+**Statutes are not italicized at all:**
+
+```md
+45 C.F.R. § 164.524(d)
+Health & Safety Code § 123110
+Code of Civil Procedure § 2030.300, subdivision (c)
+```
+
+## Block quotes
+
+Use `>` for extracted statutory language, or any quoted passage long
+enough to stand on its own. Consecutive `>` lines merge into a single
+block and are rewrapped, so source line breaks do not survive into the
+PDF — break the source wherever is convenient. The block renders
+indented 36 pt from the left margin, on consecutive grid lines, with no
+bullet, no `>` glyph, and **no quotation marks added**. Do not type your
+own quotation marks around it.
+
+```md
+Education Code § 49069.7(a) provides:
+
+> Parents of currently enrolled or former pupils have an absolute right
+> to access to any and all pupil records related to their children that
+> are maintained by school districts or private schools.
+```
+
+For a short quotation that belongs inside a sentence, just use double
+quotes inline — a block quote for a six-word phrase reads as padding:
+
+```md
+She stated that she was "not hired as court-appointed."
+```
+
+Never use a bullet list (`- `) to fake a block quote. Bullets are for
+lists of items; they render with bullet characters and a different
+indent, and the result does not read as quoted material.
+
+## Line length
+
+No hard limit in the source — the generator handles word wrapping.
+Write naturally and do not hand-break lines mid-paragraph; a manual
+break inside a paragraph is invisible in the source but changes nothing
+in the output, so it only misleads the next editor about where the
+rendered lines fall.
+
 ## Exhibit and attachment references: symbolic macros only
 
 Use `\exhibit{shortname}` or `\attachment{shortname}`. Never hardcode

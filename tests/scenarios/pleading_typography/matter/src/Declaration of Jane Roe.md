@@ -40,8 +40,9 @@ mine (TKQUO1).
 ### The First Email
 
 4. On February 3, 2026, I asked for the exchange log by email,
-citing Code of Civil Procedure § 2030.300, subdivision (c), and
-paragraph ¶ 4 of the stipulated order (TKSEC1).
+citing Code of Civil Procedure § 2030.300, subdivision (c), and the
+schedule the parties had already agreed to. (Stip. Order, ¶ 4;
+TKSEC1.)
 
 5. Ms. Roe's counsel confirmed receipt the same day. The Joneses'
 driveway camera captured both exchanges, and the witnesses'
@@ -86,6 +87,31 @@ informally before filing.
 improper, and their repetition across an entire set of responses
 supports a finding that the responding party did not act with the
 diligence the statute requires of a responding party.
+
+Code of Civil Procedure § 2030.300, subdivision (a), provides:
+
+> On receipt of a response
+> to interrogatories, the
+> propounding party may move
+> for an order compelling a
+> further response if the
+> propounding party deems
+> that any of the following
+> apply (TKBQ1): an answer to
+> a particular interrogatory
+> is evasive or incomplete;
+> an exercise of the option
+> to produce documents is
+> unwarranted or the required
+> specification of those
+> documents is inadequate; or
+> an objection to an
+> interrogatory is without
+> merit or too general
+> (TKBQ2).
+
+The statute's text governs regardless of how the responding party
+characterizes its own objections (TKBQ3).
 
 ## Application
 

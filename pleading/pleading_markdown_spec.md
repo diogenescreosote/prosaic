@@ -934,7 +934,7 @@ a LEFT single quote (‘90s), which is typographically wrong for an elision.
 Write the Unicode apostrophe (`’90s`) directly in the source when this
 matters; Unicode passes through untouched.
 
-Unicode characters in the source are passed through directly. Use `§` for section signs, `¶` for pilcrow/paragraph marks, and any other Unicode symbols as needed.
+Unicode characters in the source are passed through directly. Use `§` for section signs, `¶` for pilcrow/paragraph marks, and any other Unicode symbols as needed. Passing a glyph through is not advice to use it: see [docs/writing-style.md](../docs/writing-style.md) for when `¶` is conventional (parenthetical citations only) and when to write "paragraph" instead.
 
 The same substitutions apply to YAML-sourced display strings in the PDF
 renderer — the caption block (`paper_title`, `paper_subtitle`, party
@@ -1251,9 +1251,12 @@ Attached as \exhibit{jones_texts} are true and correct screenshots of the releva
 ## Block quotes
 
 Lines beginning with `>` are parsed as block quotes. Consecutive `>` lines merge
-into a single block (like paragraphs). Block quotes render as indented blocks
-(36 pt from the left margin) without bullet characters or quotation marks. Use
-them for extracted statutory language or other quoted material:
+into a single block (like paragraphs) and are rewrapped to the indented measure,
+so the source's own line breaks do not survive into the PDF — break the source
+wherever is convenient. Block quotes render as indented blocks (36 pt from the
+left margin) on consecutive grid lines, with the same leading as body text, and
+without bullet characters or quotation marks. Use them for extracted statutory
+language or other quoted material:
 
 ```md
 Education Code § 49069.7(a) provides:

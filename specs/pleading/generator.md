@@ -44,7 +44,16 @@ sent to a court.
    spaced-dash source renders wrong (with a stderr warning) rather
    than failing the build, and that a clean source builds without the
    warning)*
-4. **Exhibits are symbolic.** Body text references exhibits as
+4. **Block quotes are blocks, not lines.** Consecutive `>` lines merge
+   into one block and are rewrapped to the indented measure, so source
+   line breaks never survive into the artifact. The block renders 36 pt
+   from the left margin on consecutive grid lines — the same leading as
+   body text, never looser — with no bullet, no `>` glyph, and no
+   quotation marks added. *(tested: indent measured against the body
+   margin, absence of `>` and of added quote marks, and a merge check
+   that fails if the renderer honors source line breaks, in the
+   pleading_typography scenario)*
+5. **Exhibits are symbolic.** Body text references exhibits as
    `\exhibit{shortname}` / `\attachment{shortname}`; letters are
    assigned at render time, so reordering exhibits never orphans a
    reference, and the macro expands to the full label ("Exhibit A")
@@ -56,30 +65,30 @@ sent to a court.
    pages-spec, tab-sheet, link-annotation, exhibit_source, and
    out-of-range/reversed pages-spec failure checks in the
    pleading_exhibits scenario)*
-5. **Cover forms are part of the build.** A `cover_sheet:` key on a
+6. **Cover forms are part of the build.** A `cover_sheet:` key on a
    source prepends the named JC form (MC-030, CIV-110, EFS-020),
    filled from the same front matter the pleading
    uses — one set of case facts, two renderings. *(tested: envelope
    scenario asserts the cover form precedes the declaration body)*
-6. **No drafting history leaks into a filing.** Sources carry no
+7. **No drafting history leaks into a filing.** Sources carry no
    revision narration (the matter conventions forbid it), and the
    rendered output contains no NOTREAL markers, TODO/FIXME tokens,
    or draft annotations. *(tested: leak-scan in the pleading_build
    scenario)*
-7. **Rebuilds are deterministic and dependency-aware.** A build
+8. **Rebuilds are deterministic and dependency-aware.** A build
    regenerates a source when the source, any selected exhibit, or
    any exhibit-letter mapping file is newer than the output —
    otherwise it skips; `check-stale` fails loudly when outputs lag
    dependencies; a forced rebuild is always available. *(tested:
    up-to-date skip, exhibit/exhibit_source/variant-companion staleness,
    and check-stale checks in the pleading_exhibits scenario)*
-8. **Sent envelopes are protected.** Marking an envelope with the
+9. **Sent envelopes are protected.** Marking an envelope with the
    date it was sent or filed makes routine rebuilds skip it and
    explicit rebuilds require force — the on-disk output of a mailed
    packet is a record, not a build artifact. *(tested: refusal,
    --all skip, and --force override in the pleading_exhibits
    scenario)*
-9. **Sealed/public variants from one source.** `\redact{}` macros
+10. **Sealed/public variants from one source.** `\redact{}` macros
    render the sealed text in the sealed variant and the public
    substitute in the public one, with justifications collected into
    a redaction log — one source of truth for two filings. The
@@ -94,7 +103,7 @@ sent to a court.
    streams AND from every file in the public output directory, plus
    sealed-side sidecar contents, redaction-log rendering, and
    missing-log-source failure)*
-10. **Proposed orders ship editable.** A source flagged for it emits
+11. **Proposed orders ship editable.** A source flagged for it emits
     a `.docx` alongside the PDF, satisfying the editable-copy
     obligation that travels with e-filed proposed orders.
     *(tested: docx: true emission and content checks in the
@@ -102,7 +111,7 @@ sent to a court.
     the emitted .docx with python-docx and verifies dash conversion,
     Word-native multilevel heading numbering, real footnotes.xml
     footnotes, and a kept-together signature block)*
-11. **Companion documents that must be served separately are built
+12. **Companion documents that must be served separately are built
     with the document that requires them.** A source declares its
     consumer/employee notices as data (`consumer_notices:`, one entry
     per person whose records a subpoena reaches) and the build emits
