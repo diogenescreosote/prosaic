@@ -172,7 +172,7 @@ the LLM operator against a serialized matter.
   read the case model, compute a deadline through the engine, list the
   pack's forms.
 
-373 tests, 97% line coverage on the `prosaic` package, `mypy --strict`
+385 tests, 97% line coverage on the `prosaic` package, `mypy --strict`
 clean.
 
 **Status:** 0.1.0. Young code: the engine and the six forms are tested

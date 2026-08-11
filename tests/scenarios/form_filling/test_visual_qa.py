@@ -14,7 +14,7 @@ import pytest
 
 import form_fill
 from tests.harness import scenario
-from tests.harness.ai import assert_judgment, judge
+from tests.harness.ai import assert_judgment, judge, skip_if_unavailable
 
 META = {
     "filer_name": "Jane Roe",
@@ -134,6 +134,10 @@ def test_ai_judge_calibration_fails_sabotaged_output(tmp_path):
         files=pages,
         threshold=7,
     )
+    # An unreachable judge reports passed=False, which would satisfy the
+    # very assertion below for the wrong reason -- the rubber-stamp
+    # detector, rubber-stamped. Skip instead.
+    skip_if_unavailable(j, "judge calibration")
     assert not j.passed, (
         "JUDGE CALIBRATION FAILURE: a form with a pre-filled signature date "
         f"was scored {j.score}/10 with no hard failure — the AI judge is "

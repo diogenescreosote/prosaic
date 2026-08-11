@@ -43,11 +43,30 @@ rendered form is court-ready"), tests call the judge in
 artifacts (rendered page images, extracted text) against a **rubric**
 and **hard-failure conditions**, returning
 `{score: 0–10, hard_failures, rationale}`. A check passes at
-`score >= threshold` with no hard failure. Verdicts are cached by
-artifact hash under `tests/.ai_cache/` (delete to re-judge); failures
-print the judge's rationale so a disagreement is arguable, not
-mystical. See design/adr/0008 for why this is in-house rather than an
-eval framework.
+`score >= threshold` with no hard failure. Verdicts are cached under
+`tests/.ai_cache/`, keyed on the question asked (task, rubric, hard
+failures, threshold) plus each artifact's name and contents — never on
+its path, since scenario artifacts are rebuilt into a fresh temp
+directory every run. Delete the directory to re-judge; failures print
+the judge's rationale so a disagreement is arguable, not mystical. See
+design/adr/0008 for why this is in-house rather than an eval framework.
+
+**An unreachable judge is not a verdict.** If the CLI is installed but
+failing — expired login, rate limit, timeout, a reply that is not JSON
+— the judgment comes back `unavailable` and `assert_judgment` **skips**
+rather than failing. This matters more than it sounds: a scored zero is
+a specific accusation ("the redaction leaked"), and reporting that
+about work product nobody judged is worse than reporting nothing.
+Transient failures are retried with backoff first, and unavailable
+verdicts are never cached, so an outage cannot freeze itself into every
+later run.
+
+If you read `Judgment.passed` directly instead of calling
+`assert_judgment`, call `skip_if_unavailable(j)` first — otherwise an
+unreachable judge answers your question for you. The calibration test
+is the cautionary case: it asserts the judge *rejects* sabotaged
+output, so an unreachable judge reporting "did not pass" would satisfy
+it for exactly the wrong reason.
 
 Writing a good AI check:
 - The **rubric** describes a 10/10 concretely and says what costs
