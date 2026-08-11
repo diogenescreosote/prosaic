@@ -9,6 +9,40 @@ uv run pytest -m ai                 # only the AI-judged checks
 uv run pytest -q <path>             # a narrow selection
 ```
 
+## Reproducing CI exactly
+
+CI runs four commands, in this order, and a green `uv run pytest` does
+not imply the first three pass:
+
+```bash
+uv sync --locked        # what CI installs from -- see the warning below
+uv run ruff check .
+uv run ruff format --check .
+uv run mypy tests
+uv run pytest
+```
+
+**`uv run` does not prune the environment.** It installs what is
+missing; it does not remove what is no longer declared. So after a
+dependency is *removed*, a machine that already had it keeps passing
+while CI -- which runs `uv sync --locked` -- fails. This is not
+hypothetical: removing the typed library took `pydantic` out of the
+dependencies and left `plugins = ["pydantic.mypy"]` in `[tool.mypy]`,
+which passed locally against a stale venv and aborted mypy in CI before
+it checked a single file. Two more stale-config failures were hiding
+behind the same venv and surfaced the moment it was pruned.
+
+**Run `uv sync --locked` before trusting any dependency removal.** The
+statically detectable half of that failure class is now pinned by
+`tests/test_ci_config.py` -- config naming a path, plugin, or flag that
+no longer exists -- but the environment itself is not something a test
+can check from inside a process running in it.
+
+Note also that mypy's `exclude` stops files being *collected*, not
+*followed*: a type-checked file that imports an excluded module pulls
+that module into the checked set. Adding one test that imported
+`tests/harness/ai.py` is what first type-checked it.
+
 ## 1. Unit/component tests (`pleading/tests/`)
 
 Fast, deterministic: fit math, caption parsing, descriptor↔blank

@@ -26,6 +26,7 @@ dev = [
     "mypy>=1.10",
     "ruff>=0.5",
     "types-reportlab>=4.5.1.20260807",
+    "types-pyyaml>=6.0.12",
 ]
 
 # Nothing here is an importable package: the entry point is the `sc` shell

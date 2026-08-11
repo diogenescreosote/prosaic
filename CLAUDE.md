@@ -99,6 +99,17 @@ green. Fork it to a tester agent while you finish edges; the
 - Commits: intermediate commits need Tier 0 green + no known reds;
   feature-closing commits need Tier 2 green.
 
+**Removing a dependency is not verified until the environment matches
+the lock.** `uv run` installs what is missing but never prunes what is
+no longer declared, so a removal keeps passing on the machine that had
+it and fails in CI, which runs `uv sync --locked`. Run `uv sync
+--locked` yourself before believing a removal, and remember that a
+green `uv run pytest` says nothing about `ruff check .`,
+`ruff format --check .`, or `mypy tests` -- CI runs all four. See
+docs/testing.md, "Reproducing CI exactly". `tests/test_ci_config.py`
+pins the part of this that is statically checkable: configuration
+naming a path, mypy plugin, or pytest flag that no longer exists.
+
 ## Delegating to the tester agent (cheap tokens!)
 
 Routine test execution goes to the `tester` subagent
