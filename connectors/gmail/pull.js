@@ -20,6 +20,27 @@
 //
 // Output: <matter>/assets/gmail/YYYYMMDD_<subject>.pdf per thread;
 // "NEW <abs path>" lines on stdout; progress on stderr.
+//
+// Incrementality / dedup: a durable ledger in .state/gmail.json records
+// every thread this connector has exported, keyed by Gmail thread id:
+//
+//   { "threads": { "<threadId>": {
+//        historyId, messageCount, filename, exportedAt } } }
+//
+// Each run lists matching threads (cheap; the list stub carries a
+// per-thread historyId that changes whenever the thread changes) and:
+//   - skips a thread outright when its historyId matches the ledger
+//     (no metadata fetch, no render, no NEW) — so a broad domain filter
+//     doesn't re-examine the whole history every 12h;
+//   - re-exports a thread only when it has GROWN (a new message), so an
+//     updated thread is re-triaged, while a mere label/read-state change
+//     just refreshes the stored historyId;
+//   - on first run against a matter that already has assets/gmail/ PDFs
+//     from before this ledger existed, absorbs those into the ledger
+//     without re-exporting (no mass re-triage).
+// Because a thread is remembered by id, downstream triage may move or
+// rename the exported PDF out of assets/gmail/ and it will NOT be
+// re-pulled. Pulls are idempotent (connector contract, docs/connectors.md).
 
 // Suppress the punycode deprecation warning (DEP0040) emitted from deep
 // inside googleapis' dependency chain (tr46/whatwg-url). Not fixable
@@ -34,7 +55,7 @@ process.emitWarning = function (warning, ...args) {
 
 const fs = require('fs');
 const path = require('path');
-const { connectorConfig } = require('../core/config');
+const { connectorConfig, loadState, saveState } = require('../core/config');
 const { google } = require('googleapis');
 const puppeteer = require('puppeteer');
 
@@ -128,19 +149,6 @@ async function searchThreads(gmail, addresses) {
     pageToken = res.data.nextPageToken;
   } while (pageToken);
   return threads;
-}
-
-function dedupeFilenames(metas) {
-  const seen = {};
-  for (const m of metas) {
-    if (seen[m.filename]) {
-      let i = 2;
-      const base = m.filename.replace(/\.pdf$/, '');
-      while (seen[`${base}_${i}.pdf`]) i++;
-      m.filename = `${base}_${i}.pdf`;
-    }
-    seen[m.filename] = true;
-  }
 }
 
 function fmtDate(dateStr) {
@@ -533,6 +541,30 @@ async function main() {
 
   let userDisplayEmail = userEmail;
 
+  // Durable ledger of exported threads (see the header comment).
+  const state = loadState(matterDir, 'gmail', { threads: {} });
+  if (!state.threads) state.threads = {};
+
+  // Filenames already taken — on disk and claimed by the ledger — so a
+  // new thread never overwrites another thread's export.
+  const existingFiles = new Set(fs.readdirSync(outDir));
+  const claimedNames = new Set(existingFiles);
+  for (const id of Object.keys(state.threads)) {
+    const f = state.threads[id] && state.threads[id].filename;
+    if (f) claimedNames.add(f);
+  }
+  function uniqueName(base) {
+    let name = base;
+    if (claimedNames.has(name)) {
+      const stem = base.replace(/\.pdf$/, '');
+      let i = 2;
+      while (claimedNames.has(`${stem}_${i}.pdf`)) i++;
+      name = `${stem}_${i}.pdf`;
+    }
+    claimedNames.add(name);
+    return name;
+  }
+
   console.error(`Querying threads for: ${addresses.map(addressDisplay).join(', ')}`);
   const threadList = await searchThreads(gmail, addresses);
   const seen = new Set();
@@ -544,8 +576,26 @@ async function main() {
   console.error(`Found ${uniqueThreads.length} threads.`);
   if (uniqueThreads.length === 0) return;
 
-  const metas = [];
+  // Decide which threads need a (re)export. Unchanged threads (historyId
+  // matches the ledger) are skipped without a metadata fetch.
+  const toExport = [];
+  let skippedUnchanged = 0;
+  let seeded = 0;
   for (const t of uniqueThreads) {
+    const prev = state.threads[t.id];
+    if (
+      !force &&
+      prev &&
+      prev.historyId != null &&
+      t.historyId != null &&
+      String(prev.historyId) === String(t.historyId)
+    ) {
+      skippedUnchanged++;
+      continue;
+    }
+
+    // Fetch metadata to learn the subject/date and current message count.
+    let meta;
     try {
       const res = await gmail.users.threads.get({
         userId: 'me',
@@ -553,34 +603,72 @@ async function main() {
         format: 'metadata',
         metadataHeaders: ['Subject', 'Date'],
       });
-      const firstMsg = res.data.messages[0];
+      const msgs = res.data.messages || [];
+      const firstMsg = msgs[0];
       const subject =
         getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
       const dateStr = getHeader(firstMsg.payload.headers, 'Date');
       const date = dateStr ? new Date(dateStr) : new Date();
       const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
-      metas.push({
+      meta = {
         threadId: t.id,
+        historyId: t.historyId,
         subject,
-        date,
-        filename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
-      });
+        messageCount: msgs.length,
+        defaultFilename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
+      };
     } catch (err) {
       console.error(`  warning: skipping thread ${t.id}: ${err.message}`);
+      continue;
     }
-  }
-  dedupeFilenames(metas);
 
-  const existing = force ? new Set() : new Set(fs.readdirSync(outDir));
-  const toExport = metas.filter((m) => !existing.has(m.filename));
+    if (prev) {
+      // Known thread whose historyId moved. Re-export only if it grew;
+      // otherwise a label/read-state change — just refresh the ledger.
+      if (force || meta.messageCount > (prev.messageCount || 0)) {
+        meta.filename = prev.filename || uniqueName(meta.defaultFilename);
+        toExport.push(meta);
+      } else {
+        state.threads[t.id] = {
+          ...prev,
+          historyId: meta.historyId,
+          messageCount: meta.messageCount,
+        };
+        if (!dryRun) saveState(matterDir, 'gmail', state);
+      }
+      continue;
+    }
+
+    // New to the ledger. If a matching export already sits on disk from a
+    // pre-ledger pull, absorb it without re-triaging.
+    if (!force && existingFiles.has(meta.defaultFilename)) {
+      state.threads[t.id] = {
+        historyId: meta.historyId,
+        messageCount: meta.messageCount,
+        filename: meta.defaultFilename,
+        exportedAt: null,
+        migrated: true,
+      };
+      if (!dryRun) saveState(matterDir, 'gmail', state);
+      seeded++;
+      continue;
+    }
+
+    // Genuinely new thread.
+    meta.filename = uniqueName(meta.defaultFilename);
+    toExport.push(meta);
+  }
+
   console.error(
-    `${toExport.length} new, ${metas.length - toExport.length} already exported.`
+    `${toExport.length} to export, ${skippedUnchanged} unchanged (skipped), ` +
+      `${seeded} pre-existing absorbed.`
   );
 
   if (dryRun || toExport.length === 0) {
     if (dryRun) {
       console.error('\n-- dry run --');
-      for (const m of toExport) console.error(`  ${m.filename}`);
+      for (const m of toExport)
+        console.error(`  ${m.filename}  (${m.messageCount} msg)`);
       if (toExport.length === 0) console.error('  (nothing new)');
     }
     return;
@@ -615,6 +703,15 @@ async function main() {
         exported++;
         console.error('ok');
         console.log(`NEW ${pdfPath}`);
+        // Record incrementally so a crash mid-batch never re-exports
+        // what already succeeded (connector contract).
+        state.threads[meta.threadId] = {
+          historyId: meta.historyId,
+          messageCount: meta.messageCount,
+          filename: meta.filename,
+          exportedAt: new Date().toISOString(),
+        };
+        saveState(matterDir, 'gmail', state);
       } catch (err) {
         console.error(`FAIL (${err.message})`);
       }

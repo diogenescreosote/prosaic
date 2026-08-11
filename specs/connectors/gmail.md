@@ -22,8 +22,20 @@ own print view.
    case is about and *when* the relevant period runs, and the same
    config re-run captures new mail with the same meaning.
    *(untested)*
-3. **Incremental by filename.** A thread already exported is not
-   re-fetched; re-running adds only what is new. *(untested)*
+3. **Incremental by thread ledger.** `.state/gmail.json` records every
+   exported thread by Gmail thread id, with the `historyId` and message
+   count it had when exported. A thread whose `historyId` is unchanged
+   is skipped from the list stub alone --- no metadata fetch, no render,
+   no `NEW` --- so a broad domain filter does not re-examine the whole
+   history every run. A thread that has *grown* is re-exported and
+   re-triaged; a thread whose `historyId` moved for a label or
+   read-state change only refreshes its ledger entry. Because identity
+   is the thread id rather than the filename, triage may move or rename
+   an exported PDF and it will not be re-pulled. A matter whose
+   `assets/gmail/` predates the ledger absorbs those files on first run
+   instead of re-exporting them. The ledger is written after each
+   successful export, so a crash mid-batch never repeats work already
+   done. *(untested)*
 4. **Chronological, literate names.** Output is
    `YYYYMMDD_<subject_snake_case>.pdf`, so the directory reads as a
    dated correspondence log without opening a file. *(untested)*

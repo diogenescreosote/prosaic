@@ -61,7 +61,7 @@ A connector is a directory `connectors/<name>/` containing:
 
 | name | what it does | auth |
 |---|---|---|
-| `gmail` | Exports every Gmail thread involving configured addresses/domains as a print-view PDF (court-usable). Supports per-address `after:`/`before:` bounds. Incremental by filename. | OAuth; `node connectors/gmail/auth.js` once |
+| `gmail` | Exports every Gmail thread involving configured addresses/domains as a print-view PDF (court-usable). Supports per-address `after:`/`before:` bounds. Incremental via a `.state/gmail.json` thread ledger (per-thread `historyId` + message count): unchanged threads are skipped without a fetch, grown threads re-export and re-triage, and a thread once exported is never re-pulled even if triage later moves the PDF. | OAuth; `node connectors/gmail/auth.js` once |
 | `mycase` | Walks a MyCase client portal's document folder tree, diffs against a manifest (doc id + content hash), downloads new/updated documents into staging renamed to dated snake_case, keeping the portal folder as a routing hint. | Keychain |
 
 ## Writing a new connector
