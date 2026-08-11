@@ -42,23 +42,26 @@ Working today, driven from the CLI:
   and headless AI triage
 - Matter conventions: `inbox/` → `assets/` with an authoritative
   INDEX, OCR-on-triage, local-only transcription
-- The `prosaic` library: statutory deadline computation, a typed case
-  model with per-fact provenance, the typed civil form pack, record
-  ingestion, and the LLM operator that can reach them only through
-  typed tools
 - Test harness (pytest + LLM judge), `specs/`, ADRs
 
-What's *duplicated* is the other half of Phase 0. The library and the
-`pleading/` tree arrived from different directions and overlap: two
-form-filling systems (typed pack modules under `prosaic/packs/civil/`
-versus YAML descriptors under `pleading/forms/registry/`, both filling
-MC-030), two pleading-paper generators, two CLIs (`prosaic` and `sc`).
-Both are tested and both are used; neither has been retired. Unifying
-them is real work with a real design question inside it — which of the
-two form representations survives — and it wants an ADR before code.
+**The duplication is resolved.** This section used to describe two
+overlapping systems — two form-filling implementations, two
+pleading-paper generators, two CLIs — and called unifying them work
+that wanted an ADR before code. The ADR is
+[0019](design/adr/0019-one-system-not-two.md), and the typed library is
+gone. One renderer, one form engine, one CLI.
 
-What's missing is not capability. It's that using any of it requires
-comfort with a terminal, on a Mac.
+That removal cost real capability, and the roadmap should say so
+plainly rather than let it look like pure cleanup: statutory deadline
+computation is no longer in the tree at all, and CM-010, CM-110,
+MC-031 and SUM-100 are no longer fillable (their blanks are in
+`pleading/forms/` awaiting descriptors). Deadline computation was the
+one feature here that had no counterpart in the operational tree;
+whether it returns, and in what shape, is an open question rather than
+a scheduled item.
+
+What's missing is otherwise not capability. It's that using any of it
+requires comfort with a terminal, on a Mac.
 
 ---
 

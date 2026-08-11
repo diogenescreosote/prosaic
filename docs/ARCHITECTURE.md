@@ -2,85 +2,90 @@
 
 ## The split that matters
 
-prosaic is organized around one boundary: **the model classifies, extracts,
-and drafts prose; the engine computes, validates, and renders.** Everything
-below `prosaic/agent/` is deterministic: same inputs, same bytes out. The
-agent layer can act on the engine only through typed tools, and no tool
-exists that accepts model-generated dates as authority for anything.
+prosaic is organized around one boundary: **the model drafts prose; the
+engine renders it.** A language model writes and revises Markdown. It never
+lays out a page, assigns an exhibit letter, numbers a heading, or fills a
+form field. Everything between a `.md` source and the PDF a clerk accepts is
+deterministic: same source, same bytes out.
+
+That boundary is what makes the output reviewable. A rendering defect is
+reproducible, diagnosable from the artifact, and fixable once; a model that
+formats prose is none of those things. It is also why the tests assert
+against the produced PDF rather than the generator's own report of what it
+did.
 
 ## Layers
 
 ```
-prosaic/
-  deadlines/    statutory date computation. Pure functions over dates, a
-                service-method enum, and a court calendar. Stdlib only:
-                no pydantic, no I/O except loading packaged holiday data.
-  model/        the case model: matter, parties, counsel, court, documents,
-                exhibits, service events, docket entries. Pydantic v2.
-                Extracted values are Fact[T]: value + provenance to a
-                source document and page, or to the user.
-  forms/        AcroForm reading/filling and the form-pack interface.
-                Jurisdiction-agnostic: it knows how to fill fields, not
-                what any field means.
-  packs/civil/  the California general civil pack: six Judicial Council
-                form modules, the shared caption builders, and the official
-                blank PDFs. All jurisdiction knowledge lives here.
-  documents/    court paper that isn't a JC form: pleading paper per
-                CRC 2.100-2.119 and exhibit assembly.
-  ingest/       record sources behind one protocol (filesystem, IMAP) and
-                content-hash deduplication into the matter.
-  agent/        the LLM operator: system prompt, typed toolkit, tool loop.
-  cli/          typer entry points; thin shells over the library.
+pleading/       the renderer and the form filler.
+  md_pleading.py      Markdown + YAML front matter -> 28-line California
+                      pleading paper (CRC 2.100-2.119), exhibits, tab
+                      sheets, footnotes, sealed/public variants.
+  md_to_docx.py       the same source -> DOCX, for proposed orders that
+                      must ship editable.
+  md_to_txt.py        plain-text envelopes, for filings that take them.
+  build_envelope.py   assembles the sources named in envelopes.yaml into
+                      one filing packet, incrementally and dependency-aware.
+  form_fill.py        one AcroForm engine, driven by the YAML descriptors
+                      in forms/registry/. Jurisdiction knowledge lives in
+                      the descriptors, never in the engine (ADR-0006).
+  ocr_supplement.py   adds a text layer only to pages that lack one.
+  redact_pdf.py       true redaction of received PDFs.
+cli/sc          the entry point: init, sync, form, ocr, build, hooks.
+connectors/     one process per source (gmail, mycase), each conforming to
+                the NEW-line contract in ADR-0003.
+sync/           runs every configured connector, then one AI triage pass.
+triage/         the prompts that headless Claude Code runs inside a matter.
+templates/      what `sc init` writes into a new matter, including the
+                CLAUDE.md contract agents actually read.
 ```
 
-Dependencies point downward only. `deadlines` imports nothing from the
-project; `model` imports the `ServiceMethod` enum from `deadlines` (service
-facts drive deadline computation, so the pure layer owns the vocabulary);
-`packs` import `forms`, `model`, and `deadlines`; `agent` imports everything
-below it and adds no computation of its own.
+There is no importable Python package. The scripts are run by path and the
+CLI is a shell script, which is why a matter's `Makefile` includes
+`pleading/Makefile` rather than depending on an installed distribution.
 
 ## Data flow
 
-1. **Ingest.** A `RecordSource` yields `FetchedDocument`s: raw bytes plus a
-   locator. `ingest()` hashes each one; the SHA-256 is the identity, so the
-   same PDF arriving from two sources joins the matter once. Original bytes
-   are never modified.
-2. **Model.** `Matter` validates referential integrity on construction:
-   service events must point at known documents and parties, counsel at
-   known parties, exhibits at known documents. A `Matter` that exists is
-   internally consistent. Values that flow into filings or deadline
-   computation are `Fact[T]` with provenance.
-3. **Compute.** Deadline rules take facts (a date, a method) and a
-   `CourtCalendar`, and return a `Deadline`: date, citation, description.
-   Calendars carry an explicit coverage window and raise on dates outside
-   it. See [DEADLINES.md](DEADLINES.md).
-4. **Render.** A pack's form module turns `(Matter, context)` into exact
-   AcroForm field values, validated and raised as `FormValidationError`
-   when the matter lacks something the form needs. The filler rejects
-   unknown field names and ill-fitting values rather than producing a
-   silently incomplete form. Golden tests pin the values and read them back
-   out of the produced PDFs.
-5. **Operate.** The `Operator` runs a Messages-API tool loop with three
-   tools: `matter_summary` (read the model), `compute_deadline` (the only
-   source of dates), `list_forms` (the pack catalog). Tool handlers parse
-   the model's JSON with pydantic before touching the engine and return
-   error results rather than raising, so a malformed call is a correctable
-   turn, not a crash. A refusal from the model's safety layer raises to the
-   human operator; nothing is silently rerouted.
+1. **A source is written.** Markdown with YAML front matter under a matter's
+   `src/`. The front matter carries the caption, the exhibit list, the
+   redaction map, and the flags that select a cover form or a DOCX
+   companion. Recognized keys are enumerated in
+   `pleading/front_matter_keys.yaml`; an unrecognized key warns rather than
+   failing, because a silently ignored key would do nothing forever.
+2. **The envelope is built.** `build_envelope.py` reads `envelopes.yaml`,
+   resolves each source's exhibits and cover forms, and rebuilds only what
+   is stale against its dependencies. An envelope marked with the date it
+   was sent refuses to rebuild without force: the output of a mailed packet
+   is a record, not a build artifact.
+3. **The source is rendered.** `md_pleading.py` parses the Markdown into
+   blocks, applies the typographic substitutions the house style depends
+   on, auto-numbers headings in legal-outline style, resolves
+   `\exhibit{}` macros to letters assigned at render time, and lays the
+   result on the 28-line grid.
+4. **Variants diverge from one source.** `\redact{sealed}{public}` and
+   `public_disclosure:` on each exhibit produce the sealed and public
+   packets from the same file, with a redaction log demonstrating
+   completeness. The `.redactions.json` sidecar quotes sealed text, so it
+   is written only beside the sealed variant.
+5. **Companions are emitted, not merged.** Per-recipient notices are
+   separate files served on different people on their own statutory clocks.
 
 ## Testing posture
 
-- The engine's golden dates were hand-computed against the holiday
-  calendar, then a Hypothesis suite asserts the invariants over the whole
-  coverage window (never-on-a-holiday, extensions never shorten,
-  monotonicity, backward/forward round-trip).
-- Form modules have golden-file tests: exact expected field values
-  committed as JSON, plus read-back from the rendered PDF.
-- The operator loop is tested against a scripted client (malformed tool
-  input, unknown tools, refusals, the turn budget)
-  so no test depends on the network.
-- A leak guard walks every tracked file and every commit message for
-  content that must not appear in this repository, and runs in CI.
+- **Scenario suites** operate whole fictional matters for real: build the
+  envelopes, then assert against the artifacts (pdftotext, pypdf baseline
+  coordinates, python-docx) rather than the engine's self-report. Sentinel
+  tokens planted in the fixture sources make truncation detectable.
+- **Descriptor-drift alarms** check every registered form's descriptor
+  against the blank PDF's actual field names, because Judicial Council
+  revisions rename fields silently.
+- **An LLM judge** covers the properties only judgment can see -- whether a
+  render reads as court-ready -- with a calibration test that fails if the
+  judge starts rubber-stamping, and a hard distinction between a bad verdict
+  and an unreachable judge (ADR-0008).
+- **A leak guard** walks every tracked file and commit message for content
+  that must not appear in this repository, and runs at push time as well as
+  in CI.
 
 ## The operational pipeline
 

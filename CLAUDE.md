@@ -4,31 +4,26 @@ You are working ON prosaic (not in a matter directory). This file
 is the development contract. Human-facing rationale lives in
 docs/development.md; the rules are the same.
 
-## Orientation: two subsystems, one repo
+## Orientation: one system
 
-`prosaic/` is the typed library: statutory deadline computation, the
-pydantic case model with per-fact provenance, the typed California
-civil form pack, ingestion, and the LLM operator that reaches all of
-it only through typed tools. Strict mypy, ruff, 95% coverage floor.
-Read [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing its
-shape.
+`pleading/ cli/ connectors/ sync/ triage/ templates/` is the whole of
+it: the Markdown-to-pleading-paper pipeline, the descriptor-driven form
+filler, the `sc` CLI, the connectors and their scheduled sync, and the
+matter conventions those produce. It runs live matters. Read
+[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing its shape.
 
-`pleading/ cli/ connectors/ sync/ triage/ templates/` is the
-operational tree: the Markdown-to-pleading-paper pipeline, the
-descriptor-driven form filler, the `sc` CLI, the connectors and their
-scheduled sync, and the matter conventions those produce. It runs
-live matters. It is **excluded from ruff and mypy on purpose**: it is
-ported from this project's private predecessor and keeps that style so
-fixes made there still merge here as ordinary diffs. Match the
-surrounding style; do not reformat it wholesale, and do not "fix" it
-into the library's idiom.
+It is **excluded from ruff and mypy on purpose**: it is ported from
+this project's private predecessor and keeps that style so fixes made
+there still merge here as ordinary diffs. Match the surrounding style
+and do not reformat it wholesale.
 
-The two overlap today: both fill MC-030, both render pleading paper,
-each has its own CLI. That is known, deliberate for now, and the
-subject of a pending decision (see [ROADMAP.md](ROADMAP.md), Phase 0).
-When you add a form or a document type, add it to the subsystem whose
-tests already cover the neighborhood, and do not quietly start a third
-way of doing it.
+There used to be a second, parallel subsystem here --- a typed
+pydantic library with its own case model, deadline engine, form pack,
+CLI, and a 182-line pleading generator. Nothing imported it, no spec
+described it, and its form system contradicted ADR-0006. It was
+removed; see [ADR-0019](design/adr/0019-one-system-not-two.md) for what
+went and what was given up with it. **Do not reintroduce a second way
+of doing any of this.** One renderer, one form engine, one CLI.
 
 ## The prime directive: spec-first, test-always, don't wait around
 
@@ -64,8 +59,6 @@ Every feature addition or substantial modification follows this loop:
    | an `sc` subcommand | `specs/cli.md`, with a promise; help text is not the spec |
    | a front-matter key | `pleading/front_matter_keys.yaml` **and** the markdown spec |
    | a form-descriptor key | the descriptor schema in `pleading/pleading_markdown_spec.md` |
-   | a deadline rule | `docs/DEADLINES.md`, with the citation and the test that pins it |
-   | a form-pack module | `docs/FORM_PACKS.md`, and the module's own scope statement |
    | a system binary the code shells out to | `system-dependencies.yaml` |
    | a matter-facing convention | `templates/matter/CLAUDE.md`, the contract agents actually read |
    | a decision that constrains later work | an ADR, listed in `design/README.md` |
@@ -128,16 +121,13 @@ cheaper agent, but you review the diff.
 | connectors/** | node --check on touched files | connector tests as they exist; scenario syncs when fixtures exist |
 | sync/, cli/, triage/prompts | affected script smoke (`sc --help`, bash -n) | full deterministic suite |
 | tests/harness/** | the harness's own unit tests + one scenario | full suite including `-m ai` |
-| prosaic/deadlines/**, prosaic/model/** | the module's test file | tests/ (the property suite included) |
-| prosaic/forms/**, prosaic/packs/** | tests/test_civil_forms.py + the form's own test | tests/ + the golden files |
 | specs/, design/, docs/ | none (prose) | none, but check `(tested)` markers still true |
 
 Commands: `PROSAIC_AI_TESTS=0 uv run pytest -q` (deterministic),
 `uv run pytest -m ai -q` (judgments; needs claude CLI),
-`uv run pytest` (everything, with coverage). AI verdicts cache by
-artifact hash in tests/.ai_cache/, so reruns of unchanged artifacts are
-free. Add `--no-cov` to any narrow selection: the 95% floor is scoped
-to the whole `prosaic` package and a partial run will trip it.
+`uv run pytest` (everything). AI verdicts cache on the question asked
+plus each artifact's name and contents in tests/.ai_cache/, so reruns
+of unchanged artifacts are free.
 
 ## The other checks
 

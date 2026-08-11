@@ -1,7 +1,7 @@
 [project]
 name = "prosaic"
 version = "0.1.0"
-description = "Deterministic document assembly and deadline computation for self-represented civil litigants."
+description = "Deterministic document assembly for self-represented civil litigants."
 readme = "README.md"
 requires-python = ">=3.12"
 license = "MIT"
@@ -12,36 +12,27 @@ authors = [{ name = "Andrew Cone", email = "andrewpcone@gmail.com" }]
 # accidental upload.
 classifiers = ["Private :: Do Not Upload"]
 dependencies = [
-    "pydantic>=2.7",
-    "typer>=0.12",
     "pypdf[crypto]>=4.2",
     "reportlab>=4.1",
-    "anthropic>=0.121.0",
     "pyyaml>=6.0.3",
     "python-docx>=1.2.0",
     "pillow>=12.3.0",
     "pymupdf>=1.28.2",
 ]
 
-[project.scripts]
-prosaic = "prosaic.cli.main:app"
-
 [dependency-groups]
 dev = [
     "pytest>=8.2",
-    "pytest-cov>=5.0",
-    "hypothesis>=6.100",
     "mypy>=1.10",
     "ruff>=0.5",
     "types-reportlab>=4.5.1.20260807",
 ]
 
-[build-system]
-requires = ["hatchling"]
-build-backend = "hatchling.build"
-
-[tool.hatch.build.targets.wheel]
-packages = ["prosaic"]
+# Nothing here is an importable package: the entry point is the `sc` shell
+# CLI and the scripts under pleading/, run by path. uv installs the
+# dependencies and nothing is built.
+[tool.uv]
+package = false
 
 [tool.ruff]
 line-length = 100
@@ -51,8 +42,8 @@ target-version = "py312"
 # upstream fixes keep merging as clean diffs; they are exercised by their
 # own test suite rather than by these linters. The same holds for the tests
 # that came over with them: the scenario suite, its harness, and the
-# repository-invariant checks. Everything native to prosaic — the package
-# and tests/test_*.py written here — is linted normally.
+# repository-invariant checks. What remains linted is the handful of
+# tests written here directly.
 extend-exclude = [
     "pleading",
     "connectors",
@@ -95,9 +86,5 @@ exclude = ["^tests/(harness|scenarios)/", "^tests/test_(docs_coverage|platform_s
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "pleading/tests"]
-addopts = "-q --cov=prosaic --cov-report=term-missing"
+addopts = "-q"
 markers = ["ai: judged by a headless LLM; skipped when unavailable"]
-
-[tool.coverage.report]
-fail_under = 95
-show_missing = true

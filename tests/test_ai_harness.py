@@ -7,9 +7,10 @@ deterministic tests, with the CLI stubbed.
 
 Two of these pin bugs that shipped and were caught in an actual run:
 
-- ``_cache_key`` hashed each artifact's absolute path. Scenario
-  artifacts live under ``tmp_path_factory`` directories that change
-  every run, so the key never repeated, the cache never hit, and every
+- ``_cache_key`` hashed each artifact's absolute path, and the rendered
+  prompt it also hashed embeds those paths a second time. Scenario
+  artifacts live under ``tmp_path_factory`` directories that change every
+  run, so the key never repeated, the cache never hit, and every
   invocation re-judged everything -- creating the burst of back-to-back
   CLI calls whose transient failures were the flakiness being blamed on
   the artifacts.
@@ -23,27 +24,53 @@ from __future__ import annotations
 
 import json
 import subprocess
+import time
+from collections.abc import Callable, Iterator
+from pathlib import Path
+from typing import Any
 
 import pytest
 
 from tests.harness import ai
 
-
 VERDICT = json.dumps({"score": 9, "hard_failures": [], "rationale": "fine"})
 
 
 class _Proc:
-    def __init__(self, stdout="", stderr="", returncode=0):
-        self.stdout, self.stderr, self.returncode = stdout, stderr, returncode
+    """The subset of CompletedProcess the judge reads."""
+
+    def __init__(self, stdout: str = "", stderr: str = "", returncode: int = 0) -> None:
+        self.stdout = stdout
+        self.stderr = stderr
+        self.returncode = returncode
+
+
+def _always(proc: _Proc) -> Callable[..., _Proc]:
+    def run(*_args: Any, **_kwargs: Any) -> _Proc:
+        return proc
+
+    return run
+
+
+def _in_turn(replies: list[_Proc], calls: list[int] | None = None) -> Callable[..., _Proc]:
+    """Return each reply in order; record the call count if asked."""
+
+    def run(*_args: Any, **_kwargs: Any) -> _Proc:
+        if calls is not None:
+            calls.append(1)
+        return replies.pop(0) if len(replies) > 1 else replies[0]
+
+    return run
 
 
 @pytest.fixture(autouse=True)
-def _isolate_cache(tmp_path, monkeypatch):
+def _isolate_cache(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> Iterator[None]:
     monkeypatch.setattr(ai, "CACHE_DIR", tmp_path / "cache")
-    monkeypatch.setattr(ai.time, "sleep", lambda _s: None)
+    monkeypatch.setattr(time, "sleep", lambda _s: None)
+    yield
 
 
-def _artifact(directory, name="artifact.pdf", body=b"same bytes"):
+def _artifact(directory: Path, name: str = "artifact.pdf", body: bytes = b"same bytes") -> Path:
     directory.mkdir(parents=True, exist_ok=True)
     f = directory / name
     f.write_bytes(body)
@@ -54,46 +81,48 @@ def _artifact(directory, name="artifact.pdf", body=b"same bytes"):
 # Cache key: identical artifacts must key identically from any directory
 # ---------------------------------------------------------------------------
 
-def test_cache_key_ignores_the_directory_the_artifact_was_built_in(tmp_path):
+
+def test_cache_key_ignores_the_directory_the_artifact_was_built_in(tmp_path: Path) -> None:
     """The regression that made the cache write-only: pytest tmp dirs change
     every run, so a path-sensitive key never repeats."""
     a = _artifact(tmp_path / "pytest-1" / "m0")
     b = _artifact(tmp_path / "pytest-2" / "m0")
-    assert ai._cache_key("prompt", [a]) == ai._cache_key("prompt", [b])
+    assert ai._cache_key("basis", [a]) == ai._cache_key("basis", [b])
 
 
-def test_cache_key_still_tracks_contents_and_name(tmp_path):
+def test_cache_key_still_tracks_contents_and_name(tmp_path: Path) -> None:
     a = _artifact(tmp_path / "one")
     changed = _artifact(tmp_path / "two", body=b"different bytes")
     renamed = _artifact(tmp_path / "three", name="other.pdf")
-    assert ai._cache_key("p", [a]) != ai._cache_key("p", [changed])
-    assert ai._cache_key("p", [a]) != ai._cache_key("p", [renamed])
-    assert ai._cache_key("p", [a]) != ai._cache_key("different prompt", [a])
+    assert ai._cache_key("b", [a]) != ai._cache_key("b", [changed])
+    assert ai._cache_key("b", [a]) != ai._cache_key("b", [renamed])
+    assert ai._cache_key("b", [a]) != ai._cache_key("different basis", [a])
 
 
-def test_threshold_participates_in_the_key(tmp_path, monkeypatch):
+def test_threshold_participates_in_the_key(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     """`passed` is cached next to `score`, so a cache keyed without the
     threshold would serve a pass/fail decided against a different bar."""
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: _Proc(stdout=VERDICT))
+    monkeypatch.setattr(subprocess, "run", _always(_Proc(stdout=VERDICT)))
     f = _artifact(tmp_path / "a")
     lenient = ai.judge(task="t", rubric="r", files=[f], threshold=7)
     strict = ai.judge(task="t", rubric="r", files=[f], threshold=9.5)
-    assert lenient.passed and not strict.passed
+    assert lenient.passed
+    assert not strict.passed
     assert not strict.cached, "a stricter threshold reused the lenient verdict"
 
 
-def test_second_judgment_of_the_same_artifact_hits_the_cache(tmp_path, monkeypatch):
+def test_second_judgment_of_the_same_artifact_hits_the_cache(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """The whole point of the key fix: a rerun must not call the CLI."""
-    calls = []
+    calls: list[int] = []
+    monkeypatch.setattr(subprocess, "run", _in_turn([_Proc(stdout=VERDICT)], calls))
 
-    def fake_run(cmd, **kw):
-        calls.append(cmd)
-        return _Proc(stdout=VERDICT)
-
-    monkeypatch.setattr(subprocess, "run", fake_run)
     first = _artifact(tmp_path / "pytest-1" / "m0")
     j1 = ai.judge(task="t", rubric="r", files=[first])
-    assert j1.passed and not j1.cached and len(calls) == 1
+    assert j1.passed
+    assert not j1.cached
+    assert len(calls) == 1
 
     # Same artifact, rebuilt into the next run's tmp directory.
     second = _artifact(tmp_path / "pytest-2" / "m0")
@@ -106,41 +135,51 @@ def test_second_judgment_of_the_same_artifact_hits_the_cache(tmp_path, monkeypat
 # Unreachable is not a verdict
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("proc,label", [
-    (_Proc(stdout="", stderr="Not logged in · Please run /login", returncode=1),
-     "auth failure"),
-    (_Proc(stdout="I'm sorry, I can't do that.", returncode=0), "prose reply"),
-])
-def test_unreachable_judge_is_flagged_not_scored(tmp_path, monkeypatch, proc, label):
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: proc)
+
+@pytest.mark.parametrize(
+    ("proc", "label"),
+    [
+        (
+            _Proc(stdout="", stderr="Not logged in · Please run /login", returncode=1),
+            "auth failure",
+        ),
+        (_Proc(stdout="I'm sorry, I can't do that.", returncode=0), "prose reply"),
+    ],
+)
+def test_unreachable_judge_is_flagged_not_scored(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch, proc: _Proc, label: str
+) -> None:
+    monkeypatch.setattr(subprocess, "run", _always(proc))
     j = ai.judge(task="t", rubric="r", files=[_artifact(tmp_path / "a")])
     assert j.unavailable, f"{label} was reported as a verdict"
     assert not j.passed
 
 
-def test_timeout_is_unavailable_not_a_zero(tmp_path, monkeypatch):
-    def boom(cmd, **kw):
-        raise subprocess.TimeoutExpired(cmd, 1)
+def test_timeout_is_unavailable_not_a_zero(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    def boom(*_args: Any, **_kwargs: Any) -> _Proc:
+        raise subprocess.TimeoutExpired("claude", 1)
 
     monkeypatch.setattr(subprocess, "run", boom)
     j = ai.judge(task="t", rubric="r", files=[_artifact(tmp_path / "a")])
-    assert j.unavailable and "timed out" in j.rationale
+    assert j.unavailable
+    assert "timed out" in j.rationale
 
 
-def test_unreachable_verdicts_are_never_cached(tmp_path, monkeypatch):
+def test_unreachable_verdicts_are_never_cached(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     """Caching a failure would freeze a transient outage into every later run."""
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **kw: _Proc(stdout="", returncode=1))
+    monkeypatch.setattr(subprocess, "run", _always(_Proc(stdout="", returncode=1)))
     f = _artifact(tmp_path / "a")
     assert ai.judge(task="t", rubric="r", files=[f]).unavailable
-    assert not list(ai.CACHE_DIR.glob("*.json")) if ai.CACHE_DIR.exists() else True
+    if ai.CACHE_DIR.exists():
+        assert not list(ai.CACHE_DIR.glob("*.json"))
 
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **kw: _Proc(stdout=VERDICT))
+    monkeypatch.setattr(subprocess, "run", _always(_Proc(stdout=VERDICT)))
     assert ai.judge(task="t", rubric="r", files=[f]).passed
 
 
-def test_assert_judgment_skips_when_unavailable_and_fails_on_a_real_zero():
+def test_assert_judgment_skips_when_unavailable_and_fails_on_a_real_zero() -> None:
     # Skipped derives from BaseException, so it escapes pytest.raises(Exception)
     # and would silently skip this test instead of being asserted on.
     with pytest.raises(BaseException) as skipped:
@@ -152,7 +191,7 @@ def test_assert_judgment_skips_when_unavailable_and_fails_on_a_real_zero():
         ai.assert_judgment(real, "redaction")
 
 
-def test_skip_if_unavailable_passes_a_real_verdict_through():
+def test_skip_if_unavailable_passes_a_real_verdict_through() -> None:
     ai.skip_if_unavailable(ai.Judgment(3.0, False, "genuinely bad"))
 
 
@@ -160,18 +199,21 @@ def test_skip_if_unavailable_passes_a_real_verdict_through():
 # Retry
 # ---------------------------------------------------------------------------
 
-def test_transient_failure_is_retried_then_succeeds(tmp_path, monkeypatch):
-    replies = [_Proc(stdout="", stderr="Not logged in", returncode=1),
-               _Proc(stdout=VERDICT)]
-    monkeypatch.setattr(subprocess, "run", lambda cmd, **kw: replies.pop(0))
+
+def test_transient_failure_is_retried_then_succeeds(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    replies = [_Proc(stdout="", stderr="Not logged in", returncode=1), _Proc(stdout=VERDICT)]
+    monkeypatch.setattr(subprocess, "run", _in_turn(replies))
     j = ai.judge(task="t", rubric="r", files=[_artifact(tmp_path / "a")])
-    assert j.passed and not j.unavailable and not replies
+    assert j.passed
+    assert not j.unavailable
+    assert len(replies) == 1, "the retry did not consume the transient failure"
 
 
-def test_retries_are_bounded(tmp_path, monkeypatch):
-    calls = []
-    monkeypatch.setattr(subprocess, "run",
-                        lambda cmd, **kw: (calls.append(1),
-                                           _Proc(stdout="", returncode=1))[1])
+def test_retries_are_bounded(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
+    calls: list[int] = []
+    monkeypatch.setattr(subprocess, "run", _in_turn([_Proc(stdout="", returncode=1)], calls))
     j = ai.judge(task="t", rubric="r", files=[_artifact(tmp_path / "a")])
-    assert j.unavailable and len(calls) == ai.ATTEMPTS
+    assert j.unavailable
+    assert len(calls) == ai.ATTEMPTS

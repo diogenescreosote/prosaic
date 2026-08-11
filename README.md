@@ -79,12 +79,12 @@ That design is written up in [ROADMAP.md](ROADMAP.md).
 
 ## The one design rule
 
-**The model classifies, extracts, and drafts prose. The engine computes,
-validates, and renders. No date is ever produced by a language model.** This
-is structural, not aspirational: the operator's only way to obtain a date is
-a typed `compute_deadline` tool that accepts facts and returns the
-deterministic engine's result, citation attached. If the model tried to
-guess a deadline, there is no code path that would let the guess become one.
+**The model drafts prose. The engine renders it.** A language model writes
+and revises Markdown; it never lays out a page, assigns an exhibit letter,
+numbers a heading, or fills a form field. Everything between a `.md` source
+and the PDF a clerk accepts is deterministic code: same source, same bytes
+out. That boundary is why the output is reviewable — a rendering bug is
+reproducible and fixable, where a model that formats prose is neither.
 
 ## Install
 
@@ -100,21 +100,6 @@ uv sync
 
 ## Quickstart
 
-```sh
-# Last day to file a motion for an October 2, 2026 hearing, served electronically
-uv run prosaic deadline motion_filing 2026-10-02 --method electronic
-# 2026-09-04  CCP §§ 1005(b), 12c; CRC 3.1300(a)
-
-# The six forms the California civil pack fills
-uv run prosaic forms
-
-# Statewide court holidays for a covered year (2025-2028 packaged)
-uv run prosaic holidays 2026
-
-# Run the test suite
-uv run pytest
-```
-
 Scaffold a matter and build a filing packet from Markdown sources:
 
 ```sh
@@ -125,8 +110,7 @@ cd ~/cases/smith-v-smith && make list      # the envelopes this matter defines
 make responsive_declaration VARIANT=public
 ```
 
-With `ANTHROPIC_API_KEY` set, `uv run prosaic ask matter.json "..."` runs
-the LLM operator against a serialized matter.
+Run the test suite with `uv run pytest`.
 
 ## What is implemented today
 
@@ -148,32 +132,16 @@ the LLM operator against a serialized matter.
 - **Judicial Council form filling.** Each form is a YAML descriptor
   recording where every field lives and how it breaks; one engine executes
   all of them, and overflow spills to an MC-025 attachment rather than
-  truncating a filing.
-- **Deadline engine.** CCP §§ 12–12c day arithmetic, the CCP § 1005(b)
-  motion-notice schedule, § 430.40(a) demurrers, the § 1013 / § 1010.6
-  service extensions, CRC 3.110(b) and 3.725(a). Court days and calendar
-  days are distinct types; holiday calendars are data (2025–2028 packaged,
-  cross-checked against published court schedules); each rule is covered in
-  [docs/DEADLINES.md](docs/DEADLINES.md) with the test that pins it, plus a
-  property-based suite (Hypothesis) asserting the invariants examples can't.
-- **California civil form pack.** CM-010, CM-110, SUM-100, POS-010,
-  MC-030, MC-031, filled into the official Judicial Council AcroForms and
-  verified by golden-file tests that read the values back out of the
-  produced PDFs. Scope is stated per module: CM-110 completes the caption
-  and the core items (1a, 2a, 3a, 4a, 5, mediation willingness, signature),
-  and POS-010 covers personal service. Other forms are not yet implemented.
-- **A typed case model.** Parties, counsel, court, documents, exhibits,
-  service events, docket entries, validated on construction. Extracted
-  values carry provenance: a value that flows onto a filing or into a
-  deadline points back at its source document and page.
-- **Ingestion.** Local filesystem and IMAP mailboxes (Gmail works with an
-  app password), deduplicated by content hash.
-- **Operator.** A tool loop giving the model exactly three capabilities:
-  read the case model, compute a deadline through the engine, list the
-  pack's forms.
+  truncating a filing ([docs/forms.md](docs/forms.md)). Six forms are
+  registered: CIV-110, EFS-020, MC-025, MC-030, SUBP-010, SUBP-025. Blank
+  AcroForms for CM-010, CM-110, MC-031, POS-010 and SUM-100 are in
+  `pleading/forms/` awaiting descriptors.
+- **Companion documents.** A source declares its consumer and employee
+  notices as data and the build emits one filled SUBP-025 per recipient
+  beside it, captioned from the same front matter, never merged into the
+  document it accompanies.
 
-385 tests, 97% line coverage on the `prosaic` package, `mypy --strict`
-clean.
+274 tests, with `ruff` and `mypy --strict` clean.
 
 **Status:** 0.1.0. Young code: the engine and the six forms are tested
 against the statutes and the official blanks, but no filing produced by this
@@ -189,7 +157,7 @@ for the end-to-end tour.
 |---|---|
 | Running it | [install.md](docs/install.md) · [matter-layout.md](docs/matter-layout.md) · [scheduling.md](docs/scheduling.md) · [backup.md](docs/backup.md) |
 | Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) |
-| Getting documents out | [forms.md](docs/forms.md) · [FORM_PACKS.md](docs/FORM_PACKS.md) · [DEADLINES.md](docs/DEADLINES.md) |
+| Getting documents out | [forms.md](docs/forms.md) |
 | Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
 | Working on it | [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [CLAUDE.md](CLAUDE.md) |
 | Where it's going | [ROADMAP.md](ROADMAP.md) |
@@ -201,5 +169,5 @@ the numbered ADRs for choices inside it. Component contracts live in
 
 ## License
 
-MIT. The Judicial Council form PDFs in `prosaic/packs/civil/blanks/` are
+MIT. The Judicial Council form PDFs in `pleading/forms/` are
 the official published forms, included unmodified.
