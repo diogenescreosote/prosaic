@@ -144,7 +144,7 @@ def test_readme_test_count_is_current():
     assert claimed, "README no longer states a test count"
 
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only", "--no-cov",
+        [sys.executable, "-m", "pytest", "--collect-only",
          "-p", "no:cacheprovider"],
         cwd=REPO_ROOT, capture_output=True, text=True,
     )

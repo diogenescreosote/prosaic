@@ -50,6 +50,7 @@ import re
 import shutil
 import subprocess
 import time
+from collections.abc import Sequence
 from dataclasses import dataclass, field
 from pathlib import Path
 
@@ -105,8 +106,8 @@ def _cache_key(basis: str, files: list[Path]) -> str:
     return h.hexdigest()[:32]
 
 
-def judge(task: str, rubric: str, files: list[Path] | tuple = (),
-          hard_failures: list[str] | tuple = (), threshold: float = 7.0,
+def judge(task: str, rubric: str, files: Sequence[Path] = (),
+          hard_failures: Sequence[str] = (), threshold: float = 7.0,
           timeout: int = 300) -> Judgment:
     """Ask the AI judge to score artifacts against a rubric.
 

@@ -17,9 +17,8 @@ tests.
    - `uv run pytest -q <selection>` (include AI judgments only when
      the request says so — they cost real tokens; note that verdicts
      for unchanged artifacts are served from tests/.ai_cache/ for free)
-   `uv run` owns the environment; add `--no-cov` when the selection is
-   narrow, since the 95% floor is scoped to the whole `prosaic`
-   package and a partial run will trip it.
+   `uv run` owns the environment. There is no coverage gate, so a
+   narrow selection needs no extra flags.
 2. If everything passes: report the one-line summary and stop. Do not
    pad the report.
 3. For each failure, triage before reporting:

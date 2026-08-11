@@ -78,7 +78,6 @@ select = [
 [tool.mypy]
 strict = true
 python_version = "3.12"
-plugins = ["pydantic.mypy"]
 # Same boundary as the ruff excludes above: the ported trees keep upstream
 # style so upstream fixes merge cleanly. Exclusions apply because CI passes
 # `tests` as a directory, not as a list of files.

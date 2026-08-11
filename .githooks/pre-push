@@ -25,14 +25,14 @@ CHECKS="tests/test_repo_hygiene.py tests/test_leak_guard.py"
 # uv owns the environment for this repo; fall back to a python that
 # already has pytest, for clones driven some other way.
 if command -v uv >/dev/null 2>&1; then
-  exec uv run --no-sync pytest $CHECKS -q --no-header --no-cov
+  exec uv run --no-sync pytest $CHECKS -q --no-header
 fi
 
 for py in "${PROSAIC_PYTHON:-}" python3 python; do
   [ -n "$py" ] || continue
   command -v "$py" >/dev/null 2>&1 || continue
   if "$py" -c "import pytest" >/dev/null 2>&1; then
-    exec "$py" -m pytest $CHECKS -q --no-header --no-cov
+    exec "$py" -m pytest $CHECKS -q --no-header
   fi
 done
 
