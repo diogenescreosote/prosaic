@@ -9,7 +9,8 @@ docs/development.md; the rules are the same.
 ## Orientation: one system
 
 `pleading/ cli/ connectors/ sync/ triage/ templates/` is the whole of
-it: the Markdown-to-pleading-paper pipeline, the descriptor-driven form
+it (plus `skills/` — task-shaped instructions an agent loads on
+demand, ADR-0021): the Markdown-to-pleading-paper pipeline, the descriptor-driven form
 filler, the `sc` CLI, the connectors and their scheduled sync, and the
 matter conventions those produce. It runs live matters. Read
 [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) before changing its shape.
@@ -63,6 +64,7 @@ Every feature addition or substantial modification follows this loop:
    | a form-descriptor key | the descriptor schema in `pleading/pleading_markdown_spec.md` |
    | a system binary the code shells out to | `system-dependencies.yaml` |
    | a matter-facing convention | `templates/matter/AGENTS.md`, the contract agents actually read |
+   | an agent-facing capability (a task an agent performs) | a `skills/<name>/SKILL.md`, indexed in `skills/README.md` |
    | a decision that constrains later work | an ADR, listed in `design/README.md` |
    | a new `docs/` page | a link from somewhere a reader would start |
 
