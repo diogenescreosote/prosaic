@@ -32,6 +32,10 @@ subcommand's real promises live in that component's spec.
   (the descriptor's fields, checkboxes, and agent guide) for an
   agent that has never seen the form to fill it correctly without
   reading the registry source. *(untested)*
+- **`sc attest ...`** passes through to the attestation engine
+  (`crypto/attest.py`): dual hashes, detached signatures, pinned-key
+  verification, the signed manifest, timestamps. The real promises
+  live in [attest.md](attest.md). *(tested: tests/test_attest.py)*
 - **`sc connectors`** lists available connectors with their
   descriptions and auth requirements. *(untested)*
 - **`sc schedule <dir> [times]`** installs the 12-hourly background

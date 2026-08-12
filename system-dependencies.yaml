@@ -187,6 +187,27 @@ dependencies:
     npm: "@google/gemini-cli"
     in_container: false
 
+  - binary: gpg
+    why: signs and verifies document attestations (sc attest); verification is pinned to a named key file
+    used_by: [crypto/attest.py, tests/test_attest.py]
+    required: false
+    platforms: [darwin, linux]
+    apt: gnupg
+    brew: gnupg
+    in_container: true
+
+  - binary: ots
+    why: OpenTimestamps proofs bound a signature's time independently of the signer's clock
+    used_by: [crypto/attest.py]
+    required: false
+    platforms: [darwin, linux]
+    # A Python tool distributed on PyPI (opentimestamps-client), not by
+    # the system managers; attest degrades to a stderr note without it.
+    apt: null
+    brew: null
+    no_package_reason: "pip install opentimestamps-client; attest works without it"
+    in_container: false
+
   - binary: gh
     why: creates and verifies the private GitHub repo a matter backs up to
     used_by: [cli/sc backup]
