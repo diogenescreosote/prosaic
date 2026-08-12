@@ -27,6 +27,10 @@ from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from docx.opc.part import Part
 from docx.opc.packuri import PackURI
+
+# The QR seam (payload resolution + qrencode rendering) lives in
+# md_pleading so the three renderers cannot drift.
+import md_pleading as mp
 from docx.opc.constants import RELATIONSHIP_TYPE as RT, CONTENT_TYPE as CT
 from xml.sax.saxutils import escape
 
@@ -508,6 +512,21 @@ def _attach_lead(doc: Document,
             break
 
 
+def _emit_qrblock(doc: Document, payload: str, caption: str) -> None:
+    """Embed a QR image (rendered through md_pleading's qrencode seam)
+    with its caption below. 2 inches square mirrors the PDF's six grid
+    lines."""
+    import tempfile
+
+    with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+        mp.render_qr_png(payload, tmp.name)
+        doc.add_picture(tmp.name, width=Inches(2), height=Inches(2))
+    if caption:
+        para = doc.add_paragraph()
+        para.add_run(caption).font.size = Pt(12)
+    add_blank(doc)
+
+
 def _emit_signblock(doc: Document, name: str, role: str) -> None:
     """Emit a standard signature block: Dated line / blank / signature line
     / blank / NAME / Role."""
@@ -550,6 +569,8 @@ _DECLSIGNBLOCK_RE = re.compile(
     r"^\\declsignblock\{(.+?)\}\{(.+?)\}(?:\{(.*?)\})?\s*$"
 )
 _JUDGESIGNBLOCK_RE = re.compile(r"^\\judgesignblock\{(.+?)\}\s*$")
+_QRBLOCK_RE = re.compile(r"^\\qrblock\{(.+?)\}(?:\{(.*?)\})?\s*$")
+_QRBLOCKFILE_RE = re.compile(r"^\\qrblockfile\{(.+?)\}(?:\{(.*?)\})?\s*$")
 
 
 def build_letter_header(doc: Document, meta: dict) -> None:
@@ -807,6 +828,19 @@ def build_body(doc: Document, body: str, meta: dict,
             ).title()
             _attach_lead(doc)
             _emit_declsignblock(doc, name, location, role)
+            continue
+
+        m = _QRBLOCK_RE.match(text)
+        if m:
+            _attach_lead(doc)
+            _emit_qrblock(doc, m.group(1).strip(), (m.group(2) or "").strip())
+            continue
+
+        m = _QRBLOCKFILE_RE.match(text)
+        if m:
+            block = mp.Block("qrblockfile", m.group(1).strip())
+            _attach_lead(doc)
+            _emit_qrblock(doc, mp.qr_payload(block), (m.group(2) or "").strip())
             continue
 
         m = _SIGNBLOCK_RE.match(text)

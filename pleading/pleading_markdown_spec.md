@@ -1098,6 +1098,35 @@ The block renders as `Sincerely,`, a signature line, and then the
 name lines beneath the signature, with one blank line of trailing
 separation.
 
+## QR blocks — machine-readable payloads on the page
+
+`\qrblock{payload}{caption}` renders a QR symbol at the text margin,
+six grid lines square, with the optional caption on the line beneath
+it. `\qrblockfile{path}{caption}` does the same with the contents of
+a file as the payload — the form to use for anything multi-line or
+long: an armored public key, a detached signature, a hash manifest.
+Paths resolve against the working directory (envelope builds run from
+the matter directory, so matter-relative paths work unchanged); a
+missing payload file fails the build.
+
+Both macros must appear alone on a line, like the signature-block
+macros. Generation shells out to `qrencode`
+(system-dependencies.yaml): error correction level M, four-module
+quiet zone. The DOCX renderer embeds the same symbol at two inches
+square; the TXT renderer prints the caption and then the payload
+itself, which is what the symbol encodes.
+
+The property that makes a QR block worth its page space is that a
+phone camera recovers the payload byte-exactly, no OCR in the loop
+(tested: pleading/tests/test_qrblock.py renders, rasterizes, decodes,
+and compares).
+
+```
+The following key verifies every document in this matter:
+
+\qrblockfile{assets/public_key.asc}{Public key, machine-readable.}
+```
+
 ## Output specification
 
 The script emits a PDF file.

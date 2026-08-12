@@ -234,6 +234,13 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
         if block.kind in ("signblock", "declsignblock"):
             items.append((_signature_block_text(block, meta), False))
             continue
+        if block.kind in ("qrblock", "qrblockfile"):
+            # Text output has no pixels; the honest equivalent is the
+            # payload itself, labeled, which is what the QR encodes.
+            caption = block.spans[0].text if block.spans else ""
+            header = f"[QR code{': ' + caption if caption else ''}]"
+            items.append((header + "\n" + mp.qr_payload(block), False))
+            continue
         items.append((block_to_line(block, footnote_numbers), _is_tight(block)))
 
     # Footnotes: inline [n] markers point at an end-of-document notes

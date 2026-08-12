@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import subprocess
 import sys
 import tempfile
 from dataclasses import dataclass, field
@@ -236,6 +237,18 @@ SIGNBLOCK_ROLE_EXTRA_LINE = 1        # + role line when one prints
 JUDGESIGNBLOCK_GRID_LINES = 5        # Dated + blank + rule + blank + title
 LETTERSIGNBLOCK_BASE_GRID_LINES = 4  # Sincerely + blank + rule + blank (+1 per name line)
 
+# QR blocks (\qrblock / \qrblockfile): a scannable square on the grid.
+# The square spans QRBLOCK_GRID_LINES pleading lines -- large enough to
+# scan a dense payload (an armored public key) from paper, small enough
+# to share a page with the text that explains it. qrencode settings:
+# error correction M tolerates print damage without bloating module
+# count; the 4-module quiet zone is the QR spec's required minimum.
+QRBLOCK_GRID_LINES = 6               # QR square height, in grid lines
+QRBLOCK_CAPTION_EXTRA_LINE = 1       # + caption line when one prints
+QR_ERROR_CORRECTION = "M"            # qrencode -l: L/M/Q/H
+QR_MODULE_PIXELS = 10                # qrencode -s: render resolution
+QR_MARGIN_MODULES = 4                # qrencode -m: quiet-zone width
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -303,6 +316,8 @@ class Block:
     blockquote:    text=raw text, spans=styled content
     signblock:     text=name line (e.g. "JANE ROE")
     declsignblock: text=name, spans[0].text=location, spans[1].text=role (optional; if empty, no role line printed)
+    qrblock:       text=payload to encode, spans[0].text=caption (optional)
+    qrblockfile:   text=path whose contents are the payload, spans[0].text=caption
     table:         text="", rows=[[col1, col2, ...], ...] (first row is header)
     """
     kind: str
@@ -1701,6 +1716,18 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
             flush_para()
             blocks.append(Block("lettersignblock", m_letter_sign.group(1).strip()))
             continue
+        m_qr = re.match(r"^\\qrblock\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
+        if m_qr:
+            flush_para()
+            blocks.append(Block("qrblock", m_qr.group(1).strip(),
+                                spans=[TextSpan((m_qr.group(2) or "").strip())]))
+            continue
+        m_qrfile = re.match(r"^\\qrblockfile\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
+        if m_qrfile:
+            flush_para()
+            blocks.append(Block("qrblockfile", m_qrfile.group(1).strip(),
+                                spans=[TextSpan((m_qrfile.group(2) or "").strip())]))
+            continue
         m = re.match(r"^(#{1,3})\s+(.*)$", line)
         if m:
             flush_para()
@@ -2739,7 +2766,33 @@ class PleadingPDF:
 
         return current_line
 
-    _SIG_KINDS = {"signblock", "declsignblock", "judgesignblock", "lettersignblock"}
+    def _emit_qrblock(self, block: Block, current_line: int) -> int:
+        """Render a \\qrblock: a scannable square at the text margin,
+        with an optional caption on the line below it."""
+        caption = block.spans[0].text if block.spans else ""
+        lines_needed = QRBLOCK_GRID_LINES + (QRBLOCK_CAPTION_EXTRA_LINE if caption else 0)
+        if current_line + lines_needed - 1 > self.lines_per_page:
+            self.start_page()
+            current_line = 1
+
+        payload = qr_payload(block)
+        top_y = self.line_y(current_line) + FONT_SIZE
+        bottom_y = self.line_y(current_line + QRBLOCK_GRID_LINES - 1)
+        side = top_y - bottom_y
+        with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
+            render_qr_png(payload, tmp.name)
+            self.c.drawImage(ImageReader(tmp.name), self.left_margin, bottom_y,
+                             width=side, height=side)
+        current_line += QRBLOCK_GRID_LINES
+        if caption:
+            self.draw_text_line(current_line, caption)
+            current_line += 1
+        current_line += 1  # trailing blank line after the block
+
+        return current_line
+
+    _SIG_KINDS = {"signblock", "declsignblock", "judgesignblock", "lettersignblock",
+                  "qrblock", "qrblockfile"}
 
     def _is_lead_block(self, block: Block) -> bool:
         """A heading or short paragraph/list item that must not be stranded
@@ -2757,6 +2810,8 @@ class PleadingPDF:
             block, self.exhibit_letters, self.text_width, self.footnote_numbers))
 
     def _sig_block_lines_needed(self, block: Block) -> int:
+        if block.kind in ("qrblock", "qrblockfile"):
+            return QRBLOCK_GRID_LINES + QRBLOCK_CAPTION_EXTRA_LINE
         if block.kind == "judgesignblock":
             return JUDGESIGNBLOCK_GRID_LINES
         if block.kind == "lettersignblock":
@@ -2829,6 +2884,9 @@ class PleadingPDF:
                 continue
             if block.kind == "lettersignblock":
                 current_line = self._emit_lettersignblock(block, current_line)
+                continue
+            if block.kind in ("qrblock", "qrblockfile"):
+                current_line = self._emit_qrblock(block, current_line)
                 continue
             if block.kind == "table":
                 current_line = self._emit_table(block, current_line)
@@ -3101,6 +3159,42 @@ def image_to_letter_pdf(image_path: Path, out_path: str) -> None:
     c.drawImage(ImageReader(img), x, y, width=draw_w, height=draw_h,
                 preserveAspectRatio=True, mask='auto')
     c.save()
+
+
+def qr_payload(block: Block) -> str:
+    """The text a QR block encodes: inline payload, or a file's contents.
+
+    \\qrblockfile paths resolve against the working directory; envelope
+    builds run from the matter directory, so matter-relative paths (a
+    key block in assets/, a detached signature) work unchanged.
+    """
+    if block.kind != "qrblockfile":
+        return block.text
+    path = Path(block.text).expanduser()
+    if not path.exists():
+        raise SystemExit(
+            f"\\qrblockfile: {block.text} not found (paths resolve against "
+            f"the working directory; builds run from the matter)")
+    return path.read_text().strip()
+
+
+def render_qr_png(payload: str, out_path: str) -> None:
+    """Encode payload as a QR PNG via qrencode (system-dependencies.yaml).
+
+    The payload arrives on stdin: armored key blocks overflow argv
+    comfort and a command line leaks into process listings.
+    """
+    try:
+        proc = subprocess.run(
+            ["qrencode", "-o", out_path, "-l", QR_ERROR_CORRECTION,
+             "-s", str(QR_MODULE_PIXELS), "-m", str(QR_MARGIN_MODULES)],
+            input=payload.encode("utf-8"), capture_output=True)
+    except FileNotFoundError:
+        raise SystemExit(
+            "\\qrblock needs qrencode (apt/brew install qrencode; "
+            "see system-dependencies.yaml)") from None
+    if proc.returncode != 0:
+        raise SystemExit(f"qrencode failed: {proc.stderr.decode().strip()}")
 
 
 def append_pdf_scaled(writer: PdfWriter, pdf_path: Path,
