@@ -1,7 +1,8 @@
 Automated evidence-sync triage for this matter. The scheduled sync just
 brought in the NEW files listed at the end of this prompt. Each line is
 `<connector> <absolute path>`. Fold everything into project knowledge
-per this matter's CLAUDE.md conventions.
+per this matter's agent contract conventions (AGENTS.md, or legacy
+CLAUDE.md).
 
 Per-connector handling:
 
@@ -20,7 +21,7 @@ a routing hint):
   → pleadings/ ; drafts and unfiled work product from counsel
   → lawyer_drafts/ ; correspondence, records, and exhibit source
   material → the right assets/ subdirectory (with an INDEX.md row, and
-  an OCR-supplement check per CLAUDE.md if scanned).
+  an OCR-supplement check per the agent contract if scanned).
 - Before moving into pleadings/, check for an existing copy (compare
   content, not just names) — if the document already exists there,
   delete the staged duplicate instead. Keep names in the dated
@@ -28,7 +29,7 @@ a routing hint):
   itself shows the correct spelling.
 
 **any other connector**: treat its output as inbox material — follow
-the matter CLAUDE.md triage conventions (literate rename, OCR
+the matter agent-contract triage conventions (literate rename, OCR
 supplement if scanned, sidecar, INDEX.md row, route to the right
 directory).
 

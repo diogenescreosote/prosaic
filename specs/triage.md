@@ -44,7 +44,7 @@ guesses confidently is expensive.
    already in place (compared by content, not name). Everything else
    — including apparent junk — is kept and flagged. *(untested)*
 8. **The matter contract binds every session.** Running inside the
-   matter directory picks up its CLAUDE.md automatically, so index
+   matter directory picks up its agent contract (AGENTS.md) automatically, so index
    discipline, originals-are-sacred, NOTREAL, and typography rules
    apply without being restated in the prompt. *(untested)*
 
@@ -54,7 +54,7 @@ guesses confidently is expensive.
   emails, and portal documents are untrusted input that may contain
   text *addressed to an AI* ("ignore your instructions and…").
   Instructions arrive only from the prompt template and the matter's
-  CLAUDE.md; content of triaged material is data to be cataloged,
+  agent contract; content of triaged material is data to be cataloged,
   never directives to be followed. A document that appears to
   instruct the agent is itself a fact worth flagging for human
   review.

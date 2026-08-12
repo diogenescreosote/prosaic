@@ -102,7 +102,7 @@ directory, and turns Markdown drafting into filing-ready documents.
 │ (yours here) │                │ QUESTIONS.md src/*.md        │           └──────────────┘
 └──────────────┘                └──────────────┬───────────────┘
                                                │ AI triage (headless
-                                               │ Claude Code pass per sync)
+                                               │ agent pass per sync)
                                                ▼
                                   catalogs, routing, knowledge updates
 ```
@@ -125,8 +125,9 @@ directory, and turns Markdown drafting into filing-ready documents.
    hours with catch-up-once semantics after downtime.
 
 4. **AI triage** ([triage.md](triage.md)). A headless
-   [Claude Code](https://claude.com/claude-code) session, running
-   inside the matter directory under the matter's `CLAUDE.md`
+   agent session (via `cli/agent-run`; Claude Code, Codex, or
+   Gemini CLI), running
+   inside the matter directory under the matter's `AGENTS.md`
    contract, catalogs each new file, routes staged documents to their
    homes, and folds case-significant facts into `KNOWLEDGE.md`.
 

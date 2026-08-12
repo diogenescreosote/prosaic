@@ -10,7 +10,8 @@ labels: bug
 Smith / 24CV00000). Never paste real case material, names, or case
 numbers into an issue.
 
-**Environment**: macOS version, Python/Node versions, Claude Code y/n.
+**Environment**: macOS version, Python/Node versions, agent CLI
+(`cli/agent-run --check` output, or "none").
 
 **If a produced document is wrong**: attach the fictional source and
 the output, or a screenshot of the bad region.

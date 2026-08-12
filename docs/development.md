@@ -1,7 +1,7 @@
 # Development workflow
 
 How prosaic gets built — by humans and by AI agents, who follow the
-same rules (the agent-operative copy is the repo-root `CLAUDE.md`; this
+same rules (the agent-operative copy is the repo-root `AGENTS.md`; this
 page adds the rationale).
 
 ## Spec-first
@@ -39,7 +39,7 @@ Where a thing has to be written down depends on what it is:
 | an `sc` subcommand | `specs/cli.md`, as a promise — help text is not the spec |
 | a front-matter key | `pleading/front_matter_keys.yaml` and the markdown spec |
 | a system binary the code invokes | `system-dependencies.yaml` |
-| a matter-facing convention | `templates/matter/CLAUDE.md` |
+| a matter-facing convention | `templates/matter/AGENTS.md` |
 | a decision that constrains later work | an ADR, indexed in `design/README.md` |
 | a new `docs/` page | a link from wherever a reader would start |
 
@@ -77,7 +77,7 @@ subsequent sweep. Intermediate commits need Tier 0 green; a feature is
 ## Cheap tokens for routine work
 
 Test execution is delegated to the `tester` subagent
-(`.claude/agents/tester.md`), pinned to a cheaper model (Sonnet): it
+(Claude Code: `.claude/agents/tester.md`), pinned to a cheaper model: it
 runs the selection, triages failures (real / environmental / flaky,
 with AI-judge rationales quoted verbatim), and reports in a fixed
 ~30-line format. Multiple testers run concurrently on disjoint
@@ -94,7 +94,7 @@ free; `PROSAIC_AI_TESTS=0` gives a zero-token deterministic run.
 ## Selection heuristics
 
 When in doubt, run more. The touched-path ➜ selection table lives in
-`CLAUDE.md`; its spirit: Tier 0 is the narrowest thing that would
+`AGENTS.md`; its spirit: Tier 0 is the narrowest thing that would
 catch an obvious break; Tier 1 is everything that *could plausibly*
 care, including the scenario suites, because scenario tests are where
 cross-component regressions actually surface.

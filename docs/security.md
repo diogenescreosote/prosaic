@@ -8,7 +8,8 @@ and the ones only you can make.
 
 - **Matter content stays on your disk.** No prosaic component
   transmits matter content anywhere, with one exception you configure
-  deliberately: the AI triage harness (e.g. Claude Code), which
+  deliberately: the AI triage harness (whatever agent CLI `cli/agent-run`
+  selects — Claude Code, Codex, Gemini), which
   processes matter text under whatever terms you have with that
   provider. If that's unacceptable for some material, keep it out of
   the triage path (triage only sees files connectors list as new) or
@@ -72,6 +73,6 @@ Security issues: open a private report to the maintainer (see
 repository metadata) rather than a public issue, especially anything
 touching credential handling or the triage prompt-injection surface
 (a hostile document could try to steer the triage agent — the matter
-CLAUDE.md's conservative-clerk rules and git review are the current
+contract's conservative-clerk rules and git review are the current
 mitigations; treat triage diffs on adversarial material with extra
 care).

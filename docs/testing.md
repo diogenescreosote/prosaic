@@ -3,7 +3,7 @@
 prosaic's harness has three layers, all run by pytest:
 
 ```bash
-uv run pytest                       # everything (AI checks included if claude CLI present)
+uv run pytest                       # everything (AI checks included if an agent CLI is present)
 PROSAIC_AI_TESTS=0 uv run pytest    # deterministic only
 uv run pytest -m ai                 # only the AI-judged checks
 uv run pytest -q <path>             # a narrow selection
@@ -73,7 +73,8 @@ Current scenarios:
 
 For properties that are judgments rather than mechanics ("this
 rendered form is court-ready"), tests call the judge in
-`tests/harness/ai.py`: a headless Claude Code invocation that inspects
+`tests/harness/ai.py`: a headless agent invocation (through
+`cli/agent-run`, so any supported agent CLI works) that inspects
 artifacts (rendered page images, extracted text) against a **rubric**
 and **hard-failure conditions**, returning
 `{score: 0–10, hard_failures, rationale}`. A check passes at

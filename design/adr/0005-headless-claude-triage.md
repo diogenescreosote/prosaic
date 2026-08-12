@@ -1,6 +1,6 @@
 # 0005 — AI triage as a headless Claude Code session
 
-**Status:** accepted (2026-08)
+**Status:** accepted (2026-08); the CLI seam generalized by ADR-0020
 
 ## Context
 Folding new evidence into catalogs/knowledge requires reading

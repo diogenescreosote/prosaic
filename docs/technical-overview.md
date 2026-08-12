@@ -40,7 +40,7 @@ star to steer by; today, the honest framing is that prosaic makes a
   and an index row describing what each item is and why it matters.
   See [docs/conventions.md](docs/conventions.md).
 - **AI folds new material into case knowledge.** A headless
-  [Claude Code](https://claude.com/claude-code) triage pass catalogs
+  agent triage pass (via `cli/agent-run`) catalogs
   each new document, routes it to its proper home, and updates the
   matter's knowledge base — conservatively, with "needs human review"
   as the default when unsure. See [docs/triage.md](docs/triage.md).
@@ -77,7 +77,7 @@ pleading/     Markdown → pleading PDF/DOCX generator, envelope builder,
 connectors/   Source connectors (core contract + gmail, mycase)
 sync/         Per-matter sync orchestrator + scheduler installer
 triage/       AI triage prompt templates
-templates/    New-matter scaffold (incl. the matter CLAUDE.md)
+templates/    New-matter scaffold (incl. the matter AGENTS.md)
 examples/     A fictional demo matter
 tests/        Scenario test harness (fixture matters + AI-judged checks)
 specs/        What each component must accomplish (teleological specs)
@@ -115,7 +115,8 @@ shells out to is declared in `system-dependencies.yaml` and reported
 by `sc deps`, which prints the install command for your platform —
 that list, not this paragraph, is the authority. Two things are
 optional: `whisper-cpp` and `ffmpeg`, needed only for local
-transcription, and Claude Code, needed only for the AI triage layer.
+transcription, and an agent CLI (Claude Code, Codex, or Gemini),
+needed only for the AI triage layer and the AI-judged tests.
 
 See [docs/install.md](install.md) for the container, which packages
 the whole set.

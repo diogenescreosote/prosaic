@@ -2,8 +2,8 @@
 
 These are the rules that keep a matter trustworthy. They exist because
 each one prevents a real failure mode we hit running this system in
-live litigation. The matter-level `CLAUDE.md` (from
-`templates/matter/CLAUDE.md`) makes them binding on AI agents; this
+live litigation. The matter-level `AGENTS.md` (from
+`templates/matter/AGENTS.md`) makes them binding on AI agents; this
 page explains them to humans.
 
 ## Originals are sacred

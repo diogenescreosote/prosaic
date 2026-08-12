@@ -70,6 +70,28 @@ subcommand's real promises live in that component's spec.
   Unknown or missing types are errors; missing footers warn.
   *(untested)*
 
+## The agent seam: `cli/agent-run`
+
+Not an `sc` subcommand — a sibling script that is the ONLY place an
+agent CLI is named (ADR-0020). Its promises:
+
+- **`agent-run --check`** prints the provider it would use (`claude`,
+  `codex`, `gemini`, or `custom`) and exits 0, or exits 1 when no
+  agent CLI is available. Callers gate optional AI behavior on this
+  probe and degrade gracefully. *(tested: tests/test_agent_run.py)*
+- **`agent-run [--dir DIR]... [--yolo]`** reads a prompt on stdin,
+  runs it through the selected provider noninteractively, and writes
+  the agent's output to stdout. `--dir` grants read access to a
+  directory outside the working directory on harnesses that sandbox
+  reads; `--yolo` skips permission prompts and is only for callers
+  whose risk is bounded per ADR-0005. An empty prompt is an error,
+  not an empty run. *(tested: tests/test_agent_run.py)*
+- **Selection order**: `PROSAIC_AGENT_CMD` (custom command, prompt on
+  stdin, `AGENT_RUN_DIRS`/`AGENT_RUN_YOLO` exported), else
+  `PROSAIC_AGENT_CLI` (forced provider; not on PATH is an error),
+  else the first of claude, codex, gemini on PATH.
+  *(tested: tests/test_agent_run.py)*
+
 ## Non-obvious constraints
 
 - **Matter-scoped commands take the matter as an argument or the

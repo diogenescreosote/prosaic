@@ -160,8 +160,11 @@ log "SYNC done: $count new file(s) (failures=$FAILURES):"
 sed 's/^/    /' "$NEW_LIST" >> "$LOG_FILE"
 
 # --- headless AI triage ----------------------------------------------------------
-if ! command -v claude >/dev/null 2>&1; then
-  log "WARN: claude CLI not found; skipping knowledge triage"
+# The agent CLI is whatever cli/agent-run finds (claude, codex,
+# gemini, or PROSAIC_AGENT_CMD) — see ADR-0020 for the seam.
+AGENT_RUN="$PROSAIC_ROOT/cli/agent-run"
+if ! "$AGENT_RUN" --check >/dev/null 2>&1; then
+  log "WARN: no agent CLI found (claude/codex/gemini, or PROSAIC_AGENT_CMD); skipping knowledge triage"
   rm -f "$NEW_LIST"; exit 0
 fi
 PROMPT_TEMPLATE="$PROSAIC_ROOT/triage/prompts/sync_triage.md"
@@ -176,7 +179,7 @@ NEW FILES (one per line: <connector> <absolute path>):
 $(cat "$NEW_LIST")"
 
 log "TRIAGE start ($count files)"
-if ( cd "$MATTER_DIR" && claude -p "$PROMPT" --dangerously-skip-permissions ) >> "$LOG_FILE" 2>&1; then
+if ( cd "$MATTER_DIR" && printf '%s' "$PROMPT" | "$AGENT_RUN" --yolo ) >> "$LOG_FILE" 2>&1; then
   log "TRIAGE done"
 else
   log "ERROR: triage failed (new files remain in place)"

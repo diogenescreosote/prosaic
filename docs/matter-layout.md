@@ -9,7 +9,7 @@ all navigate the same structure, and the conventions in
 smith-v-smith/
 ├── matter.yaml            # case metadata + connector config
 ├── envelopes.yaml         # filing envelope definitions (build config)
-├── CLAUDE.md              # the matter-level AI agent contract
+├── AGENTS.md              # the matter-level AI agent contract (CLAUDE.md points here)
 ├── KNOWLEDGE.md           # durable case knowledge (posture, people, timeline)
 ├── TODO.md                # live task list (delete resolved items)
 ├── QUESTIONS.md           # open interview prompts

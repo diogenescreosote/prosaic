@@ -1,7 +1,7 @@
 # Roadmap
 
 prosaic today is a set of tools you drive from a terminal under
-Claude Code, on a Mac. The goal of this roadmap is to make it
+a coding agent (Claude Code, Codex, Gemini CLI), on a Mac. The goal of this roadmap is to make it
 something a litigant or a paralegal can install and use — on macOS or
 Linux — without giving up the property that makes it trustworthy:
 **everything is plain files on your own machine, readable and
@@ -310,8 +310,8 @@ verified operations rather than improvised shell.**
   (`@anthropic-ai/claude-agent-sdk`), which supplies the agent loop,
   context management, built-in file tools, hooks, permissions, and
   session continuity, while running entirely on the user's machine.
-- Existing headless triage (`claude -p`) stays as-is — it is batch
-  work and slots into the Phase 4 job model unchanged.
+- Existing headless triage (through `cli/agent-run`) stays as-is —
+  it is batch work and slots into the Phase 4 job model unchanged.
 
 ## Phase 6 — inbox and collaborator sharing
 

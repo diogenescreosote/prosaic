@@ -40,6 +40,7 @@ project accretes decisions instead of middleware.
 - [0017](adr/0017-banner-stamps-the-whole-packet.md) The draft banner stamps the whole packet, in a reclaimed band
 - [0018](adr/0018-form-attachments-are-not-pleadings.md) A form attachment is not a pleading, and the build enforces it
 - [0019](adr/0019-one-system-not-two.md) One system, not two: the typed library is removed
+- [0020](adr/0020-agent-harness-agnostic.md) One agent-CLI seam; contracts named AGENTS.md
 
 Also:
 

@@ -1,6 +1,6 @@
 # AI triage
 
-After each sync, one headless [Claude Code](https://claude.com/claude-code)
+After each sync, one headless agent
 session folds everything new into the matter: catalog rows for email
 threads, knowledge updates from message reports, routing for staged
 portal documents. This page explains the design and its guardrails.
@@ -11,13 +11,13 @@ portal documents. This page explains the design and its guardrails.
 connector, then runs:
 
 ```bash
-cd <matter_dir> && claude -p "<prompt>" --dangerously-skip-permissions
+cd <matter_dir> && cli/agent-run --yolo < prompt.txt
 ```
 
 - The prompt is `triage/prompts/sync_triage.md` plus the file list.
   Edit the template to tune behavior; it's plain Markdown.
-- Running *inside the matter directory* means Claude Code picks up the
-  matter's `CLAUDE.md` automatically — the agent contract (index
+- Running *inside the matter directory* means the agent picks up the
+  matter's `AGENTS.md` automatically — the agent contract (index
   discipline, originals-are-sacred, em-dash rules, NOTREAL, "you are a
   clerk, not a lawyer") applies to every triage session without being
   repeated in the prompt.
@@ -60,7 +60,7 @@ twin is already in place.
 ## Tuning
 
 - Per-connector handling lives in `triage/prompts/sync_triage.md`.
-- Matter-wide behavior lives in the matter's `CLAUDE.md`.
+- Matter-wide behavior lives in the matter's `AGENTS.md`.
 - If you add a connector whose output needs special handling, add a
   section to the prompt template; otherwise the generic
   "treat as inbox material" clause covers it.
@@ -71,5 +71,5 @@ The seam is narrow by design: the orchestrator shells out to one CLI
 with one prompt and a working directory. Any agent harness that can
 (a) run headless with file-editing tools scoped to a directory and
 (b) honor an instruction file in that directory could be substituted
-by editing the `TRIAGE` block of `sync/matter_sync.sh`. Claude Code is
+by editing the `TRIAGE` block of `sync/matter_sync.sh`. An agent CLI is
 what this system is tested with.

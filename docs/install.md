@@ -110,7 +110,8 @@ Also absent, deliberately:
 
 - **The macOS Keychain.** Nothing to install; the `env` credential
   backend is what a container uses.
-- **Claude Code**, which the AI triage pass invokes. It installs from
+- **An agent CLI** (Claude Code, Codex, or Gemini), which the AI
+  triage pass invokes through `cli/agent-run`. Claude Code installs from
   npm rather than a system package manager and needs credentials the
   image cannot carry. Everything except triage works without it.
 

@@ -11,12 +11,14 @@ inspects the artifacts and returns a structured verdict:
 
 A check passes when score >= threshold AND no hard failure fired.
 
-Design notes (see design/adr/0008 for the framework decision):
-- The judge shells out to the ``claude`` CLI — the same harness
-  prosaic's triage layer already requires. No API keys, no extra
-  eval-framework dependency.
+Design notes (see design/adr/0008 for the framework decision,
+and adr/0020 for the agent-CLI seam):
+- The judge shells out to ``cli/agent-run``, which dispatches to
+  whatever headless agent CLI is installed (Claude Code, Codex,
+  Gemini, or a custom command) — the same seam prosaic's triage
+  layer uses. No API keys, no extra eval-framework dependency.
 - Judged tests are marked ``@pytest.mark.ai`` and skip cleanly when
-  the CLI is absent or PROSAIC_AI_TESTS=0. CI without AI still runs
+  no agent CLI is available or PROSAIC_AI_TESTS=0. CI without AI still runs
   every deterministic check.
 - Verdicts are cached per (prompt, file names + contents) under
   .ai_cache/ so reruns are cheap; delete the cache to re-judge.
@@ -47,7 +49,6 @@ import hashlib
 import json
 import os
 import re
-import shutil
 import subprocess
 import time
 from collections.abc import Sequence
@@ -57,6 +58,7 @@ from pathlib import Path
 import pytest
 
 CACHE_DIR = Path(__file__).resolve().parent.parent / ".ai_cache"
+AGENT_RUN = Path(__file__).resolve().parent.parent.parent / "cli" / "agent-run"
 
 # A burst of judgments can trip a transient auth/rate failure that looks
 # permanent ("Not logged in") but clears on a retry seconds later.
@@ -67,7 +69,10 @@ BACKOFF_SECONDS = (2, 5)
 def ai_available() -> bool:
     if os.environ.get("PROSAIC_AI_TESTS", "1") == "0":
         return False
-    return shutil.which("claude") is not None
+    probe = subprocess.run(
+        [str(AGENT_RUN), "--check"], capture_output=True, text=True,
+    )
+    return probe.returncode == 0
 
 
 @dataclass
@@ -159,14 +164,15 @@ Respond with ONLY a JSON object, no other text:
     # parent explicitly.
     add_dirs: list[str] = []
     for d in {str(f.parent.resolve()) for f in files}:
-        add_dirs += ["--add-dir", d]
+        add_dirs += ["--dir", d]
 
     raw, m, why = "", None, ""
     for attempt in range(ATTEMPTS):
         try:
             proc = subprocess.run(
-                ["claude", "-p", prompt, *add_dirs],
-                capture_output=True, text=True, timeout=timeout,
+                [str(AGENT_RUN), *add_dirs],
+                input=prompt, capture_output=True, text=True,
+                timeout=timeout,
             )
         except subprocess.TimeoutExpired:
             why = f"judge timed out after {timeout}s"

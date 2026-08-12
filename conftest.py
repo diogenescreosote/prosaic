@@ -4,9 +4,9 @@ Test layers:
 - ``pleading/tests``            unit/component tests (fast, deterministic)
 - ``tests/scenarios/<name>``    scenario tests: whole fixture matters,
                                 real operations, many independent checks
-- ``@pytest.mark.ai``           checks judged by a headless Claude Code
-                                session (skipped without the CLI or with
-                                PROSAIC_AI_TESTS=0)
+- ``@pytest.mark.ai``           checks judged by a headless agent session
+                                via cli/agent-run (skipped without an
+                                agent CLI or with PROSAIC_AI_TESTS=0)
 """
 
 from __future__ import annotations
@@ -33,7 +33,7 @@ def pytest_collection_modifyitems(
 
     if ai_available():
         return
-    skip = pytest.mark.skip(reason="AI judge unavailable (no claude CLI or PROSAIC_AI_TESTS=0)")
+    skip = pytest.mark.skip(reason="AI judge unavailable (no agent CLI or PROSAIC_AI_TESTS=0)")
     for item in items:
         if "ai" in item.keywords:
             item.add_marker(skip)

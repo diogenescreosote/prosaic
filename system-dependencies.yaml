@@ -122,17 +122,40 @@ dependencies:
     no_package_reason: ships with macOS; elsewhere the env backend covers it
     in_container: false
 
+  # The three agent CLIs below are alternatives behind one seam:
+  # cli/agent-run picks whichever is installed (override with
+  # PROSAIC_AGENT_CLI, or supply your own via PROSAIC_AGENT_CMD).
+  # Any ONE of them enables triage and the AI-judged tests; everything
+  # else works with none. Installed via npm, not a system package
+  # manager, and each needs credentials the image cannot carry.
   - binary: claude
-    why: the headless AI triage pass that routes inbox files into assets
-    used_by: [sync/matter_sync.sh, tests/harness/ai.py]
+    why: an agent CLI for headless triage and the AI test judge (via cli/agent-run)
+    used_by: [cli/agent-run]
     required: false
     platforms: [darwin, linux]
-    # Everything except triage and the AI-judged tests works without
-    # it. Installed via npm, not a system package manager, and it needs
-    # credentials the image cannot carry.
     apt: null
     brew: null
     npm: "@anthropic-ai/claude-code"
+    in_container: false
+
+  - binary: codex
+    why: an agent CLI for headless triage and the AI test judge (via cli/agent-run)
+    used_by: [cli/agent-run]
+    required: false
+    platforms: [darwin, linux]
+    apt: null
+    brew: null
+    npm: "@openai/codex"
+    in_container: false
+
+  - binary: gemini
+    why: an agent CLI for headless triage and the AI test judge (via cli/agent-run)
+    used_by: [cli/agent-run]
+    required: false
+    platforms: [darwin, linux]
+    apt: null
+    brew: null
+    npm: "@google/gemini-cli"
     in_container: false
 
   - binary: gh
@@ -149,7 +172,7 @@ dependencies:
 
   - binary: rg
     why: the matter conventions have agents verify em-dash spacing with it; Phase 3 search is built on it
-    used_by: [templates/matter/CLAUDE.md, docs/writing-style.md]
+    used_by: [templates/matter/AGENTS.md, docs/writing-style.md]
     required: false
     platforms: [darwin, linux]
     apt: ripgrep

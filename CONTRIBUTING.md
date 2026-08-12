@@ -22,13 +22,13 @@ Thanks for helping build client-side litigation infrastructure.
   Node: 18+, deps in `connectors/package.json`. Match the style of
   the file you're editing — especially in the ported operational
   trees, which keep their upstream style deliberately (see
-  [CLAUDE.md](CLAUDE.md)).
+  [AGENTS.md](AGENTS.md)).
 
 ## Specs, design, tests
 
 The full workflow — spec-first, tests-with-features, and the tiered
 nonblocking test protocol — is in [docs/development.md](docs/development.md)
-(agents: the operative copy is the repo-root CLAUDE.md).
+(agents: the operative copy is the repo-root AGENTS.md).
 
 - Changes to behavior start from `specs/` (what must be true) and,
   for cross-cutting choices, an ADR in `design/` (what we decided and

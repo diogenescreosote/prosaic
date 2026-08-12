@@ -58,8 +58,8 @@ between sessions and a lawyer's attention dies between hearings.
    a real party's position or treated as filed/served/received.
    `pleadings/` holds only file-stamped or conformed court
    documents. *(untested)*
-8. **The matter carries its own agent contract.** `CLAUDE.md` in the
-   matter root binds every AI session that opens the directory —
+8. **The matter carries its own agent contract.** `AGENTS.md` in the
+   matter root (with a `CLAUDE.md` pointer beside it) binds every AI session that opens the directory —
    index discipline, originals-are-sacred, typography, NOTREAL,
    clerk-not-lawyer — without per-session repetition. *(untested)*
 

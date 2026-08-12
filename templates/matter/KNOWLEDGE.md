@@ -2,7 +2,7 @@
 
 <!-- Durable case knowledge lives here: what is established, with dates
 and sources. New facts are integrated into sections, not appended as a
-log. See CLAUDE.md conventions. -->
+log. See AGENTS.md conventions. -->
 
 ## Posture
 

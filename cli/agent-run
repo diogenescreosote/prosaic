@@ -1,0 +1,137 @@
+#!/bin/bash
+#
+# agent-run — the one seam between prosaic and whatever headless agent
+# CLI is installed.
+#
+# Every place prosaic needs "an agent, run once, noninteractively" —
+# the sync triage pass, the AI test judge, a flow step — goes through
+# this script, so supporting a new agent CLI is one case branch here
+# and nothing anywhere else. ADR-0005 promised the seam would be one
+# CLI call, documented for substitution; ADR-0020 makes the seam this
+# file.
+#
+# Usage:
+#   agent-run --check                      # print provider name; exit 0 if usable
+#   agent-run [--dir DIR]... [--yolo] < prompt.txt
+#
+# The prompt arrives on stdin (prompts are long; argv mangles them).
+# The agent's output goes to stdout. --dir grants read access to a
+# directory outside the working directory, for harnesses that sandbox
+# reads. --yolo skips permission prompts entirely — callers use it
+# only where ADR-0005's mitigations apply (a versioned prompt, a
+# narrow worklist, git review of every change).
+#
+# Provider selection, first match wins:
+#   PROSAIC_AGENT_CMD   a custom command line, run via sh -c with the
+#                       prompt on stdin; AGENT_RUN_DIRS (colon-
+#                       separated) and AGENT_RUN_YOLO (0/1) are
+#                       exported for it to consult
+#   PROSAIC_AGENT_CLI   force one of: claude | codex | gemini
+#   (unset)             first of claude, codex, gemini found on PATH
+#
+# Each provider's incantation lives in exactly one function below, so
+# when a CLI changes its flags the fix is one line in one place.
+
+set -u
+
+MODE=run
+YOLO=0
+DIRS=()
+
+while [ $# -gt 0 ]; do
+  case "$1" in
+    --check) MODE=check ;;
+    --yolo)  YOLO=1 ;;
+    --dir)   shift; DIRS+=("${1:?--dir needs an argument}") ;;
+    -h|--help)
+      sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
+      exit 0 ;;
+    *) echo "agent-run: unknown argument: $1" >&2; exit 2 ;;
+  esac
+  shift
+done
+
+provider() {
+  if [ -n "${PROSAIC_AGENT_CMD:-}" ]; then
+    echo custom; return 0
+  fi
+  case "${PROSAIC_AGENT_CLI:-}" in
+    "")
+      local c
+      for c in claude codex gemini; do
+        if command -v "$c" >/dev/null 2>&1; then echo "$c"; return 0; fi
+      done
+      return 1 ;;
+    claude|codex|gemini)
+      if command -v "$PROSAIC_AGENT_CLI" >/dev/null 2>&1; then
+        echo "$PROSAIC_AGENT_CLI"; return 0
+      fi
+      echo "agent-run: PROSAIC_AGENT_CLI=$PROSAIC_AGENT_CLI but it is not on PATH" >&2
+      return 1 ;;
+    *)
+      echo "agent-run: unsupported PROSAIC_AGENT_CLI='$PROSAIC_AGENT_CLI'" \
+           "(claude|codex|gemini, or set PROSAIC_AGENT_CMD)" >&2
+      return 1 ;;
+  esac
+}
+
+run_claude() {
+  local prompt="$1" args=()
+  local d
+  for d in "${DIRS[@]+"${DIRS[@]}"}"; do args+=(--add-dir "$d"); done
+  [ "$YOLO" = 1 ] && args+=(--dangerously-skip-permissions)
+  claude -p "$prompt" "${args[@]+"${args[@]}"}"
+}
+
+run_codex() {
+  local prompt="$1" args=(--skip-git-repo-check)
+  # codex's read-only sandbox can already read outside the working
+  # directory, so --dir needs no translation here.
+  if [ "$YOLO" = 1 ]; then
+    args+=(--dangerously-bypass-approvals-and-sandbox)
+  else
+    args+=(--sandbox read-only)
+  fi
+  codex exec "${args[@]}" "$prompt"
+}
+
+run_gemini() {
+  local prompt="$1" args=()
+  if [ ${#DIRS[@]} -gt 0 ]; then
+    args+=(--include-directories "$(IFS=,; echo "${DIRS[*]}")")
+  fi
+  [ "$YOLO" = 1 ] && args+=(--yolo)
+  gemini "${args[@]+"${args[@]}"}" -p "$prompt"
+}
+
+run_custom() {
+  local prompt="$1"
+  AGENT_RUN_DIRS="$(IFS=:; echo "${DIRS[*]+"${DIRS[*]}"}")" \
+  AGENT_RUN_YOLO="$YOLO" \
+    sh -c "$PROSAIC_AGENT_CMD" <<< "$prompt"
+}
+
+PROVIDER="$(provider)" || {
+  [ "$MODE" = check ] && exit 1
+  echo "agent-run: no agent CLI found (claude, codex, or gemini on PATH," \
+       "or set PROSAIC_AGENT_CLI / PROSAIC_AGENT_CMD)" >&2
+  exit 1
+}
+
+if [ "$MODE" = check ]; then
+  echo "$PROVIDER"
+  exit 0
+fi
+
+PROMPT="$(cat)"
+if [ -z "$PROMPT" ]; then
+  echo "agent-run: empty prompt on stdin" >&2
+  exit 2
+fi
+
+case "$PROVIDER" in
+  claude) run_claude "$PROMPT" ;;
+  codex)  run_codex  "$PROMPT" ;;
+  gemini) run_gemini "$PROMPT" ;;
+  custom) run_custom "$PROMPT" ;;
+esac
