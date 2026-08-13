@@ -9,7 +9,7 @@ speak cryptography. The design is ADR-0022 in the prosaic repo.)*
 
 1. **Paper anchors the key.** The will and the trust each embed, in
    their signed and witnessed/notarized text, one public key (the
-   "Anchored Key") — printed as text and as a QR code. The paper
+   "Anchored Key") — printed as text (with its fingerprint) and as a PDF417 barcode. The paper
    documents got their authority the old way: signatures, witnesses,
    a notary. The key gets its authority from being inside them.
 2. **The key vouches for the manifest.** A file named `MANIFEST.md`
@@ -34,7 +34,7 @@ sc attest manifest verify MANIFEST.md --pubkey anchor-key.asc
 sc attest verify <file> --pubkey anchor-key.asc
 ```
 
-`anchor-key.asc` must be the key from the paper: scan the QR code in
+`anchor-key.asc` must be the key from the paper: scan the PDF417 barcode in
 the executed will or trust, or retype the printed block. Do not
 substitute a key from a keyserver, an email, or anyone's computer —
 paper is the anchor.

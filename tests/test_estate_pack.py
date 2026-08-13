@@ -105,28 +105,29 @@ def test_the_wills_witnesses_are_present_at_the_same_time() -> None:
 
 
 @pytest.mark.skipif(
-    not (shutil.which("zbarimg") and shutil.which("pdftoppm")),
-    reason="zbarimg/pdftoppm not installed",
+    not (shutil.which("zint") and shutil.which("pdftoppm")),
+    reason="zint/pdftoppm not installed",
 )
-def test_the_printed_qr_is_exactly_the_shipped_anchor_key(tmp_path: Path) -> None:
+def test_the_printed_symbol_is_exactly_the_shipped_anchor_key(tmp_path: Path) -> None:
+    """The will's PDF417 must decode byte-exact to the shipped key."""
+    zxingcpp = pytest.importorskip("zxingcpp")
+    from PIL import Image
+
     pdf = build("will.md", tmp_path)
     subprocess.run(
-        ["pdftoppm", "-png", "-r", "200", str(pdf), str(tmp_path / "page")],
+        ["pdftoppm", "-png", "-r", "300", str(pdf), str(tmp_path / "page")],
         check=True,
         capture_output=True,
     )
-    decoded = ""
-    for page in sorted(tmp_path.glob("page*.png")):
-        proc = subprocess.run(
-            ["zbarimg", "--raw", "--quiet", str(page)],
-            capture_output=True,
-            text=True,
-        )
-        if proc.returncode == 0 and proc.stdout.strip():
-            decoded = proc.stdout.strip()
-            break
     expected = (PACK / "assets" / "anchor-key.asc").read_text().strip()
-    assert decoded == expected, "the page's QR must be the shipped key, byte-exact"
+    for page in sorted(tmp_path.glob("page*.png")):
+        for r in zxingcpp.read_barcodes(Image.open(page)):
+            if r.format == zxingcpp.BarcodeFormat.PDF417:
+                assert r.text.strip() == expected, (
+                    "the page's symbol must be the shipped key, byte-exact"
+                )
+                return
+    pytest.fail("no page contained a decodable PDF417 symbol")
 
 
 def test_guardianship_avoids_the_forbidden_phrase() -> None:

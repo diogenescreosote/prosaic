@@ -11,8 +11,8 @@ here is legal advice.)*
       block and `assets/anchor-key.asc` both replaced), generated
       with an expiry, revocation certificate stored offline.
 - [ ] `notreal:` removed from the source; rebuilt; PDF proofread.
-- [ ] The build's QR code scans back to your key (`zbarimg` or
-      any phone camera), and the printed fingerprint matches
+- [ ] The build's barcode scans back to your key (any PDF417-capable
+      scanner app), and the printed fingerprint matches
       `gpg --fingerprint` for your key.
 
 ## The will — paper only

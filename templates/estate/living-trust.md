@@ -106,7 +106,7 @@ The Anchored Key's fingerprint (SHA-1, as gpg prints it) is:
 5EDF 79A0 477D BBDE 38AC  F791 6676 E412 5898 C933
 }
 
-\barcodefile{qr}{assets/anchor-key.asc}{The Anchored Key, encoded as a QR code (ISO/IEC 18004).}
+\barcodefile{pdf417}{assets/anchor-key.asc}{The Anchored Key, encoded as PDF417 (ISO/IEC 15438).}
 
 2. **Presumption.** Any instrument concerning the Trust — including
    an amendment, a revocation, an exercise of a power, or a

@@ -4,11 +4,11 @@ to stay verbatim.
 
 The barcode property is the round trip: render the PDF, rasterize,
 decode the symbol, compare bytes (ADR-0026). zbar decodes qr and
-code128; PDF417 is pinned by geometry instead (zbar lacks a decoder):
-the 3:1 aspect target and the column-width cap. The fixedwidth
-property is that the typographic pass never touches the content — an
-armored header whose ----- became em dashes will never re-import
-into gpg from paper.
+code128; PDF417 decodes through zxing-cpp (a dev dependency) and is
+additionally pinned by geometry: the 3:1 aspect target and the
+column-width cap. The fixedwidth property is that the typographic
+pass never touches the content — an armored header whose ----- became
+em dashes will never re-import into gpg from paper.
 """
 
 from __future__ import annotations
@@ -95,6 +95,27 @@ def test_code128_round_trips(tmp_path):
     fpr = "F15991EE7300FD42DBD2F3D0466DD18A60791844"
     pdf = build(tmp_path, "\\barcode{code128}{%s}{Fingerprint.}" % fpr)
     assert decode(pdf, tmp_path, "code128") == fpr
+
+
+@pytest.mark.skipif(not (zint and pdftoppm), reason="zint/pdftoppm not installed")
+def test_pdf417_round_trips_byte_exact(tmp_path):
+    """The estate-instrument shape: an armored key block, decoded back
+    off the rasterized page."""
+    zxingcpp = pytest.importorskip("zxingcpp")
+    from PIL import Image
+
+    (tmp_path / "key.asc").write_text(ARMOR + "\n")
+    pdf = build(tmp_path, "\\barcodefile{pdf417}{key.asc}{The key, as PDF417.}")
+    subprocess.run(
+        [pdftoppm, "-png", "-r", "300", str(pdf), str(tmp_path / "page")],
+        check=True, capture_output=True,
+    )
+    for page in sorted(tmp_path.glob("page*.png")):
+        for r in zxingcpp.read_barcodes(Image.open(page)):
+            if r.format == zxingcpp.BarcodeFormat.PDF417:
+                assert r.text.strip() == ARMOR
+                return
+    pytest.fail("no page contained a decodable PDF417 symbol")
 
 
 @pytest.mark.skipif(zint is None, reason="zint not installed")
