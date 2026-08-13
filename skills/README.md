@@ -26,6 +26,29 @@ The discipline:
   packet" is a skill; "the pleading renderer" is a component with a
   spec.
 
+## Granularity (ADR-0029)
+
+The description is loaded into EVERY session (it is the routing
+index); the body loads per task. So splitting is not free, and the
+dominating cost is a needed rule being absent at decision time — not
+extra lines being present. Rules:
+
+- **Split by co-activation, not topic.** One skill = what one task
+  needs in context at once. Two skills that always load together
+  should be one; one description whose triggers never co-occur
+  should be two.
+- **Demote before splitting: code > data > prose.** Anything an
+  engine can enforce becomes code + a test + one "enforced" table
+  row. Anything jurisdiction- or matter-varying becomes data the
+  skill points at. Only judgment stays prose.
+- **Bodies are maps, ≤120 lines** (enforced by test). Over the cap:
+  demote detail to a spec or reference the body points at — do not
+  split into a sibling skill.
+- **State everything once**; cross-link, never duplicate.
+- **Skill count grows slower than capability count.** New machinery
+  is usually an engine + one row + one command in an existing skill.
+  A new skill needs a task-shape no current description covers.
+
 Harness note: some harnesses discover skills automatically (Claude
 Code and compatible tools read `SKILL.md` frontmatter); any other
 agent can read this index and open the file it needs. Nothing here

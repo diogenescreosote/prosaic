@@ -64,7 +64,7 @@ Every feature addition or substantial modification follows this loop:
    | a form-descriptor key | the descriptor schema in `pleading/pleading_markdown_spec.md` |
    | a system binary the code shells out to | `system-dependencies.yaml` |
    | a matter-facing convention | `templates/matter/AGENTS.md`, the contract agents actually read |
-   | an agent-facing capability (a task an agent performs) | a `skills/<name>/SKILL.md`, indexed in `skills/README.md` |
+   | an agent-facing capability (a task an agent performs) | a `skills/<name>/SKILL.md`, indexed in `skills/README.md` (granularity rules there; ADR-0029) |
    | a decision that constrains later work | an ADR, listed in `design/README.md` |
    | a new `docs/` page | a link from somewhere a reader would start |
 

@@ -49,6 +49,7 @@ project accretes decisions instead of middleware.
 - [0026](adr/0026-barcodes-and-verbatim-blocks.md) Barcodes at physical module size; verbatim fixed-width blocks
 - [0027](adr/0027-styled-signblocks-esign-fields.md) Styled signature blocks; instruments carry their e-sign fields
 - [0028](adr/0028-estate-share-folder.md) Estate matters publish a share folder: destination, never source
+- [0029](adr/0029-skill-granularity.md) Skill granularity: split by co-activation, demote by layer
 
 Also:
 

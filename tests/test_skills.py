@@ -107,3 +107,19 @@ def test_every_path_a_skill_names_exists(skill: Path) -> None:
         if not (REPO_ROOT / candidate).exists():
             missing.append(candidate)
     assert not missing, f"{skill.name} points at paths that do not exist: {missing}"
+
+
+SKILL_BODY_LINE_CAP = 120
+
+
+@pytest.mark.parametrize("skill", skill_dirs(), ids=lambda p: p.name)
+def test_skill_bodies_stay_maps_not_manuals(skill: Path) -> None:
+    """ADR-0029: a body over the cap gets fixed by DEMOTION (move
+    detail into a spec or reference the skill points at), never by
+    splitting into a sibling skill."""
+    lines = len((skill / "SKILL.md").read_text(encoding="utf-8").splitlines())
+    assert lines <= SKILL_BODY_LINE_CAP, (
+        f"{skill.name}: {lines} lines exceeds the {SKILL_BODY_LINE_CAP}-line "
+        f"cap — demote detail down a layer (specs/, references), do not "
+        f"split into another skill"
+    )
