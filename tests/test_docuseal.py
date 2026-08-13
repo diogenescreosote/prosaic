@@ -416,6 +416,7 @@ def test_signing_base_hosted_vs_self_hosted(monkeypatch: pytest.MonkeyPatch) -> 
     import importlib.util
 
     spec = importlib.util.spec_from_file_location("docuseal_client", DOCUSEAL)
+    assert spec is not None and spec.loader is not None
     mod = importlib.util.module_from_spec(spec)
     spec.loader.exec_module(mod)
 
