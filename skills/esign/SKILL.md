@@ -27,11 +27,13 @@ order the signature areas appear and every field lands placed. A
 PDF built elsewhere, without tags, sends with a warning and the
 signer places fields by hand.
 
-DocuSeal's own agent skills are vendored at
-`<prosaic>/third_party/docuseal-agent-skills` (their CLI skill and
-API/SDK reference) — consult them for flows beyond send/status/fetch:
-templates, bulk sends, webhooks, embedded signing. `DOCUSEAL_SERVER`
-and `DOCUSEAL_URL` both select the deployment.
+For flows beyond send/status/fetch (templates, bulk sends, webhooks,
+embedded signing), DocuSeal publishes official agent skills at
+github.com/docusealco/docuseal-agent-skills — install them into your
+harness with `npx skills add docusealco/docuseal-agent-skills`, or
+read them there. The API contract prosaic depends on is pinned by
+the `docuseal` SDK version in the lockfile, not by a vendored copy.
+`DOCUSEAL_SERVER` and `DOCUSEAL_URL` both select the deployment.
 
 ## The loop
 

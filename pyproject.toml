@@ -49,7 +49,6 @@ target-version = "py312"
 # repository-invariant checks. What remains linted is the handful of
 # tests written here directly.
 extend-exclude = [
-    "third_party",  # vendored submodules keep their upstream style
     "pleading",
     "connectors",
     "sync",

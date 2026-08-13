@@ -33,10 +33,17 @@ that knowledge away.
 3. **The official integration surface.** esign/client.py now speaks
    through DocuSeal's published Python SDK (pypi: docuseal) instead
    of a hand-rolled HTTP client — create_submission_from_pdf is
-   exactly the one-off flow — and DocuSeal's official agent skills
-   are vendored as a git submodule (third_party/docuseal-agent-
-   skills) so their versions are managed upstream. DOCUSEAL_SERVER
-   (the official CLI's variable) is honored alongside DOCUSEAL_URL.
+   exactly the one-off flow. DOCUSEAL_SERVER (the official CLI's
+   variable) is honored alongside DOCUSEAL_URL. DocuSeal's official
+   agent skills are REFERENCED, not vendored: they briefly lived here
+   as a git submodule, which charged for its version pinning at every
+   clone, in CI configuration, and in two tool breakages (the gitlink
+   crashed the leak guard's readers; ruff reformatted vendored files)
+   -- all for reference documentation nothing in the build executes.
+   The esign skill points at their supported channel
+   (npx skills add docusealco/docuseal-agent-skills); the API
+   contract prosaic actually depends on is pinned by the SDK version
+   in the lockfile.
 
 ## Consequences
 A built instrument is e-sign-ready the moment it renders: `sc esign

@@ -11,9 +11,10 @@ does prosaic's side.
 
 - **The transport is the official SDK** (pypi `docuseal`, in the
   python requirements): prosaic owns the workflow, DocuSeal owns the
-  HTTP contract, and their agent skills ride along as a submodule at
-  `third_party/docuseal-agent-skills`. *(tested: tests/test_esign.py,
-  through the SDK against a mock API)*
+  HTTP contract, and the contract version is pinned by the lockfile.
+  Their agent skills are referenced by their official channel
+  (`npx skills add docusealco/docuseal-agent-skills`), not vendored.
+  *(tested: tests/test_esign.py, through the SDK against a mock API)*
 - **Deployment is one variable.** Every request goes to
   `DOCUSEAL_URL` (or `DOCUSEAL_SERVER`, the official CLI's spelling;
   default `https://api.docuseal.com`); a self-hosted instance needs
