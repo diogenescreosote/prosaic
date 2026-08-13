@@ -1,0 +1,741 @@
+# SUBP-002 — Civil Subpoena (Duces Tecum) for Personal Appearance and
+# Production of Documents, Electronically Stored Information, and
+# Things at Trial or Hearing and Declaration
+#
+# The trial/hearing-subpoena member of the family: it commands a
+# WITNESS to appear at a TRIAL OR HEARING and to bring documents or
+# things, supported by the form's own page-2 declaration (the CCP
+# § 1985(b) affidavit of good cause and materiality). A business-
+# records custodian may be excused from appearing: item 3 offers a
+# records-by-mail alternative under Evidence Code §§ 1560-1562 (sealed
+# records + § 1561 custodian declaration mailed to the CLERK OF THE
+# COURT), or the subpoenaing party may insist on personal attendance
+# with original records. Deposition-stage production belongs on
+# SUBP-010/015/020, not here.
+#
+# Every mapping below was verified empirically on the shipped blank
+# (fill each field with its own logical name, rasterize, look). Three
+# things verification caught that names alone would get wrong:
+#
+# 1. THE DEPARTMENT/DIVISION WIDGET NAMES ARE SWAPPED-ISH. Item 1a's
+#    department number box is HearingDept_ft1 and its division box is
+#    HearingDept_ft — the un-suffixed name is the DIVISION, not the
+#    department. Each has its own selector checkbox, and those
+#    checkboxes' on-state is "/Yes", unlike every other box on the
+#    form.
+# 2. ITEM 3'S TWO COMPLIANCE MODES ARE SIBLING WIDGETS NAMED subp1
+#    under different parents, with DIFFERENT on-states: appear-in-
+#    person is "/1", records-by-mail is "/2". They are alternatives;
+#    check exactly one.
+# 3. THE DECLARATION'S CONTINUATION BOXES ARE ON-STATE "/2", not "/1"
+#    ("Continued on Attachment 2/3/4"), and the records demand
+#    continues on ATTACHMENT 2 — not 3 as on SUBP-010. An attachment
+#    carrying the demand must be titled accordingly.
+
+form: subp002
+title: >-
+  Civil Subpoena (Duces Tecum) for Personal Appearance and Production
+  of Documents, Electronically Stored Information, and Things at Trial
+  or Hearing and Declaration
+domain: ca/civil              # any CA civil action
+revision: "2012-01"           # form face: "SUBP-002 [Rev. January 1, 2012]"
+source_url: https://courts.ca.gov/documents/subp002.pdf
+blank: subp002.pdf
+
+# XFA: LiveCycle hybrid, same generation as SUBP-010; the engine
+# strips /XFA after filling so AcroForm values actually display.
+technology: xfa
+
+# UI chrome under SUBP-002[0].#pageSet[0].LastPage[0].P3Footer[0].
+# FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,
+# drawn on page 3. Stripped from service copies.
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+fields:
+  # ---- Page 1: attorney/party block ----------------------------------
+  attorney_block:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].AttyPartyInfo[0].TextField1[0]"
+    page: 1
+    doc: >-
+      ATTORNEY OR PARTY WITHOUT ATTORNEY (Name, State Bar number, and
+      address) — one multiline box; filled from filer_name (+ SBN) and
+      filer_address_lines.
+    auto: attorney_block
+    fit: shrink_wrap
+  phone:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+    fit: shrink
+  fax:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO. (optional)"
+    auto: fax
+    fit: shrink
+  email:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "E-MAIL ADDRESS"
+    auto: email
+    fit: shrink
+  attorney_for:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Name[0]"
+    page: 1
+    doc: >-
+      ATTORNEY FOR (Name) — the internal name "Name[0]" is the ATTORNEY
+      FOR line (verified visually). The form prints the label, so the
+      value is the client only; self-represented filers put their own
+      role here.
+    auto: attorney_for
+    fit: shrink
+
+  # ---- Page 1: court block --------------------------------------------
+  court_county:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: >-
+      County name only — the form prints "SUPERIOR COURT OF CALIFORNIA,
+      COUNTY OF" (the widget tooltip says "NAME OF COURT", which is
+      wrong; verified visually).
+    auto: court_county
+    fit: shrink
+  court_street_address:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "STREET ADDRESS of the court"
+    auto: court_street_address
+    fit: shrink
+  court_mailing_address:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "MAILING ADDRESS of the court"
+    auto: court_mailing_address
+    fit: shrink
+  court_city_zip:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "CITY AND ZIP CODE of the court"
+    auto: court_city_zip
+    fit: shrink
+  court_branch:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME of the court"
+    auto: court_branch
+    fit: shrink
+
+  # ---- Page 1: caption party names + case number -----------------------
+  plaintiff:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name (bound to the petitioner meta key)"
+    auto: petitioner
+    fit: shrink
+  defendant:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name (bound to the respondent meta key)"
+    auto: respondent
+    fit: shrink
+  case_number:
+    map: "SUBP-002[0].Page1[0].P1Caption[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 1: the witness ---------------------------------------------
+  witness:
+    map: "SUBP-002[0].Page1[0].People[0].FillText1[0]"
+    page: 1
+    doc: >-
+      "THE PEOPLE OF THE STATE OF CALIFORNIA, TO (name, address, and
+      telephone number of witness, if known)" — the person or custodian
+      commanded to appear/produce, e.g. "Custodian of Records, Example
+      Bank, N.A., 500 Market Street, Example City, CA 90000,
+      (555) 555-0199". One single-line box: keep it to one line (it
+      shrinks to 6 pt) and abbreviate rather than newline it.
+    default: ""
+    fit: shrink
+    min_font_size: 6
+
+  # ---- Page 1, Item 1: the appearance ----------------------------------
+  hearing_date:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].HearingDate_dt[0]"
+    page: 1
+    doc: >-
+      Item 1a "Date:" — the trial or hearing date at which appearance
+      (or the mailed records) is commanded. Unlike SUBP-010, this form's
+      Hearing* names mean what they say.
+    default: ""
+    fit: shrink
+  hearing_time:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].HearingTime_dt[0]"
+    page: 1
+    doc: 'Item 1a "Time:" (e.g. "9:00 a.m.")'
+    default: ""
+    fit: shrink
+  hearing_dept:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].HearingDept_ft1[0]"
+    page: 1
+    doc: >-
+      Item 1a department number — pair with dept_checkbox. NOTE the
+      widget name: the "_ft1"-suffixed field is the DEPARTMENT box; the
+      un-suffixed HearingDept_ft is the DIVISION box (verified
+      visually).
+    default: ""
+    fit: shrink
+  hearing_division:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].HearingDept_ft[0]"
+    page: 1
+    doc: >-
+      Item 1a division — pair with division_checkbox. MISLEADING FIELD
+      NAME (HearingDept_ft): this is the division box, not the
+      department (see hearing_dept).
+    default: ""
+    fit: shrink
+  hearing_room:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].HearingRoom_ft[0]"
+    page: 1
+    doc: "Item 1a room — pair with room_checkbox"
+    default: ""
+    fit: shrink
+  hearing_address:
+    map: "SUBP-002[0].Page1[0].List1[0].Lib[0].HearingAddress[0]"
+    page: 1
+    doc: 'Item 1b "Address:" — the courthouse address'
+    default: ""
+    fit: shrink
+
+  # ---- Page 1, Item 4: witness-fee contact ------------------------------
+  contact_name:
+    map: "SUBP-002[0].Page1[0].List4[0].Lia[0].FillText18[0]"
+    page: 1
+    doc: >-
+      Item 4 "(name of subpoenaing party or attorney)" — whom the
+      witness contacts about witness fees or to be excused; pre-filled
+      from filer_name (SBN stripped).
+    auto: filer_name_bare
+    fit: shrink
+  contact_phone:
+    map: "SUBP-002[0].Page1[0].List4[0].Lib[0].FillText19[0]"
+    page: 1
+    doc: 'Item 4 "(telephone number)" — pre-filled from filer_phone'
+    auto: phone
+    fit: shrink
+
+  # ---- Page 1: issuing-person block -----------------------------------
+  date_issued:
+    map: "SUBP-002[0].Page1[0].Sign[0].SigDate[0]"
+    page: 1
+    doc: >-
+      "Date issued:" — LEAVE BLANK. The issuer dates it by hand when
+      signing.
+    default: ""
+  issuer_print_name:
+    map: "SUBP-002[0].Page1[0].Sign[0].SigName[0]"
+    page: 1
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the issuing signature — the filer,
+      pre-filled from filer_name (SBN suffix stripped) so only the
+      signature and date remain for the human. The signature line
+      itself has no widget.
+    auto: filer_name_bare
+    fit: shrink
+  issuer_title:
+    map: "SUBP-002[0].Page1[0].Sign[0].FillText26[0]"
+    page: 1
+    doc: >-
+      "(TITLE)" under the signature line — the issuer's capacity, bound
+      to filer_role verbatim (e.g. "Attorney for Respondent",
+      "Respondent, In Pro Per").
+    auto: filer_role
+    fit: shrink
+
+  # ---- Page 2: declaration caption echo --------------------------------
+  plaintiff_p2:
+    map: "SUBP-002[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "PLAINTIFF/PETITIONER caption name (page 2 copy)"
+    auto: petitioner
+    fit: shrink
+  defendant_p2:
+    map: "SUBP-002[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "DEFENDANT/RESPONDENT caption name (page 2 copy)"
+    auto: respondent
+    fit: shrink
+  case_number_p2:
+    map: "SUBP-002[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "CASE NUMBER (page 2 copy)"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 2: the CCP § 1985(b) declaration ---------------------------
+  declarant_role_other_specify:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].TextField90[0]"
+    page: 2
+    doc: >-
+      Declaration item 1 "other (specify)" — declarant capacity when
+      none of the listed roles fits; pair with role_other.
+    default: ""
+    fit: shrink
+  declarant_attorney_for_specify:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].TextField89[0]"
+    page: 2
+    doc: >-
+      Declaration item 1 "attorney for (specify)" — whom the declarant
+      represents; pair with role_attorney_for.
+    default: ""
+    fit: shrink
+  records_description:
+    map: "SUBP-002[0].Page2[0].List[0].Li2[0].FillText17[0]"
+    page: 2
+    doc: >-
+      Declaration item 2 — the documents, ESI, or things the witness
+      must bring. A multiline box about four lines tall; anything
+      longer becomes "See Attachment 2." plus an appended MC-025
+      carrying the full demand, with the form's own "Continued on
+      Attachment 2." box checked to match. NOTE THE NUMBER: on this
+      form the demand continues on ATTACHMENT 2 (it is declaration item
+      2), not Attachment 3 as on SUBP-010. Leave empty in the
+      cover-sheet flow, where the demand is the attached pages.
+    default: ""
+    fit: overflow_attachment
+    attachment_label: Attachment 2
+    overflow_checkbox: continued_on_attachment_2
+  good_cause:
+    map: "SUBP-002[0].Page2[0].List[0].Li3[0].FillText18[0]"
+    page: 2
+    doc: >-
+      Declaration item 3 — good cause for production (CCP § 1985(b)).
+      Why the party needs these items at the trial or hearing.
+      Overflows to "See Attachment 3." with an appended MC-025 and the
+      "Continued on Attachment 3." box checked.
+    default: ""
+    fit: overflow_attachment
+    attachment_label: Attachment 3
+    overflow_checkbox: continued_on_attachment_3
+  materiality:
+    map: "SUBP-002[0].Page2[0].List[0].Li4[0].FillText19[0]"
+    page: 2
+    doc: >-
+      Declaration item 4 — materiality of the items to the issues in
+      the case (CCP § 1985(b)). Overflows to "See Attachment 4." with
+      an appended MC-025 and the "Continued on Attachment 4." box
+      checked.
+    default: ""
+    fit: overflow_attachment
+    attachment_label: Attachment 4
+    overflow_checkbox: continued_on_attachment_4
+  decl_date:
+    map: "SUBP-002[0].Page2[0].Sign[0].SigDate[0]"
+    page: 2
+    doc: >-
+      Declaration "Date:" — LEAVE BLANK; the declarant dates the
+      perjury declaration by hand when signing.
+    default: ""
+  decl_print_name:
+    map: "SUBP-002[0].Page2[0].Sign[0].SigName[0]"
+    page: 2
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the declaration signature — the
+      declarant, normally the same person who issues page 1; pre-filled
+      from filer_name (SBN stripped).
+    auto: filer_name_bare
+    fit: shrink
+
+  # ---- Page 3: proof-of-service caption echo ---------------------------
+  plaintiff_p3:
+    map: "SUBP-002[0].Page3[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 3
+    doc: "PLAINTIFF/PETITIONER caption name (page 3 copy)"
+    auto: petitioner
+    fit: shrink
+  defendant_p3:
+    map: "SUBP-002[0].Page3[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 3
+    doc: "DEFENDANT/RESPONDENT caption name (page 3 copy)"
+    auto: respondent
+    fit: shrink
+  case_number_p3:
+    map: "SUBP-002[0].Page3[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 3
+    doc: "CASE NUMBER (page 3 copy)"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 3: PROOF OF SERVICE ----------------------------------------
+  # Mapped so a post-service workflow can fill them from known facts,
+  # but never auto-filled: the server attests to these under penalty of
+  # perjury after service, and the copy served travels with page 3
+  # blank.
+  pos_person_served:
+    map: "SUBP-002[0].Page3[0].List1[0].Lia[0].FillText1[0]"
+    page: 3
+    doc: 'POS item 1a "Person served (name)" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_address_served:
+    map: "SUBP-002[0].Page3[0].List1[0].Lib[0].FillText2[0]"
+    page: 3
+    doc: 'POS item 1b "Address where served" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink_wrap
+  pos_delivery_date:
+    map: "SUBP-002[0].Page3[0].List1[0].Lic[0].FillText3[0]"
+    page: 3
+    doc: 'POS item 1c "Date of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_delivery_time:
+    map: "SUBP-002[0].Page3[0].List1[0].Lid[0].TextField4[0]"
+    page: 3
+    doc: 'POS item 1d "Time of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_witness_fees_amount:
+    map: "SUBP-002[0].Page3[0].List1[0].Lie[0].sublie[0].Li1[0].DecimalField2[0]"
+    page: 3
+    doc: >-
+      POS item 1e(1) witness-fee amount (dollars) — LEAVE BLANK at
+      issuance; pair with pos_witness_fees_paid when fees were demanded
+      and paid.
+    default: ""
+  pos_service_fee:
+    map: "SUBP-002[0].Page3[0].List1[0].Lif[0].DecimalField1[0]"
+    page: 3
+    doc: 'POS item 1f "Fee for service" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+  pos_received_date:
+    map: "SUBP-002[0].Page3[0].List2[0].item2[0].FillText8[0]"
+    page: 3
+    doc: >-
+      POS item 2 "I received this subpoena for service on (date)" —
+      LEAVE BLANK at issuance (server fills).
+    default: ""
+    fit: shrink
+  pos_server_info:
+    map: "SUBP-002[0].Page3[0].List3[0].Lih[0].TextField65[0]"
+    page: 3
+    doc: >-
+      POS item 3h — server's name, address, telephone number, and (if a
+      registered process server) county of registration and number.
+      LEAVE BLANK at issuance; multiline box, filled by the server.
+    default: ""
+    fit: shrink_wrap
+  pos_sig_date:
+    map: "SUBP-002[0].Page3[0].Sign1[0].SigDate[0]"
+    page: 3
+    doc: >-
+      Date next to the server's perjury signature — LEAVE BLANK for the
+      server to hand-date when signing.
+    default: ""
+  pos_sheriff_sig_date:
+    map: "SUBP-002[0].Page3[0].Sign2[0].SigDate[0]"
+    page: 3
+    doc: >-
+      Date in the "(For California sheriff or marshal use only)"
+      certification block — LEAVE BLANK; the sheriff/marshal dates it.
+    default: ""
+
+checkboxes:
+  # ---- Page 1, Item 1a: where in the courthouse ------------------------
+  # Each selector precedes its fill-in; on-state "/Yes" (not "/1").
+  dept_checkbox:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].Checkbox1[0]"
+    on_value: "/Yes"
+    doc: 'Item 1a "Dept.:" selector — pair with hearing_dept'
+  division_checkbox:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].Checkbox3[0]"
+    on_value: "/Yes"
+    doc: 'Item 1a "Div.:" selector — pair with hearing_division'
+  room_checkbox:
+    map: "SUBP-002[0].Page1[0].List1[0].Lia[0].Checkbox2[0]"
+    on_value: "/Yes"
+    doc: 'Item 1a "Room:" selector — pair with hearing_room'
+
+  # ---- Page 1, Item 3: how a records custodian complies ----------------
+  # Alternatives; check EXACTLY ONE. Sibling widgets both named subp1,
+  # with different on-states.
+  appear_and_produce:
+    map: "SUBP-002[0].Page1[0].List3[0].Lia[0].subp1[0]"
+    on_value: "/1"
+    doc: >-
+      Item 3a — the witness is ORDERED TO APPEAR IN PERSON and to
+      produce the records described in the declaration. Personal
+      attendance of the custodian and production of the ORIGINAL
+      records are required; the Evidence Code §§ 1560(b)/1561/1562
+      mail-in procedure is declared NOT sufficient compliance.
+  records_by_mail:
+    map: "SUBP-002[0].Page1[0].List3[0].Lib[0].subp1[0]"
+    on_value: "/2"
+    doc: >-
+      Item 3b — the witness is NOT required to appear in person if a
+      copy of the records and a completed Evidence Code § 1561
+      custodian declaration are mailed, in the statute's sealed
+      inner-envelope arrangement, to the CLERK OF THE COURT at the
+      item 1 address, with a copy of the declaration mailed to the
+      subpoenaing party. The usual choice for business-records
+      custodians (Evid. Code §§ 1560-1562).
+
+  # ---- Page 2: which supporting showing accompanies the subpoena -------
+  # Radio pair (same parent); check exactly one.
+  decl_via_affidavit:
+    map: "SUBP-002[0].Page2[0].Production[0].RB2Choices1[0]"
+    on_value: "/1"
+    doc: >-
+      "The production of the documents, electronically stored
+      information, or other things sought by the subpoena on page one
+      is supported by (check one): THE ATTACHED AFFIDAVIT" — use when a
+      separate affidavit rides with the subpoena instead of the form's
+      own declaration.
+  decl_on_form:
+    map: "SUBP-002[0].Page2[0].Production[0].RB2Choices1[1]"
+    on_value: "/2"
+    doc: >-
+      "... supported by ... THE FOLLOWING DECLARATION" — the normal
+      choice: the declaration is items 1-4 of page 2. On by default;
+      turn off (and set decl_via_affidavit) only when attaching a
+      separate affidavit.
+    default: true
+
+  # ---- Page 2, declaration item 1: the declarant's capacity ------------
+  # Radio family (limited1[0..5]); check exactly one, and pair
+  # role_attorney_for / role_other with their specify fields.
+  role_plaintiff:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].limited1[0]"
+    on_value: "/1"
+    doc: 'Declaration item 1 — declarant is the PLAINTIFF'
+  role_defendant:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].limited1[1]"
+    on_value: "/2"
+    doc: 'Declaration item 1 — declarant is the DEFENDANT'
+  role_petitioner:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].limited1[2]"
+    on_value: "/3"
+    doc: 'Declaration item 1 — declarant is the PETITIONER'
+  role_respondent:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].limited1[3]"
+    on_value: "/4"
+    doc: 'Declaration item 1 — declarant is the RESPONDENT'
+  role_attorney_for:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].limited1[4]"
+    on_value: "/5"
+    doc: >-
+      Declaration item 1 — declarant is ATTORNEY FOR (specify): pair
+      with declarant_attorney_for_specify.
+  role_other:
+    map: "SUBP-002[0].Page2[0].List[0].Li1[0].limited1[5]"
+    on_value: "/6"
+    doc: >-
+      Declaration item 1 — declarant is OTHER (specify): pair with
+      declarant_role_other_specify.
+
+  # ---- Page 2: continuation boxes (on-state "/2") ----------------------
+  continued_on_attachment_2:
+    map: "SUBP-002[0].Page2[0].List[0].Li2[0].Ch1[0]"
+    on_value: "/2"
+    doc: >-
+      "Continued on Attachment 2." — the records demand is on an
+      attachment rather than in the item-2 box. On by default, which is
+      right for the cover-sheet flow (the demand is the attached pages)
+      and for any demand long enough to overflow; the engine turns it
+      off automatically when a short records_description actually fits
+      inline (overflow_checkbox linkage).
+    default: true
+  continued_on_attachment_3:
+    map: "SUBP-002[0].Page2[0].List[0].Li3[0].Ch2[0]"
+    on_value: "/2"
+    doc: >-
+      "Continued on Attachment 3." — the good-cause showing continues
+      on an attachment. Managed by good_cause's overflow linkage; off
+      by default (good cause is usually stated inline).
+  continued_on_attachment_4:
+    map: "SUBP-002[0].Page2[0].List[0].Li4[0].Ch3[0]"
+    on_value: "/2"
+    doc: >-
+      "Continued on Attachment 4." — the materiality showing continues
+      on an attachment. Managed by materiality's overflow linkage; off
+      by default.
+
+  # ---- Page 2: declarant signature capacity ----------------------------
+  decl_as_party:
+    map: "SUBP-002[0].Page2[0].Sign[0].Ch6[0]"
+    on_value: "/1"
+    doc: >-
+      "(SIGNATURE OF SUBPOENAING PARTY)" — the declarant signs as the
+      party. Check exactly one of decl_as_party / decl_as_attorney.
+  decl_as_attorney:
+    map: "SUBP-002[0].Page2[0].Sign[0].Ch6[1]"
+    on_value: "/2"
+    doc: >-
+      "(SIGNATURE OF ATTORNEY FOR SUBPOENAING PARTY)" — the declarant
+      signs as counsel. Check exactly one of decl_as_party /
+      decl_as_attorney.
+
+  # ---- Page 3: PROOF OF SERVICE (server's attestations) ---------------
+  # All off by default. The server chooses; the machine never guesses.
+  pos_witness_fees_paid:
+    map: "SUBP-002[0].Page3[0].List1[0].Lie[0].sublie[0].Li1[0].unlimited1[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 1e(1) "Witness fees ... were offered or demanded and
+      paid." — server only; pair with pos_witness_fees_amount.
+  pos_witness_fees_not_demanded:
+    map: "SUBP-002[0].Page3[0].List1[0].Lie[0].sublie[0].Li2[0].unlimited1[0]"
+    on_value: "/2"
+    doc: 'POS item 1e(2) "Witness fees ... were not demanded or paid." — server only'
+  pos_not_registered:
+    map: "SUBP-002[0].Page3[0].List3[0].Lia[0].CheckBox10[0]"
+    on_value: "/1"
+    doc: "POS item 3a — server is NOT a registered California process server"
+  pos_sheriff_or_marshal:
+    map: "SUBP-002[0].Page3[0].List3[0].Lib[0].CheckBox11[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3b — server is a California sheriff or marshal. Such a
+      server signs the "(For California sheriff or marshal use only)"
+      certification instead of the perjury declaration.
+  pos_registered_process_server:
+    map: "SUBP-002[0].Page3[0].List3[0].Lic[0].CheckBox12[0]"
+    on_value: "/1"
+    doc: "POS item 3c — server IS a registered California process server"
+  pos_process_server_employee:
+    map: "SUBP-002[0].Page3[0].List3[0].Lid[0].CheckBox13[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3d — server is an employee or independent contractor of
+      a registered California process server
+  pos_exempt_22350b:
+    map: "SUBP-002[0].Page3[0].List3[0].Lie[0].CheckBox14[0]"
+    on_value: "/1"
+    doc: "POS item 3e — exempt from registration under Bus. & Prof. Code § 22350(b)"
+  pos_registered_photocopier:
+    map: "SUBP-002[0].Page3[0].List3[0].Lif[0].CheckBox15[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 3f — server is a registered professional photocopier.
+      ON-STATE IS "/3", not "/1" like the boxes above it (same quirk as
+      SUBP-010's page 2); same for item 3g.
+  pos_exempt_22451:
+    map: "SUBP-002[0].Page3[0].List3[0].Lig[0].CheckBox16[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 3g — exempt from registration under Bus. & Prof. Code
+      § 22451. On-state "/3" (see item 3f).
+
+# Static gray under-rectangle at the bottom-left of page 3, where the
+# stripped privacy-banner widget used to sit (same LiveCycle artifact
+# as SUBP-010's page 2). Rect derived from the Warning widget's own
+# rect with a small margin, confirmed by rendering.
+whiteouts:
+  - page: 3
+    rect: [35, 16, 249, 42]
+
+agent_guide: |
+  SUBP-002 is the Judicial Council form for a CIVIL SUBPOENA DUCES
+  TECUM — commanding a witness (very often a records custodian) to
+  appear at a TRIAL OR HEARING and produce documents, ESI, or things,
+  with the CCP § 1985(b) supporting declaration built into page 2. It
+  is the instrument for getting records before the COURT at a hearing;
+  nothing about it is deposition discovery, so the deposition statutes
+  (and their discovery-cutoff timing) do not govern it.
+
+  PICK THE RIGHT FORM FIRST:
+    - SUBP-001 — appearance at trial/hearing only, no production
+    - SUBP-002 — appearance at trial/hearing AND production (this form)
+    - SUBP-010 — records only, to a deposition officer (discovery)
+    - SUBP-020 — deposition appearance AND production
+  If the records should go to a deposition officer for copying and
+  inspection before any hearing, that is SUBP-010, not this form.
+
+  WHO ISSUES AND SERVES IT. An attorney of record issues (signs) it;
+  a self-represented party has the clerk issue it. Service is personal
+  on the witness (CCP § 1987(a)), with witness fees payable on demand
+  (Gov. Code § 68093). Page 3 is the proof of service, completed by
+  whoever served it, AFTER service.
+
+  USUAL INVOCATION — as a cover sheet on a subpoena source whose body
+  is the records demand:
+
+      cover_sheet: subp002
+
+  The caption fills from the standard front matter on all three pages.
+  The subpoena-specific values have no caption source and must be
+  supplied per form:
+
+      forms:
+        subp002:
+          witness: >-
+            Custodian of Records, Example Bank, N.A., 500 Market Street,
+            Example City, CA 90000, (555) 555-0199
+          hearing_date: "October 15, 2026"
+          hearing_time: "9:00 a.m."
+          dept_checkbox: true
+          hearing_dept: "20"
+          hearing_address: "600 Civic Center Drive, Example City, CA 90000"
+          records_by_mail: true
+          role_respondent: true
+          decl_as_attorney: true
+          good_cause: >-
+            The records are needed at the hearing to establish the
+            completeness and provenance of the account history at
+            issue, which cannot be shown by other evidence.
+          materiality: >-
+            The motion turns on what the account records actually
+            contained on the dates in question; the originals and
+            their custodian's certification are the only competent
+            proof.
+
+  THE ATTACHMENT IS NUMBER 2 ON THIS FORM. The records demand is item
+  2 of the page-2 declaration, so an attachment carrying it is
+  "Attachment 2" — not "Attachment 3" as on SUBP-010. A source reusing
+  a SUBP-010 attachment must retitle it. good_cause and materiality
+  overflow to Attachments 3 and 4 respectively.
+
+  COHERENT CHECKBOX COMBINATIONS:
+    - Item 3: check EXACTLY ONE of appear_and_produce (personal
+      attendance + originals; the § 1560(b) mail-in expressly does not
+      comply) or records_by_mail (custodian mails copies + a § 1561
+      declaration to the CLERK at the item 1 address and need not
+      appear). For business-records custodians, records_by_mail is the
+      usual choice; appear_and_produce is for live authentication.
+    - Page 2 support: decl_on_form is on by default (the form's own
+      items 1-4 are the showing). If a separate affidavit is attached
+      instead, set decl_via_affidavit and turn decl_on_form off.
+    - Declaration item 1: check exactly one role_* box for the
+      declarant's capacity (with the specify field for attorney_for /
+      other), and exactly one of decl_as_party / decl_as_attorney at
+      the signature.
+    - Item 1a: pair each of dept/division/room fill-ins with its
+      selector checkbox; fill only what the court actually uses.
+
+  GOOD CAUSE AND MATERIALITY ARE NOT BOILERPLATE. CCP § 1985(b)
+  requires the declaration to show good cause for production and the
+  items' materiality to the issues, and a subpoena duces tecum stands
+  or falls on that showing when challenged (CCP § 1987.1). State
+  concrete, case-specific reasons; a conclusory recital invites a
+  motion to quash.
+
+  CONSUMER AND EMPLOYEE RECORDS — SAME BIG CAVEAT AS SUBP-010. If the
+  records concern a "consumer" (CCP § 1985.3) or "employee" (§ 1985.6)
+  — medical, financial, phone, school, personnel records of an
+  identifiable person — the subpoenaing party must serve that person
+  with a NOTICE TO CONSUMER OR EMPLOYEE (SUBP-025) on the statutory
+  clocks before the custodian must comply. SUBP-025 is registered:
+  declare the recipients in `consumer_notices:` on the source and the
+  build emits one notice per person alongside the subpoena. Medical
+  and psychotherapy records may additionally need authorization or a
+  court order, and privacy objections are routine.
+
+  ALWAYS LEFT BLANK — do not fill:
+    - date_issued and decl_date, and both signature lines (the print
+      names ARE pre-filled from the filer; the pen strokes and dates
+      remain for the human);
+    - every page-3 proof-of-service field and checkbox (pos_*) — the
+      server completes them after service, and the copy served on the
+      witness carries page 3 blank.

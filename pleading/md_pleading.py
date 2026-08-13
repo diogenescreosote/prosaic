@@ -3014,7 +3014,13 @@ class PleadingPDF:
     # at 72 dpi, so its "pixels" are page points), and the tag text
     # is placed so the field's BOTTOM edge sits on the rule or blank
     # it fills — ink above the line, like a pen.
-    ESIGN_SIG_FIELD_HEIGHT = 34   # signature box above its rule
+    # A drawn signature can fill its whole box (typed values render
+    # baseline-snug, so THEIR boxes stay tight), which makes the box
+    # top the only edge needing air: 28 pt leaves ~2/3 of the grid
+    # gap clear below the preceding printed line, while the bottom
+    # stays ON the rule — a signature belongs on its line, and
+    # descenders dipping under it read as pen work.
+    ESIGN_SIG_FIELD_HEIGHT = 28   # signature box above its rule
     ESIGN_TEXT_FIELD_HEIGHT = 15  # one-line text/date entry
     ESIGN_TAG_ASCENT = 5          # ~cap height of the 6 pt tag text
 
