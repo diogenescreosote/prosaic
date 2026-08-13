@@ -67,6 +67,11 @@ a roster, never e-signed.
 - Signers sign in `--to` order (`Signer 1..N`).
 - `fetch` refuses incomplete submissions; nothing half-signed can
   land looking like an original.
+- **Fetching is automatic once the connector is on**: with
+  `connectors: {esign: {}}` in matter.yaml, every sync polls the
+  matter's receipts and pulls completed submissions into
+  `inbox/esign/<id>/` for triage. Manual check anytime:
+  `<prosaic>/cli/sc esign poll .` or `sc sync .`.
 
 ## After fetching
 

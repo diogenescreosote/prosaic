@@ -57,6 +57,16 @@ does prosaic's side.
   incomplete — a half-signed document must never land looking like
   an original. *(tested: tests/test_esign.py)*
 
+- **The matter learns on the sync schedule.** `sc esign poll
+  [matter]` — and the `esign` connector, which is a thin relay to
+  it — walks every `*.esign.json` receipt, checks pending
+  submissions, fetches completed ones into `inbox/esign/<id>/`
+  (documents + audit log) printing `NEW` lines for triage, and marks
+  the receipt so a completed submission is never polled again.
+  Enable `connectors: {esign: {}}` in matter.yaml and the 12-hourly
+  sync (or any manual `sc sync .`) carries it; no webhook server, by
+  design — a local-first matter polls. *(tested: tests/test_esign.py)*
+
 ## Non-obvious constraints
 
 - **Sending is publishing.** `send` transmits the document to the

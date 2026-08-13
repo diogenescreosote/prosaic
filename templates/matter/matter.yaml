@@ -19,6 +19,8 @@ backup:
 # Source connectors. Only configured connectors run during `sc sync`.
 # See prosaic docs/connectors.md for each connector's options.
 connectors: {}
+#  esign: {}                        # poll DocuSeal receipts each sync;
+#                                   # completed signatures land in inbox/esign/
 #  gmail:
 #    addresses:                     # plain address, bare domain, or bounded entry
 #      - opposing.party@example.com

@@ -300,3 +300,41 @@ def test_signer_count_must_match_the_documents_tags(mock_api: str, tmp_path: Pat
     assert proc.returncode != 0
     assert "signer mismatch" in proc.stderr
     assert "expect 2" in proc.stderr
+
+
+def test_poll_fetches_completed_and_skips_done(mock_api: str, tmp_path: Path) -> None:
+    """The connector engine: a pending receipt whose submission
+    completed gets its documents pulled into inbox/esign/ with NEW
+    lines for triage, and the receipt is marked so it never polls
+    again; an already-completed receipt is not touched."""
+    (tmp_path / "out" / "note").mkdir(parents=True)
+    receipt = tmp_path / "out" / "note" / "note.pdf.esign.json"
+    receipt.write_text(json.dumps({"submission_id": 123, "document": "note.pdf"}))
+    done = tmp_path / "out" / "note" / "old.pdf.esign.json"
+    done.write_text(json.dumps({"submission_id": 999, "completed": True}))
+
+    proc = run_esign("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    new_lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("NEW ")]
+    assert len(new_lines) == 2, proc.stdout  # signed.pdf + audit log
+    fetched = tmp_path / "inbox" / "esign" / "123"
+    assert (fetched / "signed.pdf").read_bytes() == PDF_BYTES
+    assert (fetched / "submission-123-audit-log.pdf").exists()
+    updated = json.loads(receipt.read_text())
+    assert updated["completed"] is True
+    assert len(updated["fetched"]) == 2
+    # 999 was never queried: only /submissions/123 traffic
+    assert not any("/999" in r["path"] for r in MockDocuSeal.requests)
+
+
+def test_poll_leaves_pending_submissions_alone(mock_api: str, tmp_path: Path) -> None:
+    MockDocuSeal.submission_status = "pending"
+    receipt = tmp_path / "doc.pdf.esign.json"
+    receipt.write_text(json.dumps({"submission_id": 123}))
+    proc = run_esign("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    assert "NEW " not in proc.stdout
+    assert not (tmp_path / "inbox").exists()
+    updated = json.loads(receipt.read_text())
+    assert updated.get("completed") is not True
+    assert updated["last_status"] == "pending"

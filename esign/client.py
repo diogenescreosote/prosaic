@@ -308,6 +308,71 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     return 0
 
 
+def cmd_poll(args: argparse.Namespace) -> int:
+    """Walk the matter for e-sign receipts, check each pending
+    submission, and fetch what completed into inbox/esign/ — the
+    connector engine (specs/esign.md): prints "NEW <abs path>" per
+    fetched file for the sync/triage pipeline, updates each receipt
+    so a completed submission is never polled again."""
+    matter = Path(args.matter_dir or ".").resolve()
+    receipts = [
+        p for p in matter.rglob("*.esign.json") if ".git" not in p.parts and "inbox" not in p.parts
+    ]
+    if not receipts:
+        return 0
+    configure_sdk()
+    pending = 0
+    for receipt_path in sorted(receipts):
+        try:
+            receipt = json.loads(receipt_path.read_text())
+        except (json.JSONDecodeError, OSError) as e:
+            print(f"WARN: unreadable receipt {receipt_path}: {e}", file=sys.stderr)
+            continue
+        if receipt.get("completed"):
+            continue
+        sid = receipt.get("submission_id")
+        if not sid:
+            print(f"WARN: receipt without submission_id: {receipt_path}", file=sys.stderr)
+            continue
+        sub = sdk_call(ds.get_submission, sid)
+        status = sub.get("status", "unknown")
+        receipt["last_status"] = status
+        if status != "completed":
+            pending += 1
+            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+            print(f"esign: submission {sid} still {status}", file=sys.stderr)
+            continue
+
+        out = matter / "inbox" / "esign" / str(sid)
+        out.mkdir(parents=True, exist_ok=True)
+        docs = sdk_call(ds.get_submission_documents, sid)
+        doc_list = docs.get("documents") if isinstance(docs, dict) else docs
+        if not doc_list:
+            doc_list = sub.get("documents", [])
+        fetched = []
+        for doc in doc_list:
+            dest = out / doc["name"]
+            download(doc["url"], dest)
+            fetched.append(str(dest))
+            print(f"NEW {dest}")
+        audit_url = sub.get("audit_log_url")
+        if audit_url:
+            dest = out / f"submission-{sid}-audit-log.pdf"
+            download(audit_url, dest)
+            fetched.append(str(dest))
+            print(f"NEW {dest}")
+        receipt["completed"] = True
+        receipt["fetched"] = fetched
+        receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+        print(
+            f"esign: submission {sid} completed; {len(fetched)} file(s) fetched to {out}",
+            file=sys.stderr,
+        )
+    if pending:
+        print(f"esign: {pending} submission(s) still pending", file=sys.stderr)
+    return 0
+
+
 def main() -> None:
     parser = argparse.ArgumentParser(description="Send documents for e-signature via DocuSeal")
     sub = parser.add_subparsers(dest="command", required=True)
@@ -337,6 +402,14 @@ def main() -> None:
     sp = sub.add_parser("status", help="per-signer state (exit 0 when completed)")
     sp.add_argument("submission_id")
     sp.set_defaults(func=cmd_status)
+
+    sp = sub.add_parser(
+        "poll",
+        help="check every pending receipt in a matter; fetch completed "
+        "submissions into inbox/esign/ (the connector engine)",
+    )
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.set_defaults(func=cmd_poll)
 
     sp = sub.add_parser("fetch", help="signed PDFs + audit log for a completed submission")
     sp.add_argument("submission_id")
