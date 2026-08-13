@@ -67,6 +67,17 @@ fiduciaries (specs/matter.md, ADR-0028). Rules when publishing:
    named people; `Inbox/` writable by them; `Public/` broader) —
    remind, don't attempt.
 
+## Will pagination is conservative (post-death authenticity is the game)
+
+Nobody can ask the testator what pages were in front of them, so
+compose wills tighter than the statutes require: continuous
+pagination, testator execution (`whereof`) immediately followed by
+the attestation heading, prose, and witness grids; no signature-only
+witness page unless the attestation genuinely cannot share one; no
+blank pages. The renderer keeps the units atomic and headings
+unstranded — your job is ordering and density. General discipline:
+[drafting-conventions](../drafting-conventions/SKILL.md).
+
 ## Execution and after
 
 Walk the user through `templates/estate/EXECUTION.md`: the will is

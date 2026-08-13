@@ -118,8 +118,9 @@ beneficiaries, successor fiduciaries, and counsel. Its contract:
   claims, not records, until triaged into the matter proper.
 - **`Public/`** holds what the world may see: recorded instruments
   and those slated for recordation (deeds in and out of the trust,
-  memoranda of trust existence). Its Drive sharing is broader than
-  the rest of the tree, set deliberately and by hand.
+  memoranda of trust existence). It is world-READABLE (anyone with
+  the link views); write access stays with the same people as the
+  rest of the tree. Set deliberately and by hand.
 
 *(tested: tests/test_estate_pack.py pins the scaffold's presence in
 the estate pack)*

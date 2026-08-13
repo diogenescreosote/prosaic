@@ -231,6 +231,11 @@ REDACTION_SIDECAR_SUFFIX = ".redactions.json"
 SIG_KEEP_MAX_LEAD_BLOCKS = 3
 # A non-heading block counts as a "short lead" at up to this many grid
 # lines as rendered (2 text lines + the trailing blank separator).
+# A heading is never stranded at a page bottom: it moves to the next
+# page unless at least this many lines of its content fit under it
+# (Butterick's keep-with-next; the statutes don't care, readers do).
+HEADING_MIN_FOLLOWING_LINES = 2
+
 SIG_LEAD_MAX_GRID_LINES = 3
 # DOCX proxy for the grid-line cap: Word does its own wrapping, so the
 # docx emitter approximates "≤ 2 wrapped lines" by character count.
@@ -3443,6 +3448,18 @@ class PleadingPDF:
             if block.kind == "table":
                 current_line = self._emit_table(block, current_line)
                 continue
+
+            # Keep-with-next for every heading: a heading whose content
+            # starts on the next page reads as a mistake (the stranded
+            # "Witness Attestation" incident). The sig-block keep-groups
+            # above handle heading+signature units; this covers headings
+            # over ordinary prose.
+            if (block.kind == "heading" and current_line != 1
+                    and i + 1 < len(self.blocks)):
+                needed = 2 + HEADING_MIN_FOLLOWING_LINES  # heading + blank + content
+                if current_line + needed - 1 > self.lines_per_page - self._fn_area_lines:
+                    self.start_page()
+                    current_line = 1
 
             block_lines = _block_to_styled_lines(block, self.exhibit_letters,
                                                   self.text_width, self.footnote_numbers)

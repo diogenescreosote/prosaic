@@ -136,3 +136,30 @@ def test_tags_do_not_disturb_printed_lines(tmp_path):
     year = datetime.date.today().year
     assert (f"Executed this _____ day of _________________, {year}, "
             f"at Springfield, California.") in text
+
+
+@pytest.mark.parametrize("pad", range(18, 30))
+def test_headings_are_never_stranded_at_a_page_bottom(tmp_path, pad):
+    """The 'Witness Attestation' incident: a heading whose content
+    begins on the next page reads as a mistake. Sweep filler lengths
+    so the heading lands near every page-bottom position; wherever it
+    renders, at least some of its content shares the page."""
+    filler = "\n\n".join(
+        f"#. Paragraph {i} pads the page so the heading lands near the "
+        f"bottom and keep-with-next has to act."
+        for i in range(1, pad)
+    )
+    body = (filler + "\n\n## Witness Attestation\n\n"
+            "On the date written above, the witnesses attest as follows, "
+            "being present at the same time and signing below.\n\n"
+            "\\witnessattestation{First Witness\\\\Second Witness}")
+    proc = build(tmp_path, body)
+    assert proc.returncode == 0, proc.stderr
+    pages = [p for p in text_of(tmp_path).split("\f") if p.strip()]
+    holding = [p for p in pages if "Witness Attestation" in p]
+    assert holding, "heading missing entirely"
+    page = holding[-1]
+    after = page.split("Witness Attestation", 1)[1]
+    assert "On the date written above" in after, (
+        f"pad={pad}: heading stranded without its content"
+    )

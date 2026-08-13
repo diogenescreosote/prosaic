@@ -42,5 +42,8 @@ Run from the matter directory (it has `envelopes.yaml` and a
 - Rebuilding is a `build` commit, separate from the `draft` commit
   that changed the sources.
 
+Signature areas and execution clauses have their own discipline:
+[drafting-conventions](../drafting-conventions/SKILL.md).
+
 References: `specs/pleading/generator.md`, `docs/forms.md`,
 `pleading/pleading_markdown_spec.md`.
