@@ -9,3 +9,8 @@ pypdf[crypto]
 python-docx
 Pillow
 pytest
+# Trusted timestamps for sc attest (the `ots` CLI). A signature's
+# claimed time is signer-asserted; OpenTimestamps anchors it in a
+# public blockchain so a backdated signature is detectable. attest
+# degrades to a stderr note if this is somehow absent.
+opentimestamps-client

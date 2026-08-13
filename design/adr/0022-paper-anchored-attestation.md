@@ -50,8 +50,8 @@ showing but cannot substitute for execution formalities).
 ## Consequences
 Signing stays in the user's normal gpg home (their key, their agent);
 only verification is isolated. gpg joins the manifest as an optional
-dependency — nothing else in prosaic needs it — and `ots` is
-documented but not packaged. The manifest format is parseable
-markdown, so `manifest verify` checks every hash mechanically, and a
+dependency — nothing else in prosaic needs it — and `ots`
+(opentimestamps-client) ships with the python requirements. The
+manifest format is parseable markdown, so `manifest verify` checks every hash mechanically, and a
 row edited inside the clearsigned block fails the signature before
 the hashes are even read.

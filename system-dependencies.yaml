@@ -201,11 +201,15 @@ dependencies:
     used_by: [crypto/attest.py]
     required: false
     platforms: [darwin, linux]
-    # A Python tool distributed on PyPI (opentimestamps-client), not by
-    # the system managers; attest degrades to a stderr note without it.
+    # A Python tool (opentimestamps-client) declared in
+    # pleading/requirements.txt and pyproject, so any normal install --
+    # including the Docker image, which pip-installs the requirements --
+    # carries it. The apt/in_container fields here track apt packages
+    # only; attest also probes beside its interpreter and degrades to a
+    # stderr note in the rare env without it.
     apt: null
     brew: null
-    no_package_reason: "pip install opentimestamps-client; attest works without it"
+    no_package_reason: "installed with prosaic's python requirements (pleading/requirements.txt)"
     in_container: false
 
   - binary: gh

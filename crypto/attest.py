@@ -212,15 +212,29 @@ def cmd_manifest_verify(args: argparse.Namespace) -> int:
     return 1 if failures else 0
 
 
+def _ots_binary() -> str | None:
+    """The ots CLI: on PATH, or beside the interpreter running this
+    script (opentimestamps-client is in pleading/requirements.txt and
+    pyproject, so the env that runs attest normally carries it even
+    when its bin directory is not on PATH)."""
+    found = shutil.which("ots")
+    if found:
+        return found
+    sibling = Path(sys.executable).parent / "ots"
+    return str(sibling) if sibling.exists() else None
+
+
 def _timestamp(path: Path) -> None:
     """OpenTimestamps proof beside the file; degrade gracefully without ots."""
-    if shutil.which("ots") is None:
+    ots = _ots_binary()
+    if ots is None:
         print(
-            "  (timestamp skipped: ots not installed -- pip install opentimestamps-client)",
+            "  (timestamp skipped: ots not found -- install prosaic's "
+            "python requirements: pleading/requirements.txt)",
             file=sys.stderr,
         )
         return
-    proc = _run(["ots", "stamp", str(path)])
+    proc = _run([ots, "stamp", str(path)])
     if proc.returncode == 0:
         print(f"timestamped: {path}.ots")
     else:
