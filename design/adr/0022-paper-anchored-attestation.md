@@ -18,7 +18,7 @@ owner.
 with four commitments:
 
 1. **The trust anchor is paper.** A signing key earns authority by
-   being embedded — armored text plus a `\qrblock` — in a
+   being embedded — armored text plus a `\barcode` — in a
    traditionally executed document (witnessed, notarized). The tool
    never treats a keyring as an anchor: `verify` and
    `manifest verify` import the expected key file into a throwaway

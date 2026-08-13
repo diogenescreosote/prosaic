@@ -61,11 +61,17 @@ The following public key (the "Anchored Key") is reproduced here, in
 text and machine-readable form, to anchor the cryptographic protocol
 described in Article VIII of the Trust:
 
-```
-[PASTE THE ARMORED PUBLIC KEY BLOCK HERE — gpg --armor --export]
-```
+\fixedwidth{
+[PASTE THE ARMORED PUBLIC KEY BLOCK HERE -- gpg --armor --export]
+}
 
-\qrblockfile{assets/anchor-key.asc}{The Anchored Key, machine-readable.}
+The Anchored Key's fingerprint (SHA-1, as gpg prints it) is:
+
+\fixedwidth{
+5EDF 79A0 477D BBDE 38AC  F791 6676 E412 5898 C933
+}
+
+\barcodefile{qr}{assets/anchor-key.asc}{The Anchored Key, machine-readable.}
 
 Any non-testamentary record bearing a cryptographic signature
 verifiable against the Anchored Key and carrying a trusted timestamp

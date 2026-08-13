@@ -258,12 +258,16 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
                              "Residing at (city and state)")
             items.append(("\n\n".join(grids), False))
             continue
-        if block.kind in ("qrblock", "qrblockfile"):
+        if block.kind in ("barcode", "barcodefile"):
             # Text output has no pixels; the honest equivalent is the
-            # payload itself, labeled, which is what the QR encodes.
-            caption = block.spans[0].text if block.spans else ""
-            header = f"[QR code{': ' + caption if caption else ''}]"
-            items.append((header + "\n" + mp.qr_payload(block), False))
+            # payload itself, labeled, which is what the symbol encodes.
+            fmt = mp.barcode_format(block)
+            caption = block.spans[1].text if len(block.spans) > 1 else ""
+            header = f"[{fmt} barcode{': ' + caption if caption else ''}]"
+            items.append((header + "\n" + mp.barcode_payload(block), False))
+            continue
+        if block.kind == "fixedwidth":
+            items.append((block.text, False))
             continue
         items.append((block_to_line(block, footnote_numbers), _is_tight(block)))
 

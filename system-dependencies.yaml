@@ -113,7 +113,7 @@ dependencies:
     in_container: true
 
   - binary: qrencode
-    why: renders \qrblock payloads (verification URLs, key blocks, signatures) into the QR images the pleading renderers embed
+    why: renders \barcode{qr} payloads (verification URLs, key blocks, signatures) into the QR images the pleading renderers embed
     used_by: [pleading/md_pleading.py, pleading/md_to_docx.py]
     required: false
     platforms: [darwin, linux]
@@ -121,9 +121,18 @@ dependencies:
     brew: qrencode
     in_container: true
 
+  - binary: zint
+    why: renders \barcode{code128} and \barcode{pdf417} symbols; qrencode covers qr
+    used_by: [pleading/md_pleading.py]
+    required: false
+    platforms: [darwin, linux]
+    apt: zint
+    brew: zint
+    in_container: true
+
   - binary: pdftoppm
     why: rasterizes rendered PDFs so the QR round-trip tests can decode what was printed
-    used_by: [pleading/tests/test_qrblock.py]
+    used_by: [pleading/tests/test_barcode.py]
     required: false
     platforms: [darwin, linux]
     # Ships in the same package as pdftotext, but it is a distinct
@@ -134,7 +143,7 @@ dependencies:
 
   - binary: zbarimg
     why: decodes QR symbols back out of rasterized pages; the proof that a \qrblock scans
-    used_by: [pleading/tests/test_qrblock.py]
+    used_by: [pleading/tests/test_barcode.py]
     required: false
     platforms: [darwin, linux]
     apt: zbar-tools

@@ -559,18 +559,28 @@ def _emit_witnessattest(doc: Document, names_raw: str) -> None:
         cap2.add_run("Residing at (city and state)").font.size = Pt(9)
 
 
-def _emit_qrblock(doc: Document, payload: str, caption: str) -> None:
-    """Embed a QR image (rendered through md_pleading's qrencode seam)
-    with its caption below. 2 inches square mirrors the PDF's six grid
-    lines."""
+def _emit_barcode(doc: Document, fmt: str, payload: str, caption: str) -> None:
+    """Embed a barcode image at its printed size (md_pleading computes
+    the module geometry), capped at 6.5 inches of column width."""
     import tempfile
 
     with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
-        mp.render_qr_png(payload, tmp.name)
-        doc.add_picture(tmp.name, width=Inches(2), height=Inches(2))
+        w_pt, h_pt = mp.barcode_image(fmt, payload, tmp.name)
+        w_in = min(w_pt / 72.0, 6.5)
+        doc.add_picture(tmp.name, width=Inches(w_in))
     if caption:
         para = doc.add_paragraph()
         para.add_run(caption).font.size = Pt(12)
+    add_blank(doc)
+
+
+def _emit_fixedwidth(doc: Document, text: str) -> None:
+    """Verbatim monospace lines; no typographic substitutions."""
+    for raw in text.split("\n"):
+        para = doc.add_paragraph()
+        run = para.add_run(raw)
+        run.font.name = "Courier New"
+        run.font.size = Pt(9)
     add_blank(doc)
 
 
@@ -620,8 +630,8 @@ _ACK_RE = re.compile(r"^\\acknowledgment\{(.*?)\}\s*$")
 _JURAT_RE = re.compile(r"^\\jurat\{(.*?)\}\s*$")
 _PROOF_RE = re.compile(r"^\\proofofexecution\{(.*?)\}\{(.*?)\}\s*$")
 _WATT_RE = re.compile(r"^\\witnessattestation\{(.+?)\}\s*$")
-_QRBLOCK_RE = re.compile(r"^\\qrblock\{(.+?)\}(?:\{(.*?)\})?\s*$")
-_QRBLOCKFILE_RE = re.compile(r"^\\qrblockfile\{(.+?)\}(?:\{(.*?)\})?\s*$")
+_BARCODE_RE = re.compile(r"^\\barcode\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$")
+_BARCODEFILE_RE = re.compile(r"^\\barcodefile\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$")
 
 
 def build_letter_header(doc: Document, meta: dict) -> None:
@@ -858,6 +868,18 @@ def build_body(doc: Document, body: str, meta: dict,
     # main() via the shared substitute_exhibit_refs.
     body = _COMMENT_RE.sub("", body)
 
+    # \fixedwidth{ ... } content is verbatim: stash it BEFORE the
+    # body-wide typographic pass, which would otherwise turn an armored
+    # block's ----- runs into em dashes (corruption, not style).
+    fw_blocks: list[str] = []
+
+    def _fw_stash(m: re.Match) -> str:
+        fw_blocks.append(m.group(1))
+        return f"\n\n@@FIXEDWIDTH{len(fw_blocks) - 1}@@\n\n"
+
+    body = re.sub(r"(?ms)^\\fixedwidth\{[ \t]*\n(.*?)\n\}[ \t]*$",
+                  _fw_stash, body)
+
     body = typographic_subs(body)
 
     num_id = None  # lazy-initialized the first time a heading is seen
@@ -906,17 +928,25 @@ def build_body(doc: Document, body: str, meta: dict,
             _attach_lead(doc)
             _emit_witnessattest(doc, m.group(1).strip())
             continue
-        m = _QRBLOCK_RE.match(text)
+        m = re.match(r"^@@FIXEDWIDTH(\d+)@@$", text)
         if m:
-            _attach_lead(doc)
-            _emit_qrblock(doc, m.group(1).strip(), (m.group(2) or "").strip())
+            _emit_fixedwidth(doc, fw_blocks[int(m.group(1))])
             continue
 
-        m = _QRBLOCKFILE_RE.match(text)
+        m = _BARCODE_RE.match(text)
         if m:
-            block = mp.Block("qrblockfile", m.group(1).strip())
             _attach_lead(doc)
-            _emit_qrblock(doc, mp.qr_payload(block), (m.group(2) or "").strip())
+            _emit_barcode(doc, m.group(1).strip(), m.group(2).strip(),
+                          (m.group(3) or "").strip())
+            continue
+
+        m = _BARCODEFILE_RE.match(text)
+        if m:
+            block = mp.Block("barcodefile", m.group(2).strip(),
+                             spans=[mp.TextSpan(m.group(1).strip())])
+            _attach_lead(doc)
+            _emit_barcode(doc, m.group(1).strip(), mp.barcode_payload(block),
+                          (m.group(3) or "").strip())
             continue
 
         m = _SIGNBLOCK_RE.match(text)

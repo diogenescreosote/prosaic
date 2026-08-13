@@ -1159,33 +1159,61 @@ attestation *prose* (what the witnesses are attesting) stays
 ordinary document text above the macro; the grid is only the
 structured signing area, kept together as one object per witness.
 
-## QR blocks — machine-readable payloads on the page
+## Barcode blocks — machine-readable payloads on the page
 
-`\qrblock{payload}{caption}` renders a QR symbol at the text margin,
-six grid lines square, with the optional caption on the line beneath
-it. `\qrblockfile{path}{caption}` does the same with the contents of
-a file as the payload — the form to use for anything multi-line or
-long: an armored public key, a detached signature, a hash manifest.
-Paths resolve against the working directory (envelope builds run from
-the matter directory, so matter-relative paths work unchanged); a
-missing payload file fails the build.
+`\barcode{format}{payload}{caption}` renders a machine-readable
+symbol at the text margin, with the optional caption on the line
+beneath it. `\barcodefile{format}{path}{caption}` encodes a file's
+contents instead — the form for anything multi-line or long: an
+armored public key, a detached signature, a hash manifest. Paths
+resolve against the working directory (envelope builds run from the
+matter directory); a missing payload file fails the build.
 
-Both macros must appear alone on a line, like the signature-block
-macros. Generation shells out to `qrencode`
-(system-dependencies.yaml): error correction level M, four-module
-quiet zone. The DOCX renderer embeds the same symbol at two inches
-square; the TXT renderer prints the caption and then the payload
-itself, which is what the symbol encodes.
+Formats and their generators (system-dependencies.yaml):
 
-The property that makes a QR block worth its page space is that a
-phone camera recovers the payload byte-exactly, no OCR in the loop
-(tested: pleading/tests/test_qrblock.py renders, rasterizes, decodes,
+| format | symbol | generator |
+|---|---|---|
+| `qr` | QR code, error correction M, 4-module quiet zone | qrencode |
+| `code128` | Code 128 1D bar, 15 mm tall | zint |
+| `pdf417` | PDF417 stacked 2D, aiming at a 3:1 width:height ratio | zint |
+
+Symbols print at their physical module size — 0.5 mm per module — so
+scanners see the geometry the symbology specs assume; a symbol wider
+than the text column is scaled down to fit it. PDF417's 3:1 target is
+met by searching zint's column count for the nearest geometry. Both
+macros must appear alone on a line. Payloads reach the generators via
+stdin or a temp file, never argv.
+
+The property that makes a barcode worth its page space is that a
+scanner recovers the payload byte-exactly, no OCR in the loop
+(tested: pleading/tests/test_barcode.py renders, rasterizes, decodes,
 and compares).
 
 ```
 The following key verifies every document in this matter:
 
-\qrblockfile{assets/public_key.asc}{Public key, machine-readable.}
+\barcodefile{qr}{assets/anchor-key.asc}{Public key, machine-readable.}
+```
+
+## Fixed-width blocks — verbatim or not at all
+
+`\fixedwidth{` on its own line opens a verbatim block; a lone `}`
+closes it. Every line between renders in monospace exactly as
+written: no typographic substitutions (the em-dash rule, quote
+curling), no wrapping, no whitespace collapse. This is the construct
+for armored key blocks, hashes, fingerprints, and anything where a
+substituted character is corruption rather than style — a `-----`
+armor header that renders as em dashes will never re-import into gpg
+from paper. Font size fits the block's longest line to the text
+column (10 pt down to 6 pt). Fenced code blocks (```` ``` ````) are
+NOT supported; use this.
+
+```
+\fixedwidth{
+-----BEGIN PGP PUBLIC KEY BLOCK-----
+...
+-----END PGP PUBLIC KEY BLOCK-----
+}
 ```
 
 ## Output specification

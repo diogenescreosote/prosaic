@@ -6,7 +6,7 @@ description: Cryptographically attest matter documents - dual hashes, GPG detach
 # Cryptographic attestation
 
 The protocol (ADR-0022, `specs/attest.md`): a key is anchored in an
-executed paper document (armored block + `\qrblock`); a clearsigned
+executed paper document (armored block + `\barcode`); a clearsigned
 MANIFEST names the operative version of every document by dual hash;
 detached signatures and timestamps make each document independently
 checkable. Verification is always against the anchored key file,
@@ -40,7 +40,7 @@ every signature that matters.
 - **Generate** with an expiry (3y is sensible: forced periodic
   review): `gpg --quick-gen-key "Name <email>" ed25519 sign 3y`.
 - **Anchor**: export the armored public key and embed it, with a
-  `\qrblockfile`, in the paper instrument that gives it authority.
+  `\barcodefile{qr}{...}`, in the paper instrument that gives it authority.
 - **Revocation certificate**: gpg writes one at generation
   (`openpgp-revocs.d/`); it must be stored OFFLINE, separate from
   the key — anyone holding it can kill the key.
@@ -52,5 +52,5 @@ every signature that matters.
   unrevoked post-compromise signatures as suspect — this scenario is
   why "irrefutable" must never appear in the instrument text.
 
-References: `specs/attest.md`, ADR-0022, and the QR block section of
+References: `specs/attest.md`, ADR-0022, and the barcode section of
 `pleading/pleading_markdown_spec.md`.

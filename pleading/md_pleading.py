@@ -243,17 +243,35 @@ SIGNBLOCK_ROLE_EXTRA_LINE = 1        # + role line when one prints
 JUDGESIGNBLOCK_GRID_LINES = 5        # Dated + blank + rule + blank + title
 LETTERSIGNBLOCK_BASE_GRID_LINES = 4  # Sincerely + blank + rule + blank (+1 per name line)
 
-# QR blocks (\qrblock / \qrblockfile): a scannable square on the grid.
-# The square spans QRBLOCK_GRID_LINES pleading lines -- large enough to
-# scan a dense payload (an armored public key) from paper, small enough
-# to share a page with the text that explains it. qrencode settings:
-# error correction M tolerates print damage without bloating module
-# count; the 4-module quiet zone is the QR spec's required minimum.
-QRBLOCK_GRID_LINES = 6               # QR square height, in grid lines
-QRBLOCK_CAPTION_EXTRA_LINE = 1       # + caption line when one prints
+# Barcode blocks (\barcode{format}{data} / \barcodefile{format}{path}):
+# machine-readable symbols on the page, sized from physical module
+# dimensions so a phone or scanner reads them from paper. Formats: qr
+# (qrencode; error correction M tolerates print damage, 4-module quiet
+# zone is the spec minimum), code128 and pdf417 (zint). Modules print
+# at 0.5 mm; a symbol wider than the text column is scaled down to it.
+# PDF417 aims at a 3:1 width:height ratio (its sweet spot for handheld
+# scanners), chosen by searching zint's column count.
+BARCODE_MODULE_MM = 0.5              # printed module size, mm
+BARCODE_MODULE_PT = BARCODE_MODULE_MM * 72 / 25.4
+BARCODE_CAPTION_EXTRA_LINE = 1       # + caption line when one prints
+BARCODE_PX_PER_MODULE = 8            # render resolution (zint --scale 4)
+PDF417_TARGET_ASPECT = 3.0           # width / height
+PDF417_COLS_RANGE = range(2, 21)     # zint --cols candidates
+CODE128_HEIGHT_MODULES = 30          # 1D bar height at 0.5 mm/module (15 mm)
 QR_ERROR_CORRECTION = "M"            # qrencode -l: L/M/Q/H
-QR_MODULE_PIXELS = 10                # qrencode -s: render resolution
 QR_MARGIN_MODULES = 4                # qrencode -m: quiet-zone width
+ZINT_FORMAT_CODES = {"code128": "20", "pdf417": "55"}
+BARCODE_FORMATS = ("qr", "code128", "pdf417")
+
+# Fixed-width blocks (\fixedwidth{ ... }): verbatim monospace, exempt
+# from every typographic substitution -- the construct for armored key
+# blocks, hashes, and anything where a mangled character is corruption
+# rather than style. The size fits the block's longest line to the
+# text column (Courier advance = 0.6 em).
+FIXEDWIDTH_FONT = "Courier"
+FIXEDWIDTH_MAX_SIZE = 10
+FIXEDWIDTH_MIN_SIZE = 6
+FIXEDWIDTH_ADVANCE_EM = 0.6
 
 # ---------------------------------------------------------------------------
 # Notarial certificates (California) — drawn objects, not text expansion.
@@ -409,8 +427,9 @@ class Block:
     blockquote:    text=raw text, spans=styled content
     signblock:     text=name line (e.g. "JANE ROE")
     declsignblock: text=name, spans[0].text=location, spans[1].text=role (optional; if empty, no role line printed)
-    qrblock:       text=payload to encode, spans[0].text=caption (optional)
-    qrblockfile:   text=path whose contents are the payload, spans[0].text=caption
+    barcode:       text=payload, spans[0]=format (qr|code128|pdf417), spans[1]=caption
+    barcodefile:   text=path whose contents are the payload, spans as barcode
+    fixedwidth:    text=verbatim lines joined by newline; no typographic subs
     acknowledgment: text=signer name(s), blank lines if empty (CA Civ. Code 1189)
     jurat:          text=signer name(s) (CA Gov. Code 8202)
     proofexec:      text=subscribing witness, spans[0].text=principal(s) (CA Civ. Code 1195)
@@ -1744,7 +1763,24 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         table_rows = []
 
     in_comment = False
+    fw_lines: Optional[List[str]] = None
     for raw_line in lines:
+        # \fixedwidth{ ... } collects lines VERBATIM until a lone `}`:
+        # no comment stripping, no typographic substitution, no
+        # wrapping. A mangled character in an armored block is
+        # corruption, not style, so this runs before everything.
+        if fw_lines is not None:
+            if raw_line.strip() == "}":
+                blocks.append(Block("fixedwidth", "\n".join(fw_lines)))
+                fw_lines = None
+            else:
+                fw_lines.append(raw_line.rstrip())
+            continue
+        if raw_line.strip() == "\\fixedwidth{":
+            flush_para()
+            fw_lines = []
+            continue
+
         line = raw_line.rstrip()
 
         # Strip HTML comments (non-rendering annotations for literate-programming style revision notes)
@@ -1813,17 +1849,19 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
             flush_para()
             blocks.append(Block("lettersignblock", m_letter_sign.group(1).strip()))
             continue
-        m_qr = re.match(r"^\\qrblock\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
-        if m_qr:
+        m_bar = re.match(r"^\\barcode\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
+        if m_bar:
             flush_para()
-            blocks.append(Block("qrblock", m_qr.group(1).strip(),
-                                spans=[TextSpan((m_qr.group(2) or "").strip())]))
+            blocks.append(Block("barcode", m_bar.group(2).strip(),
+                                spans=[TextSpan(m_bar.group(1).strip()),
+                                       TextSpan((m_bar.group(3) or "").strip())]))
             continue
-        m_qrfile = re.match(r"^\\qrblockfile\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
-        if m_qrfile:
+        m_barfile = re.match(r"^\\barcodefile\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
+        if m_barfile:
             flush_para()
-            blocks.append(Block("qrblockfile", m_qrfile.group(1).strip(),
-                                spans=[TextSpan((m_qrfile.group(2) or "").strip())]))
+            blocks.append(Block("barcodefile", m_barfile.group(2).strip(),
+                                spans=[TextSpan(m_barfile.group(1).strip()),
+                                       TextSpan((m_barfile.group(3) or "").strip())]))
             continue
         m_ack = re.match(r"^\\acknowledgment\{(.*?)\}\s*$", line)
         if m_ack:
@@ -2901,29 +2939,60 @@ class PleadingPDF:
 
         return current_line
 
-    def _emit_qrblock(self, block: Block, current_line: int) -> int:
-        """Render a \\qrblock: a scannable square at the text margin,
-        with an optional caption on the line below it."""
-        caption = block.spans[0].text if block.spans else ""
-        lines_needed = QRBLOCK_GRID_LINES + (QRBLOCK_CAPTION_EXTRA_LINE if caption else 0)
-        if current_line + lines_needed - 1 > self.lines_per_page:
-            self.start_page()
-            current_line = 1
-
-        payload = qr_payload(block)
-        top_y = self.line_y(current_line) + FONT_SIZE
-        bottom_y = self.line_y(current_line + QRBLOCK_GRID_LINES - 1)
-        side = top_y - bottom_y
+    def _emit_barcode(self, block: Block, current_line: int) -> int:
+        """Render a \\barcode symbol at the text margin at its printed
+        module size (0.5 mm/module), scaled down to the text column
+        when wider, with an optional caption on the line below."""
+        caption = block.spans[1].text if len(block.spans) > 1 else ""
+        fmt = barcode_format(block)
+        payload = barcode_payload(block)
         with tempfile.NamedTemporaryFile(suffix=".png") as tmp:
-            render_qr_png(payload, tmp.name)
-            self.c.drawImage(ImageReader(tmp.name), self.left_margin, bottom_y,
-                             width=side, height=side)
-        current_line += QRBLOCK_GRID_LINES
+            draw_w, draw_h = barcode_image(fmt, payload, tmp.name)
+            if draw_w > self.text_width:
+                scale = self.text_width / draw_w
+                draw_w, draw_h = self.text_width, draw_h * scale
+
+            symbol_lines = math.ceil(draw_h / self.leading) + 1
+            lines_needed = symbol_lines + (BARCODE_CAPTION_EXTRA_LINE if caption else 0)
+            if current_line != 1 and current_line + lines_needed - 1 > self.lines_per_page:
+                self.start_page()
+                current_line = 1
+
+            top_y = self.line_y(current_line) + FONT_SIZE
+            self.c.drawImage(ImageReader(tmp.name), self.left_margin,
+                             top_y - draw_h, width=draw_w, height=draw_h)
+        current_line += symbol_lines
         if caption:
             self.draw_text_line(current_line, caption)
             current_line += 1
         current_line += 1  # trailing blank line after the block
 
+        return current_line
+
+    def _barcode_lines_needed(self, block: Block) -> int:
+        """Keep-together estimate without rendering: generous, from the
+        payload length (a QR of an armored key runs ~6-8 lines)."""
+        caption = block.spans[1].text if len(block.spans) > 1 else ""
+        return 8 + (BARCODE_CAPTION_EXTRA_LINE if caption else 0)
+
+    def _fixedwidth_size(self, block: Block) -> float:
+        longest = max((len(ln) for ln in block.text.split("\n")), default=1)
+        fitted = self.text_width / max(longest, 1) / FIXEDWIDTH_ADVANCE_EM
+        return max(FIXEDWIDTH_MIN_SIZE, min(FIXEDWIDTH_MAX_SIZE, fitted))
+
+    def _emit_fixedwidth(self, block: Block, current_line: int) -> int:
+        """Verbatim monospace lines, one per grid line, splitting at
+        page bottoms like any text (an armored block outlasting a page
+        is content, not an object)."""
+        size = self._fixedwidth_size(block)
+        for raw in block.text.split("\n"):
+            if current_line > self.lines_per_page - self._fn_area_lines:
+                self.start_page()
+                current_line = 1
+            self.draw_text_line(current_line, raw,
+                                font=FIXEDWIDTH_FONT, size=int(size))
+            current_line += 1
+        current_line += 1  # trailing blank line
         return current_line
 
     _NOTARIAL_KINDS = ("acknowledgment", "jurat", "proofexec")
@@ -3066,7 +3135,7 @@ class PleadingPDF:
         return current_line
 
     _SIG_KINDS = {"signblock", "declsignblock", "judgesignblock", "lettersignblock",
-                  "qrblock", "qrblockfile", "acknowledgment", "jurat", "proofexec",
+                  "barcode", "barcodefile", "acknowledgment", "jurat", "proofexec",
                   "witnessattest"}
 
     def _is_lead_block(self, block: Block) -> bool:
@@ -3090,8 +3159,8 @@ class PleadingPDF:
         if block.kind == "witnessattest":
             names = [n for n in block.text.split("\\") if n.strip()]
             return WITNESS_GRID_LINES_EACH * max(len(names), 1)
-        if block.kind in ("qrblock", "qrblockfile"):
-            return QRBLOCK_GRID_LINES + QRBLOCK_CAPTION_EXTRA_LINE
+        if block.kind in ("barcode", "barcodefile"):
+            return self._barcode_lines_needed(block)
         if block.kind == "judgesignblock":
             return JUDGESIGNBLOCK_GRID_LINES
         if block.kind == "lettersignblock":
@@ -3165,8 +3234,11 @@ class PleadingPDF:
             if block.kind == "lettersignblock":
                 current_line = self._emit_lettersignblock(block, current_line)
                 continue
-            if block.kind in ("qrblock", "qrblockfile"):
-                current_line = self._emit_qrblock(block, current_line)
+            if block.kind in ("barcode", "barcodefile"):
+                current_line = self._emit_barcode(block, current_line)
+                continue
+            if block.kind == "fixedwidth":
+                current_line = self._emit_fixedwidth(block, current_line)
                 continue
             if block.kind in self._NOTARIAL_KINDS:
                 current_line = self._emit_notarial(block, current_line)
@@ -3464,40 +3536,95 @@ def notarial_text(block: Block) -> str:
     raise ValueError(f"not a notarial block: {block.kind}")
 
 
-def qr_payload(block: Block) -> str:
-    """The text a QR block encodes: inline payload, or a file's contents.
+def barcode_payload(block: Block) -> str:
+    """The text a barcode encodes: inline payload, or a file's contents.
 
-    \\qrblockfile paths resolve against the working directory; envelope
+    \\barcodefile paths resolve against the working directory; envelope
     builds run from the matter directory, so matter-relative paths (a
     key block in assets/, a detached signature) work unchanged.
     """
-    if block.kind != "qrblockfile":
+    if block.kind != "barcodefile":
         return block.text
     path = Path(block.text).expanduser()
     if not path.exists():
         raise SystemExit(
-            f"\\qrblockfile: {block.text} not found (paths resolve against "
+            f"\\barcodefile: {block.text} not found (paths resolve against "
             f"the working directory; builds run from the matter)")
     return path.read_text().strip()
 
 
-def render_qr_png(payload: str, out_path: str) -> None:
-    """Encode payload as a QR PNG via qrencode (system-dependencies.yaml).
+def barcode_format(block: Block) -> str:
+    fmt = block.spans[0].text if block.spans else ""
+    if fmt not in BARCODE_FORMATS:
+        raise SystemExit(
+            f"\\barcode: unknown format {fmt!r} (one of {', '.join(BARCODE_FORMATS)})")
+    return fmt
 
-    The payload arrives on stdin: armored key blocks overflow argv
-    comfort and a command line leaks into process listings.
-    """
+
+def _run_symbol_tool(cmd: List[str], payload: str, tool: str) -> None:
     try:
-        proc = subprocess.run(
-            ["qrencode", "-o", out_path, "-l", QR_ERROR_CORRECTION,
-             "-s", str(QR_MODULE_PIXELS), "-m", str(QR_MARGIN_MODULES)],
-            input=payload.encode("utf-8"), capture_output=True)
+        proc = subprocess.run(cmd, input=payload.encode("utf-8"),
+                              capture_output=True)
     except FileNotFoundError:
         raise SystemExit(
-            "\\qrblock needs qrencode (apt/brew install qrencode; "
-            "see system-dependencies.yaml)") from None
+            f"\\barcode needs {tool} (apt/brew install {tool}; "
+            f"see system-dependencies.yaml)") from None
     if proc.returncode != 0:
-        raise SystemExit(f"qrencode failed: {proc.stderr.decode().strip()}")
+        raise SystemExit(f"{tool} failed: {proc.stderr.decode().strip()}")
+
+
+def render_barcode_png(fmt: str, payload: str, out_path: str,
+                       cols: Optional[int] = None) -> None:
+    """Encode payload as a symbol PNG: qrencode for qr, zint for the
+    rest. Payload arrives on stdin (qrencode) or via a temp file
+    (zint): key blocks overflow argv comfort and a command line leaks
+    into process listings.
+    """
+    if fmt == "qr":
+        _run_symbol_tool(
+            ["qrencode", "-o", out_path, "-l", QR_ERROR_CORRECTION,
+             "-s", str(BARCODE_PX_PER_MODULE), "-m", str(QR_MARGIN_MODULES)],
+            payload, "qrencode")
+        return
+    with tempfile.NamedTemporaryFile(suffix=".txt") as data:
+        data.write(payload.encode("utf-8"))
+        data.flush()
+        cmd = ["zint", "--barcode", ZINT_FORMAT_CODES[fmt],
+               "--output", out_path, "--filetype", "PNG",
+               "--scale", str(BARCODE_PX_PER_MODULE / 2),
+               "--input", data.name, "--binary", "--quietzones"]
+        if fmt == "code128":
+            cmd += ["--height", str(CODE128_HEIGHT_MODULES), "--notext"]
+        if cols is not None:
+            cmd += ["--cols", str(cols)]
+        _run_symbol_tool(cmd, payload, "zint")
+
+
+def barcode_image(fmt: str, payload: str, out_path: str) -> Tuple[float, float]:
+    """Render the symbol and return its printed size in points at
+    BARCODE_MODULE_MM per module. PDF417 searches zint's column count
+    for the geometry nearest the 3:1 width:height target."""
+    if fmt == "pdf417":
+        best = None
+        for cols in PDF417_COLS_RANGE:
+            try:
+                render_barcode_png(fmt, payload, out_path, cols=cols)
+            except SystemExit:
+                continue
+            img = Image.open(out_path)
+            aspect = img.width / img.height
+            score = abs(aspect - PDF417_TARGET_ASPECT)
+            if best is None or score < best[0]:
+                best = (score, cols)
+        if best is None:
+            raise SystemExit("zint could not encode the payload as pdf417")
+        render_barcode_png(fmt, payload, out_path, cols=best[1])
+    else:
+        render_barcode_png(fmt, payload, out_path)
+    img = Image.open(out_path)
+    w = img.width / BARCODE_PX_PER_MODULE * BARCODE_MODULE_PT
+    h = img.height / BARCODE_PX_PER_MODULE * BARCODE_MODULE_PT
+    return w, h
 
 
 def append_pdf_scaled(writer: PdfWriter, pdf_path: Path,

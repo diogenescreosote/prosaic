@@ -96,11 +96,17 @@ shall be brought in the Superior Court for the County of Example.
 1. **The Anchored Key.** The following public key (the "Anchored
    Key") is reproduced here in text and machine-readable form:
 
-```
-[PASTE THE ARMORED PUBLIC KEY BLOCK HERE — gpg --armor --export]
-```
+\fixedwidth{
+[PASTE THE ARMORED PUBLIC KEY BLOCK HERE -- gpg --armor --export]
+}
 
-\qrblockfile{assets/anchor-key.asc}{The Anchored Key, machine-readable.}
+The Anchored Key's fingerprint (SHA-1, as gpg prints it) is:
+
+\fixedwidth{
+5EDF 79A0 477D BBDE 38AC  F791 6676 E412 5898 C933
+}
+
+\barcodefile{qr}{assets/anchor-key.asc}{The Anchored Key, machine-readable.}
 
 2. **Presumption.** Any instrument concerning the Trust — including
    an amendment, a revocation, an exercise of a power, or a
