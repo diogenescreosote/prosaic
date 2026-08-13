@@ -28,7 +28,9 @@ different service, different protocol.
 ```
 
 - `send` writes `<pdf>.proof.json` beside the document — commit it.
-- With `connectors: {proof: {}}` in matter.yaml, every sync polls;
+- matter.yaml must name the credential by reference (ADR-0031):
+  `connectors: {proof: {credential: prosaic.proof}}`; with that
+  declared, every sync polls;
   completed notarizations land in `inbox/proof/<id>/` for triage,
   then attestation ([crypto-attest](../crypto-attest/SKILL.md)).
 - Expired/canceled transactions go terminal in the receipt: report

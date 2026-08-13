@@ -18,6 +18,17 @@ backup:
 
 # Source connectors. Only configured connectors run during `sc sync`.
 # See prosaic docs/connectors.md for each connector's options.
+#
+# Credentials are incorporated by REFERENCE (ADR-0031): `credential:`
+# names a Keychain item; the key material never enters the matter.
+# A prosaic-global key is fine, but the matter must still name it.
+#
+# connectors:
+#   docuseal:
+#     credential: prosaic.docuseal      # or a matter-specific item
+#   proof:
+#     credential: prosaic.proof
+#     url: https://api.fairfax.proof.com   # optional per-matter deployment
 connectors: {}
 #  docuseal: {}                        # poll DocuSeal receipts each sync;
 #                                   # completed signatures land in inbox/docuseal/

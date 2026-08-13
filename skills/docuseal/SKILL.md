@@ -7,7 +7,8 @@ description: Send a document for e-signature via DocuSeal, poll until signed, an
 
 DocuSeal handles delivery and capture (`specs/docuseal.md`, ADR-0023);
 you handle the matter's side of the record. The API key is already
-configured (`DOCUSEAL_API_KEY` or the Keychain) — you never see or
+configured (`DOCUSEAL_API_KEY`, or the Keychain item named by
+matter.yaml's `connectors.docuseal.credential`) — you never see or
 handle it.
 
 ## Before sending — the two human decisions
@@ -84,4 +85,4 @@ The signed PDF and audit log are received originals:
    reissue the matter's manifest, so the signed document's integrity
    stops depending on DocuSeal's continued existence.
 
-References: `specs/docuseal.md`, ADR-0023, ADR-0012 (credentials).
+References: `specs/docuseal.md`, ADR-0023, ADR-0012/0031 (credentials).

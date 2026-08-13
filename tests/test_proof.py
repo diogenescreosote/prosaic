@@ -213,3 +213,49 @@ def test_send_refuses_a_draft_stamped_pdf(mock_api: str, tmp_path: Path) -> None
     proc = run_proof("send", "draft.pdf", "--to", "j@example.com", url=mock_api, cwd=tmp_path)
     assert proc.returncode != 0
     assert "refusing to send a draft" in proc.stderr
+
+
+def _security_shim(tmp_path: Path, ref: str, key: str) -> str:
+    """A fake `security` on PATH answering the Keychain lookup for one
+    service name — credential-by-reference without a real Keychain."""
+    shim_dir = tmp_path / "shim-bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "security"
+    shim.write_text(f'#!/bin/sh\nif [ "$3" = "{ref}" ]; then echo {key}; exit 0; fi\nexit 1\n')
+    shim.chmod(0o755)
+    return str(shim_dir)
+
+
+def test_matter_credential_is_incorporated_by_reference(mock_api: str, tmp_path: Path) -> None:
+    """Same discipline as DocuSeal (ADR-0031): matter.yaml names the
+    Keychain item; the client resolves it; the key never enters the
+    matter."""
+    (tmp_path / "matter.yaml").write_text(
+        "connectors:\n  proof:\n    credential: proof.test-matter\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, str(CLIENT), "status", "tx_777"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={
+            "PROOF_URL": mock_api,
+            "PATH": _security_shim(tmp_path, "proof.test-matter", "matter-scoped-key")
+            + ":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert any(r["auth"] == "matter-scoped-key" for r in MockProof.requests)
+
+
+def test_matter_without_credential_reference_refuses(tmp_path: Path) -> None:
+    (tmp_path / "matter.yaml").write_text("connectors:\n  proof: {}\n")
+    proc = subprocess.run(
+        [sys.executable, str(CLIENT), "status", "tx_777"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={"PROOF_URL": "http://127.0.0.1:1", "PATH": "/usr/bin:/bin"},
+    )
+    assert proc.returncode != 0
+    assert "credential" in proc.stderr and "ADR-0031" in proc.stderr

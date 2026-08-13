@@ -19,6 +19,17 @@ matter additionally keeps the **share convention** below. Tooling
 must treat an unknown type as `litigation` rather than failing: the
 type gates conventions, not machinery.
 
+## Configuration lives in the matter
+
+The matter, not prosaic, owns its bindings (ADR-0031): which
+credential a connector uses (`connectors.<name>.credential`, a
+Keychain item named by reference — the key material never enters the
+matter) and, where it matters, which deployment
+(`connectors.<name>.url`). Prosaic-global keys may exist, but a
+matter must incorporate one by reference; clients refuse a connector
+with no `credential:` and print the lines to add. Prosaic implements
+the skills; it stores no per-matter state.
+
 ## Promises
 
 1. **The index never lies.** `assets/INDEX.md` describes every

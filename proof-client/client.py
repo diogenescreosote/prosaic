@@ -47,23 +47,86 @@ CREDENTIAL_REF = "prosaic.proof"
 TERMINAL_FAILURES = ("expired", "canceled", "rejected")
 DRAFT_METADATA_KEY = "/ProsaicDraftBanner"
 
+# The enclosing matter's connectors.proof mapping, set by
+# load_matter_config(). None means no matter.yaml was found (ad-hoc
+# use outside any matter).
+MATTER_CFG: dict | None = None
+MATTER_YAML: Path | None = None
+
+
+def load_matter_config(start: Path) -> None:
+    """Configuration is the matter's, not prosaic's (ADR-0031): walk
+    up from `start` to the enclosing matter.yaml and take its
+    connectors.proof mapping — `credential:` (a Keychain item named
+    by reference; the key material never enters the matter) and
+    optionally `url:` (e.g. the fairfax sandbox for a matter still
+    in rehearsal)."""
+    global MATTER_CFG, MATTER_YAML
+    d = (start if start.is_dir() else start.parent).resolve()
+    for parent in (d, *d.parents):
+        f = parent / "matter.yaml"
+        if f.exists():
+            import yaml
+
+            try:
+                data = yaml.safe_load(f.read_text()) or {}
+            except yaml.YAMLError as e:
+                raise SystemExit(f"unreadable {f}: {e}") from None
+            MATTER_CFG = (data.get("connectors") or {}).get("proof") or {}
+            MATTER_YAML = f
+            return
+
+
+def keychain_lookup(ref: str) -> str | None:
+    if sys.platform != "darwin":
+        return None
+    proc = subprocess.run(
+        ["security", "find-generic-password", "-s", ref, "-w"],
+        capture_output=True,
+        text=True,
+    )
+    if proc.returncode == 0 and proc.stdout.strip():
+        return proc.stdout.strip()
+    return None
+
 
 def api_base() -> str:
-    return os.environ.get("PROOF_URL", DEFAULT_URL).rstrip("/")
+    env = os.environ.get("PROOF_URL")
+    matter = (MATTER_CFG or {}).get("url")
+    return (env or matter or DEFAULT_URL).rstrip("/")
 
 
 def api_key() -> str:
     key = os.environ.get("PROOF_API_KEY")
     if key:
         return key
-    if sys.platform == "darwin":
-        proc = subprocess.run(
-            ["security", "find-generic-password", "-s", CREDENTIAL_REF, "-w"],
-            capture_output=True,
-            text=True,
+    if MATTER_YAML is not None:
+        # Inside a matter the credential must be incorporated by
+        # reference — even a prosaic-global key. The matter owns the
+        # binding; prosaic and the Keychain just hold the mechanism
+        # and the material.
+        ref = (MATTER_CFG or {}).get("credential")
+        if not ref:
+            raise SystemExit(
+                f"this matter does not say which Proof credential it "
+                f"uses. Add to {MATTER_YAML}:\n"
+                f"  connectors:\n"
+                f"    proof:\n"
+                f"      credential: {CREDENTIAL_REF}   # or a matter-specific Keychain item\n"
+                f"(key material stays in the Keychain; the matter holds "
+                f"only the reference — ADR-0031)"
+            )
+        key = keychain_lookup(ref)
+        if key:
+            return key
+        raise SystemExit(
+            f"the matter references credential {ref!r} but the Keychain "
+            f"has no such item: security add-generic-password -s {ref} "
+            f"-a prosaic -w <key>"
         )
-        if proc.returncode == 0 and proc.stdout.strip():
-            return proc.stdout.strip()
+    key = keychain_lookup(CREDENTIAL_REF)
+    if key:
+        return key
     raise SystemExit(
         f"no Proof API key: set PROOF_API_KEY, or store one in the "
         f"Keychain (security add-generic-password -s {CREDENTIAL_REF} "
@@ -303,6 +366,8 @@ def main() -> None:
     sp.set_defaults(func=cmd_poll)
 
     args = parser.parse_args()
+    start = Path(getattr(args, "matter_dir", None) or getattr(args, "pdf", None) or ".")
+    load_matter_config(start)
     sys.exit(args.func(args))
 
 

@@ -51,6 +51,7 @@ project accretes decisions instead of middleware.
 - [0028](adr/0028-estate-share-folder.md) Estate matters publish a share folder: destination, never source
 - [0029](adr/0029-skill-granularity.md) Skill granularity: split by co-activation, demote by layer
 - [0030](adr/0030-ron-through-proof.md) RON through Proof; parallel clients, not an e-sign abstraction
+- [0031](adr/0031-matter-held-configuration.md) Matters own their configuration; prosaic stores no state
 
 Also:
 

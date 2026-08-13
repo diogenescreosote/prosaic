@@ -28,11 +28,16 @@ different protocol, no premature generalization.
   completed transactions into `inbox/proof/<id>/` with `NEW` lines
   for triage, and marks expired/canceled transactions terminal so a
   dead ceremony is a recorded fact, not an eternal retry. *(tested)*
-- **Deployment and credentials**: `PROOF_URL` selects production
-  (`https://api.proof.com`, default) or the fairfax sandbox
-  (`https://api.fairfax.proof.com`); the key resolves
-  `PROOF_API_KEY` then the `prosaic.proof` Keychain entry. Auth is
-  Proof's `ApiKey` header. *(tested against a mock)*
+- **Deployment and credentials**: `PROOF_URL`, else the matter's
+  `connectors.proof.url`, selects production (`https://api.proof.com`,
+  default) or the fairfax sandbox (`https://api.fairfax.proof.com`).
+  The key resolves `PROOF_API_KEY` (an explicit per-run act) first;
+  inside a matter, the Keychain item named by
+  `connectors.proof.credential` in matter.yaml — required there even
+  for a global `prosaic.proof` key, which a matter incorporates by
+  reference, never inherits silently (ADR-0031). Key material never
+  enters the matter. Auth is Proof's `ApiKey` header.
+  *(tested against a mock)*
 
 ## Non-obvious constraints
 

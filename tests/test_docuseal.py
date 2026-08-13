@@ -356,3 +356,53 @@ def test_poll_marks_declined_terminal_and_stops(mock_api: str, tmp_path: Path) -
     proc = run_docuseal("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0
     assert not MockDocuSeal.requests, "terminal receipts are never re-polled"
+
+
+def _security_shim(tmp_path: Path, ref: str, key: str) -> str:
+    """A fake `security` on PATH: answers the Keychain lookup for one
+    service name, so tests exercise credential-by-reference without a
+    real Keychain."""
+    shim_dir = tmp_path / "shim-bin"
+    shim_dir.mkdir()
+    shim = shim_dir / "security"
+    shim.write_text(f'#!/bin/sh\nif [ "$3" = "{ref}" ]; then echo {key}; exit 0; fi\nexit 1\n')
+    shim.chmod(0o755)
+    return str(shim_dir)
+
+
+def test_matter_credential_is_incorporated_by_reference(mock_api: str, tmp_path: Path) -> None:
+    """Inside a matter, the key binding lives in matter.yaml as a
+    Keychain reference (ADR-0031): the client resolves the named
+    item, and the material never appears in the matter."""
+    (tmp_path / "matter.yaml").write_text(
+        "connectors:\n  docuseal:\n    credential: docuseal.test-matter\n"
+    )
+    proc = subprocess.run(
+        [sys.executable, str(DOCUSEAL), "status", "123"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={
+            "DOCUSEAL_URL": mock_api,
+            "PATH": _security_shim(tmp_path, "docuseal.test-matter", "matter-scoped-key")
+            + ":/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        },
+    )
+    assert proc.returncode == 0, proc.stderr
+    assert any(r["auth"] == "matter-scoped-key" for r in MockDocuSeal.requests)
+
+
+def test_matter_without_credential_reference_refuses(tmp_path: Path) -> None:
+    """A matter that declares the connector but names no credential
+    gets a refusal telling it what to add — a global key is fine, but
+    only incorporated by reference, never assumed."""
+    (tmp_path / "matter.yaml").write_text("connectors:\n  docuseal: {}\n")
+    proc = subprocess.run(
+        [sys.executable, str(DOCUSEAL), "status", "123"],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env={"DOCUSEAL_URL": "http://127.0.0.1:1", "PATH": "/usr/bin:/bin"},
+    )
+    assert proc.returncode != 0
+    assert "credential" in proc.stderr and "ADR-0031" in proc.stderr

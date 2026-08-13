@@ -15,13 +15,20 @@ does prosaic's side.
   Their agent skills are referenced by their official channel
   (`npx skills add docusealco/docuseal-agent-skills`), not vendored.
   *(tested: tests/test_docuseal.py, through the SDK against a mock API)*
-- **Deployment is one variable.** Every request goes to
-  `DOCUSEAL_URL` (or `DOCUSEAL_SERVER`, the official CLI's spelling;
-  default `https://api.docuseal.com`); a self-hosted instance needs
-  nothing but that variable. The API key resolves `DOCUSEAL_API_KEY`
-  first, then the `prosaic.docuseal` Keychain entry, and a missing
-  key is a clear how-to-configure error — never a silent default.
-  *(tested: tests/test_docuseal.py)*
+- **Deployment is one setting.** Every request goes to
+  `DOCUSEAL_URL` (or `DOCUSEAL_SERVER`, the official CLI's spelling),
+  else the matter's `connectors.docuseal.url`, else
+  `https://api.docuseal.com`; a self-hosted instance needs nothing
+  but that setting. *(tested: tests/test_docuseal.py)*
+- **Credentials are the matter's, by reference (ADR-0031).** The key
+  resolves `DOCUSEAL_API_KEY` (an explicit per-run act) first; inside
+  a matter, the Keychain item named by
+  `connectors.docuseal.credential` in matter.yaml — a connector with
+  no `credential:` is a refusal that prints the exact lines to add,
+  even when a global `prosaic.docuseal` key exists. Only outside any
+  matter does the global name apply on its own. Key material never
+  enters the matter; a missing key is a clear how-to-configure
+  error — never a silent default. *(tested: tests/test_docuseal.py)*
 - **A draft never ships by accident.** `send` refuses a PDF whose
   metadata carries the prosaic draft stamp (every non-`--final`
   build) unless `--allow-draft` is passed for deliberate circulation.
