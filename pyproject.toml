@@ -19,6 +19,7 @@ dependencies = [
     "pillow>=12.3.0",
     "pymupdf>=1.28.2",
     "opentimestamps-client>=0.7.2",
+    "docuseal>=1.0.9",
 ]
 
 [dependency-groups]
@@ -48,6 +49,7 @@ target-version = "py312"
 # repository-invariant checks. What remains linted is the handful of
 # tests written here directly.
 extend-exclude = [
+    "third_party",  # vendored submodules keep their upstream style
     "pleading",
     "connectors",
     "sync",

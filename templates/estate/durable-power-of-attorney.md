@@ -62,6 +62,6 @@ knowledge of the revocation.
 
 I sign this instrument on ____________ at Springfield, California.
 
-\signblock{JANE ROE}{Principal}
+\signblock{dated}{JANE ROE}{Principal}
 
 \acknowledgment{JANE ROE}

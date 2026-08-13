@@ -149,6 +149,6 @@ The Anchored Key's fingerprint (SHA-1, as gpg prints it) is:
 IN WITNESS WHEREOF, I sign this instrument as Settlor and initial
 Trustee on the date stated below.
 
-\declsignblock{JANE ROE, Settlor and Initial Trustee}{Springfield, California}
+\signblock{decl}{JANE ROE, Settlor and Initial Trustee}{Springfield, California}
 
 \acknowledgment{JANE ROE}

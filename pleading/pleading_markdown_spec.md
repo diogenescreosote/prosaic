@@ -263,7 +263,7 @@ Because the MC-030 already carries the boilerplate
 `I declare under penalty of perjury under the laws of the State of
 California that the foregoing is true and correct.` and a single
 signature block, the attached declaration should omit both the
-perjury clause and any `\declsignblock{}` at the end of the body.
+perjury clause and any `\signblock{decl}` at the end of the body.
 
 Additional YAML keys supported by `cover_sheet: mc030`:
 
@@ -1077,148 +1077,51 @@ and the tab sheets read `ATTACHMENT A` instead of `EXHIBIT A`.
 and is preferred in letters. Both macros are interchangeable: each is
 resolved to the doctype's label at render time.
 
-## Letter signature block — multi-line author block
-
-`\lettersignblock{...}` accepts a single-line argument with `\\` as a
-line-break separator, and the preprocessor accepts the same content
-written across multiple source lines. Both of these inputs render
-identically:
-
-```md
-\lettersignblock{Sally Sattler, Esq.\\SATTLER LAW GROUP\\Attorneys for Plaintiff}
-```
-
-```md
-\lettersignblock{Sally Sattler, Esq.\\
-SATTLER LAW GROUP\\
-Attorneys for Plaintiff}
-```
-
-The block renders as `Sincerely,`, a signature line, and then the
-name lines beneath the signature, with one blank line of trailing
-separation.
-
-## Plain documents (`doctype: document`)
-
-`doctype: document` renders a plain letter-size document: the
-`paper_title` centered in bold at the top, single-spaced body at the
-letter geometry, a bare page number — no court caption, no
-letterhead, no 28-line grid. It is the doctype for instruments that
-are not filings: contracts, estate documents, attestations. Only
-`paper_title` is required.
-
-`heading_numbers: false` (any doctype) turns off the automatic
-I./A./1. heading enumeration, for documents whose headings carry
-their own ("Article I. ...").
-
-## Signature authentication blocks
-
-Two families, one conceptual parent: **notarial certificates** (the
-officer's certificate, in the officer's visual register) and the
-**witness attestation grid** (part of the instrument itself). All are
-rendered objects with keep-together semantics — never split across a
-page break — because a certificate a notary cannot read whole, sign,
-and seal in one place is a defective certificate.
-
-### Notarial certificates (California)
+## Signature blocks — one macro, five styles
 
 ```
-\acknowledgment{SIGNER NAME(S)}
-\jurat{SIGNER NAME(S)}
-\proofofexecution{SUBSCRIBING WITNESS}{PRINCIPAL(S)}
+\signblock{dated}{NAME}{ROLE?}
+\signblock{decl}{NAME}{LOCATION?}{ROLE?}
+\signblock{judge}{TITLE}
+\signblock{letter}{Name\\Firm\\Role}
+\signblock{whereof}{NAME}{ROLE?}{INSTRUMENT?}
 ```
 
-Each renders a bordered, sans-serif certificate matching the
-Secretary of State's published forms: centered title, the statutory
-consumer disclosure in its own enclosed box (required by the 2015
-amendments to all three statutes), venue lines, the certificate
-paragraph with the named signer(s) inserted (an empty argument
-leaves a ruled blank), and a signature line beneath a clear zone
-(~2.6in x 1.4in) reserved for the seal, which must stay
-photographically reproducible. Wording is verbatim statutory:
-Civ. Code § 1189 (acknowledgment, with the penalty-of-perjury
-paragraph), Gov. Code § 8202 (jurat), Civ. Code § 1195 (proof of
-execution). The statutory texts live as named constants in
-`md_pleading.py`, and the DOCX and TXT renderers consume the same
-constants so the three outputs cannot drift.
+- **dated** — `Dated: ____, <year>`, signature rule, name, role (the
+  role falls back to `filer_role`).
+- **decl** — the declaration execution line (`Executed this ___ day
+  of ___, <year>, at LOCATION.`), rule, name, role.
+- **judge** — `Dated:` line, rule, and the title, for proposed
+  orders.
+- **letter** — `Sincerely,`, rule, and the `\\`-separated author
+  block; the argument may span source lines.
+- **whereof** — the testamentary execution clause and signature area
+  as ONE block: `IN WITNESS WHEREOF, I, {NAME}, sign this
+  {INSTRUMENT} on this ___ day of ___, 20__, at ___.` with the
+  location blank for the ceremony, then rule, name, role. It prints
+  no `Dated:` line — the clause recites the date, and the old
+  pairing of a prose clause with a bare `\signblock` printed the
+  date twice.
 
-Proof of execution may not be used for powers of attorney, deeds,
-other instruments affecting real property, or documents requiring a
-journal thumbprint (Gov. Code § 27287; Civ. Code § 1195(b)) — the
-renderer does not police document types; the drafter must.
+The legacy spellings (`\declsignblock`, `\judgesignblock`,
+`\lettersignblock`, bare `\signblock{NAME}`) still build, mapped to
+the styles above with a stderr deprecation warning — a live matter
+mid-filing never breaks on a taxonomy change.
 
-### Witness attestation grids
+### E-signature field tags, embedded automatically
 
-```
-\witnessattestation{Name One\\Name Two}
-```
-
-One signing grid per `\\`-separated witness: a signature rule with a
-date line, the printed-name caption, and a residence line. The
-attestation *prose* (what the witnesses are attesting) stays
-ordinary document text above the macro; the grid is only the
-structured signing area, kept together as one object per witness.
-
-## Barcode blocks — machine-readable payloads on the page
-
-`\barcode{format}{payload}{caption}` renders a machine-readable
-symbol at the text margin, with the optional caption on the line
-beneath it. `\barcodefile{format}{path}{caption}` encodes a file's
-contents instead — the form for anything multi-line or long: an
-armored public key, a detached signature, a hash manifest. Paths
-resolve against the working directory (envelope builds run from the
-matter directory); a missing payload file fails the build.
-
-Formats and their generators (system-dependencies.yaml):
-
-| format | symbol | module | generator |
-|---|---|---|---|
-| `qr` | QR code (ISO/IEC 18004), error correction M, 4-module quiet zone | 0.75 mm | qrencode |
-| `code128` | Code 128 1D bar (ISO/IEC 15417), 15 mm tall | 0.75 mm | zint |
-| `pdf417` | PDF417 stacked 2D (ISO/IEC 15438), 3:1 width:height target | 0.5 mm | zint |
-
-Module sizes are chosen for a recorder's office scanner and
-camscanned nearly-flat paper, not a crisp screenshot; symbols are
-additionally scaled up until their smaller side reaches 40 mm. A
-symbol wider than the text column is scaled down to fit it (prefer a
-2D format for long payloads). Captions should name the encoding
-format — a stranger with the paper needs to know what to scan it
-as. PDF417's 3:1 target is
-met by searching zint's column count for the nearest geometry. Both
-macros must appear alone on a line. Payloads reach the generators via
-stdin or a temp file, never argv.
-
-The property that makes a barcode worth its page space is that a
-scanner recovers the payload byte-exactly, no OCR in the loop
-(tested: pleading/tests/test_barcode.py renders, rasterizes, decodes,
-and compares).
-
-```
-The following key verifies every document in this matter:
-
-\barcodefile{qr}{assets/anchor-key.asc}{Public key, encoded as a QR code.}
-```
-
-## Fixed-width blocks — verbatim or not at all
-
-`\fixedwidth{` on its own line opens a verbatim block; a lone `}`
-closes it. Every line between renders in monospace exactly as
-written: no typographic substitutions (the em-dash rule, quote
-curling), no wrapping, no whitespace collapse. This is the construct
-for armored key blocks, hashes, fingerprints, and anything where a
-substituted character is corruption rather than style — a `-----`
-armor header that renders as em dashes will never re-import into gpg
-from paper. Font size fits the block's longest line to the text
-column (12 pt down to 6 pt). Fenced code blocks (```` ``` ````) are
-NOT supported; use this.
-
-```
-\fixedwidth{
------BEGIN PGP PUBLIC KEY BLOCK-----
-...
------END PGP PUBLIC KEY BLOCK-----
-}
-```
+Every signature block and witness grid also draws DocuSeal text tags
+(`{{Signature 1;role=Signer 1;type=signature}}` and kindred for
+dates, locations, residences) in white 6 pt text in the inter-line
+gap: invisible in print, machine-readable in the text layer, and
+stripped from the executed document by DocuSeal's default
+`remove_tags`. Signer roles number in document order — the same
+order `sc esign send --to` assigns submitters — so a built PDF is
+e-sign-ready with fields already placed. A `--sign` render's dated
+and decl blocks carry no tags (the signature line is already
+executed), and notarial certificates carry none (a notary's ceremony
+is not an e-sign flow). Overlapping tags stagger
+vertically; text extraction keeps every printed line whole.
 
 ## Output specification
 
@@ -1606,7 +1509,7 @@ At render time the macro expands to a four-paragraph declaration:
 3. Date of service and bulleted list of documents served.
 4. Recipients with their email or mailing addresses.
 
-The expansion ends with a perjury clause and a `\declsignblock{}` so the
+The expansion ends with a perjury clause and a `\signblock{decl}` so the
 server can date and sign at filing time. If `proof_of_service.date` is
 omitted, the date in paragraph 3 renders as a fill-in blank.
 

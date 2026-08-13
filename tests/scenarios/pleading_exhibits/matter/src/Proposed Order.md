@@ -24,4 +24,4 @@ supporting declaration of Jane Roe, and good cause appearing:
 IT IS ORDERED that the responding party shall produce the documents
 described in Attachment 1 to this order.
 
-\judgesignblock{JUDGE OF THE SUPERIOR COURT}
+\signblock{judge}{JUDGE OF THE SUPERIOR COURT}

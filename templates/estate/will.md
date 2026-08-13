@@ -91,10 +91,7 @@ Code section 6110(c)(2).
 
 If any provision of this Will is invalid, the remainder stands.
 
-IN WITNESS WHEREOF, I, Jane Roe, sign this Will on this ____ day of
-____________, 20__, at Springfield, California.
-
-\signblock{JANE ROE}{Testator}
+\signblock{whereof}{JANE ROE}{Testator}{Will}
 
 ## Witness Attestation
 

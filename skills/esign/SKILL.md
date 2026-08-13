@@ -20,10 +20,18 @@ handle it.
    `notreal:` sources must never be sent; the user clears the marker
    first (their call, never yours).
 
-Signature placement: the source should carry DocuSeal text tags where
-signatures go — literal `{{Signature;role=Signer 1}}` text in the
-rendered PDF becomes a signature field. No tags = a warning and
-manual placement by the signer.
+Signature placement is automatic: prosaic signature blocks and
+witness grids embed invisible DocuSeal field tags at render time
+(ADR-0027), roles numbered in document order. Give `--to` in the same
+order the signature areas appear and every field lands placed. A
+PDF built elsewhere, without tags, sends with a warning and the
+signer places fields by hand.
+
+DocuSeal's own agent skills are vendored at
+`<prosaic>/third_party/docuseal-agent-skills` (their CLI skill and
+API/SDK reference) — consult them for flows beyond send/status/fetch:
+templates, bulk sends, webhooks, embedded signing. `DOCUSEAL_SERVER`
+and `DOCUSEAL_URL` both select the deployment.
 
 ## The loop
 

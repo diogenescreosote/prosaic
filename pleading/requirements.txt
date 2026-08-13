@@ -14,3 +14,6 @@ pytest
 # public blockchain so a backdated signature is detectable. attest
 # degrades to a stderr note if this is somehow absent.
 opentimestamps-client
+# Official DocuSeal API client (sc esign): submissions from PDF,
+# status, signed-document retrieval. docuseal.com/docs/api
+docuseal

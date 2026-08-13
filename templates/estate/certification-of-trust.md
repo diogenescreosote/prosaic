@@ -44,6 +44,6 @@ State of California:
     trust instrument will be furnished on reasonable request; the
     dispositive provisions need not be disclosed.
 
-\declsignblock{JANE ROE, Trustee}{Springfield, California}
+\signblock{decl}{JANE ROE, Trustee}{Springfield, California}
 
 \acknowledgment{JANE ROE}

@@ -41,7 +41,7 @@ subcommand's real promises live in that component's spec.
   command, judge, and gate steps. The real promises live in
   [flows.md](flows.md). *(tested: tests/test_flows.py)*
 - **`sc esign ...`** passes through to the e-signature client
-  (`esign/docuseal.py`): send for signature, poll, fetch the signed
+  (`esign/client.py`): send for signature, poll, fetch the signed
   originals and audit log. The real promises live in
   [esign.md](esign.md). *(tested: tests/test_esign.py)*
 - **`sc connectors`** lists available connectors with their

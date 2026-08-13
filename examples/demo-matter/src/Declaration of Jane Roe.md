@@ -38,4 +38,4 @@ it.
 I declare under penalty of perjury under the laws of the State of
 California that the foregoing is true and correct.
 
-\declsignblock{JANE ROE}{Springfield, California}
+\signblock{decl}{JANE ROE}{Springfield, California}

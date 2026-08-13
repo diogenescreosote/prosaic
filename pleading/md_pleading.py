@@ -37,7 +37,7 @@ logging.getLogger("pypdf").setLevel(logging.ERROR)
 from PIL import Image
 from pypdf import PdfReader, PdfWriter, Transformation
 from pypdf._page import PageObject
-from reportlab.lib.colors import black
+from reportlab.lib.colors import black, white
 from reportlab.lib.pagesizes import letter
 from reportlab.lib.utils import ImageReader
 from reportlab.pdfbase import pdfmetrics
@@ -367,6 +367,35 @@ NOTARIAL_TITLES = {
     "proofexec": "PROOF OF EXECUTION BY SUBSCRIBING WITNESS",
 }
 
+# Signature blocks are one macro with styles (ADR-0027):
+#   \signblock{dated}{NAME}{ROLE?}          Dated line + rule + name
+#   \signblock{decl}{NAME}{LOCATION?}{ROLE?} perjury execution line
+#   \signblock{judge}{TITLE}                proposed-order judge block
+#   \signblock{letter}{Name\\Firm\\Role}    letter closing
+#   \signblock{whereof}{NAME}{ROLE?}{INSTRUMENT?}
+#       "IN WITNESS WHEREOF, I, {name}, sign this {instrument} on
+#       this ____ day of ____________, 20__, at ____________." + rule
+#       + name + role. No Dated line: the clause recites the date, so
+#       the old pairing of prose + \signblock printed it twice.
+# The legacy macros (\declsignblock, \judgesignblock,
+# \lettersignblock, and bare \signblock{NAME}) still parse, mapped to
+# these styles with a deprecation warning: a live matter mid-filing
+# never breaks on a taxonomy change.
+SIGNBLOCK_STYLES = ("dated", "decl", "judge", "letter", "whereof")
+WHEREOF_CLAUSE = ("IN WITNESS WHEREOF, I, {name}, sign this {instrument} "
+                  "on this _____ day of _________________, 20___, at "
+                  "_________________________.")
+WHEREOF_TAIL_GRID_LINES = 5          # blank + rule + blank + name (+role)
+
+# Every signature area also carries DocuSeal text tags
+# ({{Name;role=...;type=...}}, docuseal.com/docs/api) drawn in white
+# 6 pt text over the blanks: invisible on paper, machine-readable in
+# the text layer, and stripped from the executed document by
+# DocuSeal's default remove_tags. Signer roles number in document
+# order -- the same order `sc esign send --to` assigns them.
+ESIGN_TAG_FONT_SIZE = 6
+ESIGN_ROLE_PREFIX = "Signer"
+
 # Witness signature grids (\witnessattestation): per witness, a
 # signature rule plus printed-name, residence, and date lines. Part of
 # the instrument (unlike a notarial certificate), so it stays in the
@@ -438,7 +467,8 @@ class Block:
     paragraph:     text=raw text, spans=styled content
     bullet:        text=raw text, spans=styled content
     blockquote:    text=raw text, spans=styled content
-    signblock:     text=name line (e.g. "JANE ROE")
+    signblock:     text=name line (e.g. "JANE ROE"); dated style
+    whereofsignblock: text=name, spans[0]=role, spans[1]=instrument word
     declsignblock: text=name, spans[0].text=location, spans[1].text=role (optional; if empty, no role line printed)
     barcode:       text=payload, spans[0]=format (qr|code128|pdf417), spans[1]=caption
     barcodefile:   text=path whose contents are the payload, spans as barcode
@@ -1477,18 +1507,21 @@ def flatten_lettersignblock(body: str) -> str:
     Both collapse to a single source line with internal ``\\n`` markers that
     the renderer splits on at draw time.
     """
-    pattern = re.compile(r"\\lettersignblock\{([^}]*)\}", re.DOTALL)
-
-    def repl(match: re.Match[str]) -> str:
-        content = match.group(1)
-        # Replace double-backslash (with optional surrounding whitespace) with \n marker.
+    def collapse(content: str) -> str:
         content = re.sub(r"\s*\\\\\s*", r"\\n", content)
-        # Collapse any remaining newlines/whitespace runs to single spaces.
         content = re.sub(r"\s*\n\s*", " ", content)
-        content = re.sub(r"\s+", " ", content).strip()
-        return "\\lettersignblock{" + content + "}"
+        return re.sub(r"\s+", " ", content).strip()
 
-    return pattern.sub(repl, body)
+    body = re.sub(
+        r"\\lettersignblock\{([^}]*)\}",
+        lambda m: "\\lettersignblock{" + collapse(m.group(1)) + "}",
+        body, flags=re.DOTALL)
+    # The styled spelling accepts the same multi-line form.
+    body = re.sub(
+        r"\\signblock\{letter\}\{([^}]*)\}",
+        lambda m: "\\signblock{letter}{" + collapse(m.group(1)) + "}",
+        body, flags=re.DOTALL)
+    return body
 
 
 # CCP § 1010.6 / § 1013a proof-of-service boilerplate lives in editable
@@ -1631,9 +1664,9 @@ def substitute_posblock_macro(body: str, meta: Dict) -> str:
     lines.append("")
 
     if server_city_state:
-        sigblock = "\\declsignblock{" + server_name.upper() + "}{" + server_city_state + "}"
+        sigblock = "\\signblock{decl}{" + server_name.upper() + "}{" + server_city_state + "}"
     else:
-        sigblock = "\\declsignblock{" + server_name.upper() + "}{}"
+        sigblock = "\\signblock{decl}{" + server_name.upper() + "}{}"
     lines.append(sigblock)
 
     return body.replace("\\posblock", "\n".join(lines))
@@ -1837,16 +1870,40 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         if not line.strip():
             flush_para()
             continue
-        m_sign = re.match(r"^\\signblock\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
+        m_sign = re.match(r"^\\signblock((?:\{[^{}]*\})+)\s*$", line)
         if m_sign:
             flush_para()
-            role_override = (m_sign.group(2) or "").strip()
-            blocks.append(Block("signblock", m_sign.group(1).strip(),
-                                spans=[TextSpan(role_override)]))
+            args = re.findall(r"\{([^{}]*)\}", m_sign.group(1))
+            args = [a.strip() for a in args]
+            style = args[0] if args and args[0] in SIGNBLOCK_STYLES else None
+            if style == "dated":
+                blocks.append(Block("signblock", args[1] if len(args) > 1 else "",
+                                    spans=[TextSpan(args[2] if len(args) > 2 else "")]))
+            elif style == "decl":
+                blocks.append(Block("declsignblock", args[1] if len(args) > 1 else "",
+                                    spans=[TextSpan(args[2] if len(args) > 2 else ""),
+                                           TextSpan(args[3] if len(args) > 3 else "")]))
+            elif style == "judge":
+                blocks.append(Block("judgesignblock", args[1] if len(args) > 1 else ""))
+            elif style == "letter":
+                blocks.append(Block("lettersignblock", args[1] if len(args) > 1 else ""))
+            elif style == "whereof":
+                blocks.append(Block("whereofsignblock", args[1] if len(args) > 1 else "",
+                                    spans=[TextSpan(args[2] if len(args) > 2 else ""),
+                                           TextSpan(args[3] if len(args) > 3 else "")]))
+            else:
+                # Legacy bare form \signblock{NAME}{ROLE?} -> dated.
+                print(f"WARNING: \\signblock{{{args[0] if args else ''}}} uses the "
+                      f"legacy form; write \\signblock{{dated}}{{NAME}}{{ROLE}} "
+                      f"(styles: {', '.join(SIGNBLOCK_STYLES)})", file=sys.stderr)
+                blocks.append(Block("signblock", args[0] if args else "",
+                                    spans=[TextSpan(args[1] if len(args) > 1 else "")]))
             continue
         m_decl = re.match(r"^\\declsignblock\{(.+?)\}\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
         if m_decl:
             flush_para()
+            print("WARNING: \\declsignblock is deprecated; write "
+                  "\\signblock{decl}{NAME}{LOCATION}{ROLE}", file=sys.stderr)
             role_override = (m_decl.group(3) or "").strip()
             blocks.append(Block("declsignblock", m_decl.group(1).strip(), level=0,
                                 spans=[TextSpan(m_decl.group(2).strip()),
@@ -1855,11 +1912,15 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         m_judge = re.match(r"^\\judgesignblock\{(.+)\}\s*$", line)
         if m_judge:
             flush_para()
+            print("WARNING: \\judgesignblock is deprecated; write "
+                  "\\signblock{judge}{TITLE}", file=sys.stderr)
             blocks.append(Block("judgesignblock", m_judge.group(1).strip()))
             continue
         m_letter_sign = re.match(r"^\\lettersignblock\{(.+)\}\s*$", line)
         if m_letter_sign:
             flush_para()
+            print("WARNING: \\lettersignblock is deprecated; write "
+                  "\\signblock{letter}{Name\\\\Firm\\\\Role}", file=sys.stderr)
             blocks.append(Block("lettersignblock", m_letter_sign.group(1).strip()))
             continue
         m_bar = re.match(r"^\\barcode\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
@@ -2433,6 +2494,9 @@ class PleadingPDF:
         self._footnote_lines_cache: Dict[int, List[List[StyledWord]]] = {}
         self._page_fn_nums: List[int] = []
         self._fn_area_lines: int = 0
+        # DocuSeal signer roles, assigned in document order across
+        # signature blocks and witness grids (ADR-0027).
+        self._esign_role = 0
 
     def line_y(self, line_no: int) -> float:
         return TOP_FIRST_LINE - (line_no - 1) * self.leading
@@ -2861,6 +2925,52 @@ class PleadingPDF:
         else:
             self.draw_text_line(line_no, "____________________________________")
 
+    def _next_esign_role(self) -> int:
+        self._esign_role += 1
+        return self._esign_role
+
+    def _esign_tag(self, x: float, y: float, text: str) -> None:
+        """A DocuSeal text tag, white and small: invisible on paper,
+        present in the text layer, removed from the executed document
+        by DocuSeal's default remove_tags."""
+        self.c.setFillColor(white)
+        self.c.setFont(NOTARIAL_FONT, ESIGN_TAG_FONT_SIZE)
+        self.c.drawString(x, y, text)
+        self.c.setFillColor(black)
+
+    # Tags sit in the whitespace just BELOW their blank or rule: the
+    # field anchors where DocuSeal needs it, and a text extraction of
+    # the page keeps every printed line intact (the tag comes out as
+    # its own line instead of interleaving).
+    ESIGN_TAG_DROP = 9  # pt below the target baseline
+
+    def _tag_blanks(self, line_no: int, text: str, specs: List[Optional[str]],
+                    font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
+        """Place tags under the ``___`` blank runs of a drawn line, in
+        order; a None spec skips that blank. A 6 pt tag is wider than
+        the gap between adjacent blanks, so tags that would overlap
+        stagger one level deeper -- overprinted tags interleave in the
+        text layer and DocuSeal would read garbage."""
+        base_y = self.line_y(line_no) - self.ESIGN_TAG_DROP
+        level_end_x: List[float] = []
+        for m, tag in zip(re.finditer(r"_{3,}", text), specs):
+            if tag is None:
+                continue
+            x = self.left_margin + pdfmetrics.stringWidth(text[:m.start()], font, size) + 2
+            width = pdfmetrics.stringWidth(tag, NOTARIAL_FONT, ESIGN_TAG_FONT_SIZE)
+            level = next((i for i, end in enumerate(level_end_x) if x >= end + 4),
+                         len(level_end_x))
+            if level == len(level_end_x):
+                level_end_x.append(0.0)
+            level_end_x[level] = x + width
+            self._esign_tag(x, base_y - level * (ESIGN_TAG_FONT_SIZE + 1), tag)
+
+    def _tag_signature(self, line_no: int, role: int) -> None:
+        self._esign_tag(self.left_margin + 4,
+                        self.line_y(line_no) - self.ESIGN_TAG_DROP,
+                        f"{{{{Signature {role};role={ESIGN_ROLE_PREFIX} {role};"
+                        f"type=signature}}}}")
+
     def _emit_signblock(self, block: Block, current_line: int) -> int:
         """Render a \\signblock or \\declsignblock.
 
@@ -2905,8 +3015,19 @@ class PleadingPDF:
             current_line = 1
 
         self.draw_text_line(current_line, date_text)
+        if not self.sign_name:
+            n = self._next_esign_role()
+            if is_decl:
+                self._tag_blanks(current_line, date_text, [
+                    f"{{{{Day {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
+                    f"{{{{Month {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}"])
+            else:
+                self._tag_blanks(current_line, date_text, [
+                    f"{{{{Date {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}"])
         current_line += 2  # skip blank line
         self._draw_signature_line(current_line)
+        if not self.sign_name:
+            self._tag_signature(current_line, n)
         current_line += 2  # skip blank line
         self.draw_text_line(current_line, name_line)
         current_line += 1
@@ -2914,6 +3035,51 @@ class PleadingPDF:
             self.draw_text_line(current_line, role)
             current_line += 1
         current_line += 1  # trailing blank line after signature block
+
+        return current_line
+
+    def _emit_whereofsignblock(self, block: Block, current_line: int) -> int:
+        """The testamentary execution clause and its signature area as
+        ONE block, so the date is recited exactly once (the old
+        prose + \\signblock pairing printed a second Dated line).
+        Day, month, year, and location stay blank for the ceremony."""
+        name = block.text
+        role = block.spans[0].text if block.spans else ""
+        instrument = (block.spans[1].text
+                      if len(block.spans) > 1 and block.spans[1].text
+                      else "instrument")
+        clause = WHEREOF_CLAUSE.format(name=name, instrument=instrument)
+        clause_lines = wrap_text(clause, self.text_width, FONT_NAME, FONT_SIZE)
+
+        lines_needed = len(clause_lines) + WHEREOF_TAIL_GRID_LINES + (1 if role else 0)
+        if current_line != 1 and current_line + lines_needed - 1 > self.lines_per_page:
+            self.start_page()
+            current_line = 1
+
+        n = self._next_esign_role()
+        blank_tags = [
+            f"{{{{Day {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
+            f"{{{{Month {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
+            f"{{{{Year {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
+            f"{{{{Location {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
+        ]
+        for text in clause_lines:
+            self.draw_text_line(current_line, text)
+            n_blanks = len(re.findall(r"_{3,}", text))
+            if n_blanks:
+                self._tag_blanks(current_line, text, blank_tags[:n_blanks])
+                blank_tags = blank_tags[n_blanks:]
+            current_line += 1
+        current_line += 1  # blank line before the rule
+        self._draw_signature_line(current_line)
+        self._tag_signature(current_line, n)
+        current_line += 2
+        self.draw_text_line(current_line, name)
+        current_line += 1
+        if role:
+            self.draw_text_line(current_line, role)
+            current_line += 1
+        current_line += 1  # trailing blank
 
         return current_line
 
@@ -3130,26 +3296,36 @@ class PleadingPDF:
             if current_line + lines_needed - 1 > self.lines_per_page:
                 self.start_page()
                 current_line = 1
+            n = self._next_esign_role()
             rule_y = self.line_y(current_line)
             self.c.setLineWidth(0.5)
             self.c.setStrokeColor(black)
             self.c.line(self.left_margin, rule_y, self.left_margin + 220, rule_y)
+            self._tag_signature(current_line, n)
             self.draw_text_line(current_line, "Date: _______________", indent=260)
+            self._esign_tag(
+                self.left_margin + 260
+                + pdfmetrics.stringWidth("Date: ", FONT_NAME, FONT_SIZE) + 2,
+                rule_y - self.ESIGN_TAG_DROP,
+                f"{{{{Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date}}}}")
             current_line += 1
             self.draw_text_line(current_line, f"Signature of {name}",
                                 font=FONT_NAME, size=FONT_SIZE_SMALL)
             current_line += 2
             rule_y = self.line_y(current_line)
             self.c.line(self.left_margin, rule_y, self.left_margin + 220, rule_y)
+            self._esign_tag(
+                self.left_margin + 4, rule_y - self.ESIGN_TAG_DROP,
+                f"{{{{Residence {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}")
             current_line += 1
             self.draw_text_line(current_line, "Residing at (city and state)",
                                 font=FONT_NAME, size=FONT_SIZE_SMALL)
             current_line += 2
         return current_line
 
-    _SIG_KINDS = {"signblock", "declsignblock", "judgesignblock", "lettersignblock",
-                  "barcode", "barcodefile", "acknowledgment", "jurat", "proofexec",
-                  "witnessattest"}
+    _SIG_KINDS = {"signblock", "declsignblock", "whereofsignblock", "judgesignblock",
+                  "lettersignblock", "barcode", "barcodefile", "acknowledgment",
+                  "jurat", "proofexec", "witnessattest"}
 
     def _is_lead_block(self, block: Block) -> bool:
         """A heading or short paragraph/list item that must not be stranded
@@ -3174,6 +3350,8 @@ class PleadingPDF:
             return WITNESS_GRID_LINES_EACH * max(len(names), 1)
         if block.kind in ("barcode", "barcodefile"):
             return self._barcode_lines_needed(block)
+        if block.kind == "whereofsignblock":
+            return 2 + WHEREOF_TAIL_GRID_LINES + 1  # ~2 clause lines + tail
         if block.kind == "judgesignblock":
             return JUDGESIGNBLOCK_GRID_LINES
         if block.kind == "lettersignblock":
@@ -3240,6 +3418,9 @@ class PleadingPDF:
                 current_line = 1
             if block.kind in ("signblock", "declsignblock"):
                 current_line = self._emit_signblock(block, current_line)
+                continue
+            if block.kind == "whereofsignblock":
+                current_line = self._emit_whereofsignblock(block, current_line)
                 continue
             if block.kind == "judgesignblock":
                 current_line = self._emit_judgesignblock(block, current_line)

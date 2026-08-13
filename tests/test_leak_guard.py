@@ -73,7 +73,9 @@ def _git(*argv: str) -> bytes:
 
 def _tracked_files() -> list[Path]:
     names = _git("ls-files", "-z").split(b"\0")
-    return [REPO_ROOT / name.decode() for name in names if name]
+    # A submodule appears in ls-files as a gitlink whose path is a
+    # directory; its contents are another repository's problem.
+    return [p for name in names if name if (p := REPO_ROOT / name.decode()).is_file()]
 
 
 def test_tracked_files_contain_no_prior_matter_content() -> None:

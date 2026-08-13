@@ -68,7 +68,7 @@ primary physician.
 
 I sign this directive on ____________ at Springfield, California.
 
-\signblock{JANE ROE}{Principal}
+\signblock{dated}{JANE ROE}{Principal}
 
 ## Witnesses
 

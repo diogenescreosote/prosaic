@@ -439,8 +439,14 @@ def test_body_baselines_align_to_grid_on_later_pages(decl_pdf):
             (x, y, t) for x, y, t in body
             if min(abs(y - ly) for ly in line_ys) > 0.5
         ]
-        # Sanctioned exceptions: raised superscript digits (footnote refs).
-        bad = [it for it in off_grid if not (it[2].isdigit() and len(it[2]) <= 2)]
+        # Sanctioned exceptions: raised superscript digits (footnote
+        # refs), and DocuSeal field tags -- white, invisible metadata
+        # deliberately placed in the inter-line gap (ADR-0027).
+        bad = [
+            it for it in off_grid
+            if not (it[2].isdigit() and len(it[2]) <= 2)
+            and not it[2].startswith("{{")
+        ]
         assert not bad, f"page {page_no}: text off the 28-line grid: {bad[:5]}"
 
 

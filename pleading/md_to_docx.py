@@ -546,15 +546,25 @@ def _emit_notarial(doc: Document, block) -> None:
     add_blank(doc)
 
 
-def _emit_witnessattest(doc: Document, names_raw: str) -> None:
+def _emit_witnessattest(doc: Document, names_raw: str,
+                        esign_role_counter: list | None = None) -> None:
     for name in [n.strip() for n in names_raw.split("\\\\") if n.strip()]:
         add_blank(doc)
         p1 = doc.add_paragraph()
         p1.add_run("____________________________      Date: ______________")
+        if esign_role_counter is not None:
+            esign_role_counter[0] += 1
+            n = esign_role_counter[0]
+            _esign_tag_para(doc, "{{Signature %d;role=Signer %d;type=signature}} "
+                                 "{{Date %d;role=Signer %d;type=date}}"
+                            % ((n,) * 4))
         cap = doc.add_paragraph()
         cap.add_run(f"Signature of {name}").font.size = Pt(9)
         p2 = doc.add_paragraph()
         p2.add_run("____________________________")
+        if esign_role_counter is not None:
+            _esign_tag_para(doc, "{{Residence %d;role=Signer %d;type=text}}"
+                            % (esign_role_counter[0], esign_role_counter[0]))
         cap2 = doc.add_paragraph()
         cap2.add_run("Residing at (city and state)").font.size = Pt(9)
 
@@ -582,6 +592,39 @@ def _emit_fixedwidth(doc: Document, text: str) -> None:
         run.font.name = "Courier New"
         run.font.size = Pt(9)
     add_blank(doc)
+
+
+def _esign_tag_para(doc: Document, tag: str) -> None:
+    """A DocuSeal text tag in white 6 pt: invisible in print, present
+    in the document text for field placement, stripped from the
+    executed document by remove_tags. The PDF is the primary e-sign
+    artifact; DOCX tags land adjacent to (not atop) their blanks."""
+    para = doc.add_paragraph()
+    run = para.add_run(tag)
+    run.font.size = Pt(6)
+    run.font.color.rgb = RGBColor(0xFF, 0xFF, 0xFF)
+
+
+def _emit_whereofsignblock(doc: Document, name: str, role: str,
+                           instrument: str, esign_role: int) -> None:
+    start = len(doc.paragraphs)
+    add_blank(doc)
+    _add_styled_para(doc, mp.WHEREOF_CLAUSE.format(
+        name=name, instrument=instrument or "instrument"))
+    _esign_tag_para(doc, "{{Day %d;role=Signer %d;type=text}} "
+                         "{{Month %d;role=Signer %d;type=text}} "
+                         "{{Year %d;role=Signer %d;type=text}} "
+                         "{{Location %d;role=Signer %d;type=text}}"
+                    % ((esign_role,) * 8))
+    add_blank(doc)
+    _add_styled_para(doc, "____________________________________")
+    _esign_tag_para(doc, "{{Signature %d;role=Signer %d;type=signature}}"
+                    % (esign_role, esign_role))
+    add_blank(doc)
+    _add_styled_para(doc, name)
+    if role:
+        _add_styled_para(doc, role)
+    _keep_block_together(doc, start)
 
 
 def _emit_signblock(doc: Document, name: str, role: str) -> None:
@@ -621,7 +664,7 @@ def _emit_declsignblock(doc: Document, name: str, location: str,
 # Signblock argument parser
 # ---------------------------------------------------------------------------
 
-_SIGNBLOCK_RE = re.compile(r"^\\signblock\{(.+?)\}(?:\{(.*?)\})?\s*$")
+_SIGNBLOCK_RE = re.compile(r"^\\signblock((?:\{[^{}]*\})+)\s*$")
 _DECLSIGNBLOCK_RE = re.compile(
     r"^\\declsignblock\{(.+?)\}\{(.+?)\}(?:\{(.*?)\})?\s*$"
 )
@@ -883,6 +926,7 @@ def build_body(doc: Document, body: str, meta: dict,
     body = typographic_subs(body)
 
     num_id = None  # lazy-initialized the first time a heading is seen
+    esign_role_counter = [0]  # DocuSeal signer roles, document order
 
     paragraphs = body.split("\n\n")
     for para_text in paragraphs:
@@ -905,6 +949,10 @@ def build_body(doc: Document, body: str, meta: dict,
             ).title()
             _attach_lead(doc)
             _emit_declsignblock(doc, name, location, role)
+            esign_role_counter[0] += 1
+            _esign_tag_para(doc, "{{Date %d;role=Signer %d;type=text}} "
+                                 "{{Signature %d;role=Signer %d;type=signature}}"
+                            % ((esign_role_counter[0],) * 4))
             continue
 
         m = _ACK_RE.match(text)
@@ -926,7 +974,7 @@ def build_body(doc: Document, body: str, meta: dict,
         m = _WATT_RE.match(text)
         if m:
             _attach_lead(doc)
-            _emit_witnessattest(doc, m.group(1).strip())
+            _emit_witnessattest(doc, m.group(1).strip(), esign_role_counter)
             continue
         m = re.match(r"^@@FIXEDWIDTH(\d+)@@$", text)
         if m:
@@ -951,13 +999,56 @@ def build_body(doc: Document, body: str, meta: dict,
 
         m = _SIGNBLOCK_RE.match(text)
         if m:
-            name = m.group(1).strip()
-            role_override = (m.group(2) or "").strip()
-            role = role_override.title() if role_override else str(
-                meta.get("filer_role", "")
-            ).title()
+            args = [a.strip() for a in re.findall(r"\{([^{}]*)\}", m.group(1))]
+            style = args[0] if args and args[0] in mp.SIGNBLOCK_STYLES else None
             _attach_lead(doc)
-            _emit_signblock(doc, name, role)
+            if style == "dated":
+                role = (args[2].title() if len(args) > 2 and args[2]
+                        else str(meta.get("filer_role", "")).title())
+                _emit_signblock(doc, args[1] if len(args) > 1 else "", role)
+                esign_role_counter[0] += 1
+                _esign_tag_para(doc, "{{Date %d;role=Signer %d;type=text}} "
+                                     "{{Signature %d;role=Signer %d;type=signature}}"
+                                % ((esign_role_counter[0],) * 4))
+            elif style == "decl":
+                role = (args[3] if len(args) > 3 and args[3]
+                        else str(meta.get("filer_role", "")).title())
+                _emit_declsignblock(doc, args[1] if len(args) > 1 else "",
+                                    args[2] if len(args) > 2 else "", role)
+                esign_role_counter[0] += 1
+                _esign_tag_para(doc, "{{Date %d;role=Signer %d;type=text}} "
+                                     "{{Signature %d;role=Signer %d;type=signature}}"
+                                % ((esign_role_counter[0],) * 4))
+            elif style == "judge":
+                title = args[1] if len(args) > 1 else ""
+                start = len(doc.paragraphs)
+                add_blank(doc)
+                _add_styled_para(doc, "Dated: _________________")
+                add_blank(doc)
+                _add_styled_para(doc, "____________________________________")
+                add_blank(doc)
+                _add_styled_para(doc, title)
+                _keep_block_together(doc, start)
+            elif style == "letter":
+                add_blank(doc)
+                _add_styled_para(doc, "Sincerely,")
+                add_blank(doc)
+                add_blank(doc)
+                for line in (args[1] if len(args) > 1 else "").split("\\\\"):
+                    _add_styled_para(doc, line.strip())
+            elif style == "whereof":
+                esign_role_counter[0] += 1
+                _emit_whereofsignblock(
+                    doc, args[1] if len(args) > 1 else "",
+                    args[2] if len(args) > 2 else "",
+                    args[3] if len(args) > 3 else "",
+                    esign_role_counter[0])
+            else:
+                print("WARNING: \\signblock legacy form; write "
+                      "\\signblock{dated}{NAME}{ROLE}", file=sys.stderr)
+                role = (args[1].title() if len(args) > 1 and args[1]
+                        else str(meta.get("filer_role", "")).title())
+                _emit_signblock(doc, args[0] if args else "", role)
             continue
 
         m = _JUDGESIGNBLOCK_RE.match(text)

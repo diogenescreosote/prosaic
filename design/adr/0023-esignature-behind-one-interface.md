@@ -1,6 +1,6 @@
 # 0023 — E-signature through DocuSeal, cloud or self-hosted behind one interface
 
-**Status:** accepted (2026-08)
+**Status:** accepted (2026-08); transport moved to the official SDK by ADR-0027
 
 ## Context
 Some matter documents need real-world signatures from people who will
@@ -12,7 +12,7 @@ it the rare case where "local-first" and "just works today" are the
 same integration.
 
 ## Decision
-`esign/docuseal.py` (surfaced as `sc esign`) speaks the DocuSeal API
+`esign/client.py` (surfaced as `sc esign`) speaks the DocuSeal API
 with three subcommands: `send` (create a template from a PDF, create
 a submission, email the signers, write a receipt beside the
 document), `status`, and `fetch` (signed PDFs plus the audit log,

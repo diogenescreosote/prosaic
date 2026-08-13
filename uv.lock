@@ -285,6 +285,15 @@ wheels = [
 ]
 
 [[package]]
+name = "docuseal"
+version = "1.0.9"
+source = { registry = "https://pypi.org/simple" }
+sdist = { url = "https://files.pythonhosted.org/packages/9f/98/a97c85ea17abf3efc407f62c6dc26ca88073e973cb15ddcbf104010c9dbd/docuseal-1.0.9.tar.gz", hash = "sha256:6489abc352d12cfd3f95521cfbc884c4b01619d7e71d3060ed262a7be848c943", size = 9479, upload-time = "2026-07-17T14:16:30.685Z" }
+wheels = [
+    { url = "https://files.pythonhosted.org/packages/cd/2a/33d635fb5e70f5b837046abefd173087cdbf60c2f831813a48544ce7ee68/docuseal-1.0.9-py3-none-any.whl", hash = "sha256:99ab08e31e29b597873fbb675082877e71bc2c0dcf0610a4b559dc276297cf19", size = 7421, upload-time = "2026-07-17T14:16:29.604Z" },
+]
+
+[[package]]
 name = "gitdb"
 version = "4.0.12"
 source = { registry = "https://pypi.org/simple" }
@@ -683,6 +692,7 @@ name = "prosaic"
 version = "0.1.0"
 source = { virtual = "." }
 dependencies = [
+    { name = "docuseal" },
     { name = "opentimestamps-client" },
     { name = "pillow" },
     { name = "pymupdf" },
@@ -704,6 +714,7 @@ dev = [
 
 [package.metadata]
 requires-dist = [
+    { name = "docuseal", specifier = ">=1.0.9" },
     { name = "opentimestamps-client", specifier = ">=0.7.2" },
     { name = "pillow", specifier = ">=12.3.0" },
     { name = "pymupdf", specifier = ">=1.28.2" },

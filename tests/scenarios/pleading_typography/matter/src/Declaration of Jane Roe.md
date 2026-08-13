@@ -136,7 +136,7 @@ justification and forced this motion.
 I declare under penalty of perjury under the laws of the State of
 California that the foregoing is true and correct.
 
-\declsignblock{JANE ROE}{Springfield, California}{Declarant, In Pro Se}
+\signblock{decl}{JANE ROE}{Springfield, California}{Declarant, In Pro Se}
 
 [^grid]: The exchange log is maintained in a shared spreadsheet and
     each entry is timestamped when saved (TKFN1).

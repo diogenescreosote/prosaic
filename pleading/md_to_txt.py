@@ -236,6 +236,19 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
         if block.kind in ("signblock", "declsignblock"):
             items.append((_signature_block_text(block, meta), False))
             continue
+        if block.kind == "whereofsignblock":
+            role = block.spans[0].text if block.spans else ""
+            instrument = (block.spans[1].text
+                          if len(block.spans) > 1 and block.spans[1].text
+                          else "instrument")
+            clause = mp.WHEREOF_CLAUSE.format(name=block.text,
+                                              instrument=instrument)
+            lines = [clause, "", "____________________________________", "",
+                     block.text]
+            if role:
+                lines.append(role)
+            items.append(("\n".join(lines), False))
+            continue
         if block.kind in ("acknowledgment", "jurat", "proofexec"):
             title = mp.NOTARIAL_TITLES[block.kind]
             parts_n = [f"[{title}]", mp.NOTARIAL_DISCLOSURE, "",

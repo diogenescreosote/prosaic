@@ -47,6 +47,7 @@ project accretes decisions instead of middleware.
 - [0024](adr/0024-files-first-flows.md) Judgment work as files-first flows; build work stays in Make
 - [0025](adr/0025-estate-pack.md) An estate pack: plain-document instruments on the attestation protocol
 - [0026](adr/0026-barcodes-and-verbatim-blocks.md) Barcodes at physical module size; verbatim fixed-width blocks
+- [0027](adr/0027-styled-signblocks-esign-fields.md) Styled signature blocks; instruments carry their e-sign fields
 
 Also:
 

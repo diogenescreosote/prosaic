@@ -31,18 +31,26 @@ import argparse
 import base64
 import json
 import os
+import shutil
 import subprocess
 import sys
 import urllib.error
 import urllib.request
 from pathlib import Path
 
+from docuseal import docuseal as ds
+
 DEFAULT_URL = "https://api.docuseal.com"
 CREDENTIAL_REF = "prosaic.docuseal"
 
 
 def api_base() -> str:
-    return os.environ.get("DOCUSEAL_URL", DEFAULT_URL).rstrip("/")
+    # DOCUSEAL_URL is prosaic's original spelling; DOCUSEAL_SERVER is
+    # the official CLI/skill's. Either works, so one configuration
+    # serves sc esign, the docuseal CLI, and the vendored skill.
+    return (
+        os.environ.get("DOCUSEAL_URL") or os.environ.get("DOCUSEAL_SERVER") or DEFAULT_URL
+    ).rstrip("/")
 
 
 def api_key() -> str:
@@ -64,26 +72,21 @@ def api_key() -> str:
     )
 
 
-def request(method: str, path: str, payload: dict | None = None) -> dict | list:
-    url = f"{api_base()}{path}"
-    data = json.dumps(payload).encode() if payload is not None else None
-    req = urllib.request.Request(
-        url,
-        data=data,
-        method=method,
-        headers={
-            "X-Auth-Token": api_key(),
-            "Content-Type": "application/json",
-        },
-    )
+def configure_sdk() -> None:
+    """Point the official SDK (pypi.org/project/docuseal) at the
+    configured deployment. The SDK owns the HTTP contract; prosaic
+    owns the workflow around it."""
+    ds.url = api_base()
+    ds.key = api_key()
+    ds.open_timeout = 60
+    ds.read_timeout = 120
+
+
+def sdk_call(fn, *args):
     try:
-        with urllib.request.urlopen(req, timeout=60) as resp:
-            return json.loads(resp.read().decode())
-    except urllib.error.HTTPError as e:
-        body = e.read().decode()[:400]
-        raise SystemExit(f"DocuSeal API {method} {path}: HTTP {e.code}: {body}") from None
-    except urllib.error.URLError as e:
-        raise SystemExit(f"DocuSeal unreachable at {api_base()}: {e.reason}") from None
+        return fn(*args)
+    except Exception as e:  # the SDK raises per-status exception types
+        raise SystemExit(f"DocuSeal API ({api_base()}): {e}") from None
 
 
 def download(url: str, dest: Path) -> None:
@@ -105,41 +108,26 @@ def cmd_send(args: argparse.Namespace) -> int:
     pdf = Path(args.pdf)
     if not pdf.exists():
         raise SystemExit(f"no such file: {pdf}")
-
-    encoded = base64.b64encode(pdf.read_bytes()).decode()
-    template = request(
-        "POST",
-        "/templates/pdf",
-        {
-            "name": args.name or pdf.stem,
-            "documents": [{"name": pdf.name, "file": encoded}],
-        },
-    )
-    fields = template.get("fields") or []
-    if not fields:
-        print(
-            "WARNING: no {{...}} text tags detected in the document; "
-            "signers will have to place their own signature",
-            file=sys.stderr,
-        )
+    configure_sdk()
 
     submitters = [parse_signer(s) for s in args.to]
     for i, sub in enumerate(submitters):
         sub["role"] = f"Signer {i + 1}" if len(submitters) > 1 else "Signer"
-    submission = request(
-        "POST",
-        "/submissions",
-        {
-            "template_id": template["id"],
-            "send_email": not args.no_email,
-            "submitters": submitters,
-            **(
-                {"message": {"subject": args.subject, "body": args.message}}
-                if args.subject or args.message
-                else {}
-            ),
-        },
-    )
+
+    payload = {
+        "name": args.name or pdf.stem,
+        "documents": [
+            {
+                "name": pdf.name,
+                "file": base64.b64encode(pdf.read_bytes()).decode(),
+            }
+        ],
+        "submitters": submitters,
+        "send_email": not args.no_email,
+    }
+    if args.subject or args.message:
+        payload["message"] = {"subject": args.subject, "body": args.message}
+    submission = sdk_call(ds.create_submission_from_pdf, payload)
 
     # The API returns the submitter list; normalize either shape.
     entries = (
@@ -147,15 +135,25 @@ def cmd_send(args: argparse.Namespace) -> int:
     )
     submission_id = entries[0].get("submission_id") or submission.get("id")
 
+    if shutil.which("pdftotext"):
+        text = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
+        if "{{" not in text:
+            print(
+                "WARNING: no {{...}} field tags detected in the document; "
+                "signers will have to place their own fields "
+                "(prosaic signature blocks embed tags automatically)",
+                file=sys.stderr,
+            )
+
     receipt = {
         "submission_id": submission_id,
-        "template_id": template["id"],
         "document": pdf.name,
         "api": api_base(),
         "submitters": [
             {
                 "email": e.get("email"),
                 "slug": e.get("slug"),
+                "role": e.get("role"),
                 "status": e.get("status"),
                 "sign_url": (
                     f"{api_base().replace('/api', '')}/s/{e['slug']}" if e.get("slug") else None
@@ -168,12 +166,13 @@ def cmd_send(args: argparse.Namespace) -> int:
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
     print(f"submission {submission_id} created; receipt: {receipt_path}")
     for e in receipt["submitters"]:
-        print(f"  {e['email']}: {e.get('sign_url') or '(emailed)'}")
+        print(f"  {e['email']} ({e.get('role')}): {e.get('sign_url') or '(emailed)'}")
     return 0
 
 
 def cmd_status(args: argparse.Namespace) -> int:
-    sub = request("GET", f"/submissions/{args.submission_id}")
+    configure_sdk()
+    sub = sdk_call(ds.get_submission, args.submission_id)
     print(f"submission {args.submission_id}: {sub.get('status', 'unknown')}")
     for s in sub.get("submitters", []):
         stamp = s.get("completed_at") or s.get("opened_at") or s.get("sent_at") or ""
@@ -182,7 +181,8 @@ def cmd_status(args: argparse.Namespace) -> int:
 
 
 def cmd_fetch(args: argparse.Namespace) -> int:
-    sub = request("GET", f"/submissions/{args.submission_id}")
+    configure_sdk()
+    sub = sdk_call(ds.get_submission, args.submission_id)
     if sub.get("status") != "completed":
         print(
             f"submission is {sub.get('status', 'unknown')}, not completed; nothing fetched",
@@ -191,8 +191,12 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         return 2
     out = Path(args.out or ".")
     out.mkdir(parents=True, exist_ok=True)
+    docs = sdk_call(ds.get_submission_documents, args.submission_id)
+    doc_list = docs.get("documents") if isinstance(docs, dict) else docs
+    if not doc_list:
+        doc_list = sub.get("documents", [])
     got = 0
-    for doc in sub.get("documents", []):
+    for doc in doc_list:
         dest = out / doc["name"]
         download(doc["url"], dest)
         print(f"fetched: {dest}")

@@ -23,14 +23,20 @@ from typing import Any, ClassVar
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DOCUSEAL = REPO_ROOT / "esign" / "docuseal.py"
+DOCUSEAL = REPO_ROOT / "esign" / "client.py"
 
 PDF_BYTES = b"%PDF-1.4 fake test document"
 
 
 class MockDocuSeal(BaseHTTPRequestHandler):
-    """A minimal DocuSeal API double. Records every request."""
+    """A minimal DocuSeal API double. Records every request.
 
+    HTTP/1.1 with Content-Length on purpose: the official SDK touches
+    conn.sock after reading the response, which a closing HTTP/1.0
+    server sets to None — the mock must keep the real API's manners.
+    """
+
+    protocol_version = "HTTP/1.1"
     requests: ClassVar[list[dict[str, Any]]] = []
     submission_status = "completed"
 
@@ -38,14 +44,21 @@ class MockDocuSeal(BaseHTTPRequestHandler):
         body = json.dumps(obj).encode()
         self.send_response(code)
         self.send_header("Content-Type", "application/json")
+        self.send_header("Content-Length", str(len(body)))
         self.end_headers()
         self.wfile.write(body)
+
+    @property
+    def route(self) -> str:
+        # The SDK appends "?<query>" to every request path, empty
+        # query included; compare on the bare route.
+        return self.path.split("?", 1)[0]
 
     def _record(self, payload: object = None) -> None:
         type(self).requests.append(
             {
                 "method": self.command,
-                "path": self.path,
+                "path": self.route,
                 "auth": self.headers.get("X-Auth-Token"),
                 "payload": payload,
             }
@@ -55,17 +68,17 @@ class MockDocuSeal(BaseHTTPRequestHandler):
         length = int(self.headers.get("Content-Length", 0))
         payload = json.loads(self.rfile.read(length) or "{}")
         self._record(payload)
-        if self.path == "/templates/pdf":
-            self._reply({"id": 77, "fields": [{"name": "Signature"}]})
-        elif self.path == "/submissions":
+        if self.route == "/submissions/pdf":
             self._reply(
                 [
                     {
                         "submission_id": 123,
-                        "email": "jane@example.com",
-                        "slug": "abc123",
+                        "email": s.get("email"),
+                        "role": s.get("role"),
+                        "slug": f"slug{i}",
                         "status": "sent",
-                    },
+                    }
+                    for i, s in enumerate(payload.get("submitters", []))
                 ]
             )
         else:
@@ -74,7 +87,9 @@ class MockDocuSeal(BaseHTTPRequestHandler):
     def do_GET(self) -> None:  # the http.server API's casing
         self._record()
         base = f"http://{self.headers['Host']}"
-        if self.path == "/submissions/123":
+        if self.route == "/submissions/123/documents":
+            self._reply({"documents": [{"name": "signed.pdf", "url": f"{base}/files/signed.pdf"}]})
+        elif self.route == "/submissions/123":
             self._reply(
                 {
                     "id": 123,
@@ -90,9 +105,10 @@ class MockDocuSeal(BaseHTTPRequestHandler):
                     "audit_log_url": f"{base}/files/audit.pdf",
                 }
             )
-        elif self.path.startswith("/files/"):
+        elif self.route.startswith("/files/"):
             self.send_response(200)
             self.send_header("Content-Type", "application/pdf")
+            self.send_header("Content-Length", str(len(PDF_BYTES)))
             self.end_headers()
             self.wfile.write(PDF_BYTES)
         else:
@@ -131,15 +147,13 @@ def test_send_posts_the_document_and_writes_a_receipt(mock_api: str, tmp_path: P
     )
     assert proc.returncode == 0, proc.stderr
 
-    template_req = next(r for r in MockDocuSeal.requests if r["path"] == "/templates/pdf")
-    assert template_req["auth"] == "test-key-123"
-    sent = base64.b64decode(template_req["payload"]["documents"][0]["file"])
+    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
+    assert req["auth"] == "test-key-123"
+    sent = base64.b64decode(req["payload"]["documents"][0]["file"])
     assert sent == PDF_BYTES, "the uploaded document must be byte-identical"
-
-    submission_req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions")
-    submitter = submission_req["payload"]["submitters"][0]
+    submitter = req["payload"]["submitters"][0]
     assert submitter == {"name": "Jane Roe", "email": "jane@example.com", "role": "Signer"}
-    assert submission_req["payload"]["send_email"] is True
+    assert req["payload"]["send_email"] is True
 
     receipt = json.loads((tmp_path / "will.pdf.esign.json").read_text())
     assert receipt["submission_id"] == 123
@@ -160,7 +174,7 @@ def test_signing_order_maps_to_numbered_roles(mock_api: str, tmp_path: Path) -> 
         cwd=tmp_path,
     )
     assert proc.returncode == 0, proc.stderr
-    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions")
+    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
     roles = [s["role"] for s in req["payload"]["submitters"]]
     assert roles == ["Signer 1", "Signer 2"]
 
