@@ -85,14 +85,18 @@ def test_the_instruments_state_a_rebuttable_presumption() -> None:
         assert "rebutted only by clear and convincing evidence" in text, name
 
 
-def test_the_will_excludes_electronic_testamentary_effect() -> None:
-    will = (PACK / "will.md").read_text()
-    assert "Nothing in this Article makes any electronic record a will" in will
-    trust = (PACK / "living-trust.md").read_text()
-    assert (
-        "Nothing in this Article gives testamentary\n   effect" in trust
-        or "gives testamentary" in trust
-    )
+def test_the_crypto_articles_disclaim_testamentary_reach_neutrally() -> None:
+    """The Article must neither create testamentary instruments nor be
+    quotable AGAINST any will's validity — the operative shape after
+    the 'Wills excluded' phrasing proved usable against an e-signed
+    will."""
+    will = " ".join((PACK / "will.md").read_text().split())
+    trust = " ".join((PACK / "living-trust.md").read_text().split())
+    for text, name in ((will, "will"), (trust, "trust")):
+        assert "creates an evidentiary presumption only" in text, name
+        assert "for or against" in text, name
+        assert "gives testamentary effect" not in text, name
+        assert "makes any electronic record a will" not in text, name
 
 
 def test_the_wills_witnesses_are_present_at_the_same_time() -> None:

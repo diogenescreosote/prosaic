@@ -80,12 +80,12 @@ presumption may be rebutted only by clear and convincing evidence of
 forgery, compromise of the key, or my lack of capacity or free will
 at signing.
 
-Nothing in this Article makes any electronic record a will or
-codicil, and this Will may be amended or revoked only as the
-California Probate Code provides. A signed and timestamped
-electronic record may nonetheless be offered as evidence of my
-intent to the full extent the law allows, including under Probate
-Code section 6110(c)(2).
+This Article creates an evidentiary presumption only; it does not
+itself amend or revoke this Will, and it is not to be read as
+bearing, for or against, on the validity of any will or codicil,
+however executed. A signed and timestamped record may be offered as
+evidence of my intent to the full extent the law allows, including
+under Probate Code section 6110(c)(2).
 
 # Article VIII. Miscellaneous
 

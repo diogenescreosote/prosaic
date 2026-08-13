@@ -70,11 +70,9 @@ lifetime and becomes irrevocable at my death.
 
 1. Assets transferred to the Trust by my will become part of the
    Trust Estate.
-2. My will, and the operative version of every document connected
-   with the Trust, may be identified through the Document Manifest
-   protocol of Article VIII. The identification is presumptive, not
-   dispositive: a will speaks through its own execution under the
-   Probate Code.
+2. The operative versions of documents connected with the Trust may
+   be identified through the Document Manifest protocol of
+   Article VIII.
 3. The Trust may receive retirement accounts and insurance proceeds
    designated to it.
 
@@ -133,8 +131,11 @@ The Anchored Key's fingerprint (SHA-1, as gpg prints it) is:
    presumption of this Article. A successor key receives it only if
    anchored by an instrument executed with the formalities of this
    Trust.
-6. **Wills excluded.** Nothing in this Article gives testamentary
-   effect to any electronic record.
+6. **Scope.** This Article creates an evidentiary presumption only.
+   It neither adds to nor subtracts from the requirements for making,
+   amending, or revoking a will, and it is not to be read as bearing,
+   for or against, on the validity of any will or codicil, however
+   executed; that question is answered by the Probate Code alone.
 
 # Article IX. Miscellaneous
 
