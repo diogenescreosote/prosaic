@@ -1,6 +1,7 @@
 # matter.yaml — prosaic matter configuration.
 
 case:
+  type: litigation                  # litigation (default) | estate
   name: "Smith v. Smith"            # caption shorthand
   number: ""                        # court case number, once assigned
   court: ""                         # e.g. Superior Court of California, County of X

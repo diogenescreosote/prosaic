@@ -45,6 +45,28 @@ you never remove a `notreal:` marker.
   hashes hard-coded across instruments — a hard-coded hash makes
   every revision a re-execution of paper.
 
+## Publishing to the share folder
+
+Estate matters (`case.type: estate` in matter.yaml) keep a `share/`
+directory — the outward face, shared with beneficiaries and
+fiduciaries (specs/matter.md, ADR-0028). Rules when publishing:
+
+1. `share/` receives COPIES of executed deliverables only; the
+   originals stay in `assets/executed/`. After every copy,
+   `sc attest hash` both and compare — a share folder that drifts
+   from the record is worse than none.
+2. Keep the tree human: instruments alone in `Executed Documents/`;
+   signatures, proofs, keys, and the verification how-to in
+   `Verification/`; never commingle sidecars with documents.
+3. `START HERE.md` is the reader's entry point — keep it current
+   when fiduciaries, documents, or instructions change, in the same
+   commit as the change it reflects.
+4. `Inbox/` contents are claims, not records: triage them into the
+   matter like any inbox, and never treat `share/` as a source.
+5. Drive permissions are the human's to set (the folder to the
+   named people; `Inbox/` writable by them; `Public/` broader) —
+   remind, don't attempt.
+
 ## Execution and after
 
 Walk the user through `templates/estate/EXECUTION.md`: the will is

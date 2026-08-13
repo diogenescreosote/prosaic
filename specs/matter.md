@@ -11,6 +11,14 @@ standard is navigability by someone with no memory of the case:
 every convention below exists because an agent's context dies
 between sessions and a lawyer's attention dies between hearings.
 
+## Matter types
+
+`matter.yaml` declares `case.type` — `litigation` (the default when
+absent) or `estate`. The layout above is common to both; an estate
+matter additionally keeps the **share convention** below. Tooling
+must treat an unknown type as `litigation` rather than failing: the
+type gates conventions, not machinery.
+
 ## Promises
 
 1. **The index never lies.** `assets/INDEX.md` describes every
@@ -79,3 +87,39 @@ between sessions and a lawyer's attention dies between hearings.
 - The layout is opinionated on purpose: tools and prompts hardcode
   these paths, so a matter that "improves" the layout silently
   drops out of automation.
+
+## Estate matters: the share folder
+
+An estate matter carries a `share/` directory — the live, outward
+face of the plan, shared (by Drive permissions, set by hand) with
+beneficiaries, successor fiduciaries, and counsel. Its contract:
+
+- **A destination, never a source.** `share/` holds COPIES of
+  executed deliverables; the originals live in `assets/executed/`
+  and the matter's history lives in git. Nothing in the matter may
+  treat `share/` as authoritative, and nothing regenerable lives
+  only there. After every copy in, verify the copies hash-identical
+  to the originals (`sc attest hash`).
+- **Human-first browsing.** The tree reads like a folder a
+  meticulous person maintains by hand: `START HERE.md` at the top
+  explains the legal architecture in plain language (what the
+  documents are, who is who, what to do on death or incapacity),
+  notes it was made with prosaic (with a link), and points the rare
+  technical reader at `Verification/`. Executed instruments sit
+  clean in `Executed Documents/` — no sidecars beside them.
+- **The cryptography is relegated, not hidden.** `Verification/`
+  holds the how-to-verify document, the anchored public key, and a
+  `signatures/` subfolder with the detached signatures and
+  timestamp proofs. Most readers never open it; the ones who need
+  it find everything.
+- **`Inbox/`** is writable by the people the folder is shared with:
+  where a death certificate, a funding document, or a question
+  lands. It is intake, processed like any inbox — its contents are
+  claims, not records, until triaged into the matter proper.
+- **`Public/`** holds what the world may see: recorded instruments
+  and those slated for recordation (deeds in and out of the trust,
+  memoranda of trust existence). Its Drive sharing is broader than
+  the rest of the tree, set deliberately and by hand.
+
+*(tested: tests/test_estate_pack.py pins the scaffold's presence in
+the estate pack)*

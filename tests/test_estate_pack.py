@@ -141,3 +141,21 @@ def test_guardianship_avoids_the_forbidden_phrase() -> None:
     leak guard with a confusing one."""
     will = (PACK / "will.md").read_text()
     assert "under eighteen" in will
+
+
+def test_the_share_scaffold_ships_complete() -> None:
+    """The share convention (ADR-0028): entry point present, crypto
+    relegated, inbox and public stubs explaining themselves."""
+    share = PACK / "share"
+    for rel in (
+        "START HERE.md",
+        "Executed Documents/README.md",
+        "Verification/HOW TO VERIFY.md",
+        "Verification/signatures/README.md",
+        "Inbox/README.md",
+        "Public/README.md",
+    ):
+        assert (share / rel).is_file(), f"share scaffold missing {rel}"
+    start = (share / "START HERE.md").read_text()
+    assert "prosaic" in start, "the credit-with-link belongs in START HERE"
+    assert "Inbox/" in start and "Public/" in start

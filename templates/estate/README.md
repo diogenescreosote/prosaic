@@ -23,6 +23,7 @@ later against a key anchored in their own executed paper
 | `KEY-PROTOCOL.md` | The verification story, written for the person checking a document later |
 | `EXECUTION.md` | Signing-ceremony checklists, and the crypto steps after |
 | `assets/anchor-key.asc` | EXAMPLE key — replace with your own before anything is real |
+| `share/` | The outward face: START HERE, clean executed copies, relegated verification material, Inbox, Public (ADR-0028) |
 
 ## Use
 
