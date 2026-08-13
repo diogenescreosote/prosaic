@@ -1,11 +1,11 @@
 ---
-name: esign
+name: docuseal
 description: Send a document for e-signature via DocuSeal, poll until signed, and bring the signed PDF and audit log back into the matter. Use when a document needs real-world signatures from people who will not install anything, or when a pending submission needs checking or collecting.
 ---
 
 # E-signature round trip
 
-DocuSeal handles delivery and capture (`specs/esign.md`, ADR-0023);
+DocuSeal handles delivery and capture (`specs/docuseal.md`, ADR-0023);
 you handle the matter's side of the record. The API key is already
 configured (`DOCUSEAL_API_KEY` or the Keychain) — you never see or
 handle it.
@@ -50,9 +50,9 @@ envelopes:
 ```
 
 ```
-<prosaic>/cli/sc esign send "out/note/Promissory Note.pdf" --envelope note
-<prosaic>/cli/sc esign status <submission_id>     # exit 0 = completed
-<prosaic>/cli/sc esign fetch <submission_id> --out inbox/
+<prosaic>/cli/sc docuseal send "out/note/Promissory Note.pdf" --envelope note
+<prosaic>/cli/sc docuseal status <submission_id>     # exit 0 = completed
+<prosaic>/cli/sc docuseal fetch <submission_id> --out inbox/
 ```
 
 `--to "Name <email>"` (repeatable) covers ad-hoc sends. Either way
@@ -61,17 +61,17 @@ field tags and refuses a mismatch. Judicial signature lines
 (\signblock{judge}) are wet-ink spaces: never tagged, never part of
 a roster, never e-signed.
 
-- `send` writes `<pdf>.esign.json` beside the document — commit it
+- `send` writes `<pdf>.docuseal.json` beside the document — commit it
   (`config` or `docket` per the matter's conventions) so the
   submission survives the session.
 - Signers sign in `--to` order (`Signer 1..N`).
 - `fetch` refuses incomplete submissions; nothing half-signed can
   land looking like an original.
 - **Fetching is automatic once the connector is on**: with
-  `connectors: {esign: {}}` in matter.yaml, every sync polls the
+  `connectors: {docuseal: {}}` in matter.yaml, every sync polls the
   matter's receipts and pulls completed submissions into
-  `inbox/esign/<id>/` for triage. Manual check anytime:
-  `<prosaic>/cli/sc esign poll .` or `sc sync .`.
+  `inbox/docuseal/<id>/` for triage. Manual check anytime:
+  `<prosaic>/cli/sc docuseal poll .` or `sc sync .`.
 
 ## After fetching
 
@@ -84,4 +84,4 @@ The signed PDF and audit log are received originals:
    reissue the matter's manifest, so the signed document's integrity
    stops depending on DocuSeal's continued existence.
 
-References: `specs/esign.md`, ADR-0023, ADR-0012 (credentials).
+References: `specs/docuseal.md`, ADR-0023, ADR-0012 (credentials).

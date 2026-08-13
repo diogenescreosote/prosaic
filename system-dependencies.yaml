@@ -152,7 +152,7 @@ dependencies:
 
   - binary: security
     why: reads credentials from the macOS Keychain under ADR-0012's keychain backend
-    used_by: [connectors/core/secrets.js, esign/client.py]
+    used_by: [connectors/core/secrets.js, docuseal-client/client.py, proof-client/client.py]
     required: false
     platforms: [darwin]
     apt: null

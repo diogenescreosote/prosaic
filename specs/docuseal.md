@@ -1,10 +1,10 @@
-# Spec: e-signature (`sc esign`)
+# Spec: e-signature (`sc docuseal`)
 
 ## Purpose
 
 Get a document signed by people who install nothing, and bring the
 signed original plus its audit trail back into the matter
-(ADR-0023). DocuSeal does delivery and capture; `esign/client.py`
+(ADR-0023). DocuSeal does delivery and capture; `docuseal-client/client.py`
 does prosaic's side.
 
 ## Promises
@@ -14,58 +14,58 @@ does prosaic's side.
   HTTP contract, and the contract version is pinned by the lockfile.
   Their agent skills are referenced by their official channel
   (`npx skills add docusealco/docuseal-agent-skills`), not vendored.
-  *(tested: tests/test_esign.py, through the SDK against a mock API)*
+  *(tested: tests/test_docuseal.py, through the SDK against a mock API)*
 - **Deployment is one variable.** Every request goes to
   `DOCUSEAL_URL` (or `DOCUSEAL_SERVER`, the official CLI's spelling;
   default `https://api.docuseal.com`); a self-hosted instance needs
   nothing but that variable. The API key resolves `DOCUSEAL_API_KEY`
   first, then the `prosaic.docuseal` Keychain entry, and a missing
   key is a clear how-to-configure error — never a silent default.
-  *(tested: tests/test_esign.py)*
+  *(tested: tests/test_docuseal.py)*
 - **A draft never ships by accident.** `send` refuses a PDF whose
   metadata carries the prosaic draft stamp (every non-`--final`
   build) unless `--allow-draft` is passed for deliberate circulation.
-  *(tested: tests/test_esign.py)*
-- **The signing roster is declarative.** `sc esign send <pdf>
+  *(tested: tests/test_docuseal.py)*
+- **The signing roster is declarative.** `sc docuseal send <pdf>
   --envelope <name>` takes the signers from that envelope's
   `signers:` list in the matter's envelopes.yaml (name, email,
   optional human `note:`), in signing order — versioned intent
   instead of emails retyped from a conversation. `--to` remains for
   ad-hoc sends; the two are mutually exclusive. *(tested:
-  tests/test_esign.py)*
+  tests/test_docuseal.py)*
 - **The document is consulted before sending.** When the PDF's
   embedded field tags declare N signer roles, a roster of any other
   size refuses to send — a two-signer instrument dispatched to one
-  signer is a defective ceremony. *(tested: tests/test_esign.py)*
-- **`sc esign send <pdf> --to "Name <email>" [--to ...]`** uploads
+  signer is a defective ceremony. *(tested: tests/test_docuseal.py)*
+- **`sc docuseal send <pdf> --to "Name <email>" [--to ...]`** uploads
   the document byte-identically, creates one submission with signers
   in the given order (roles `Signer 1..N`), emails them (unless
-  `--no-email`), and writes `<pdf>.esign.json` beside the document:
+  `--no-email`), and writes `<pdf>.docuseal.json` beside the document:
   submission id, signers, signing URLs. The receipt is the durable
   record the other subcommands and the matter's history work from.
   A document with no `{{...}}` text tags sends with a warning —
   which prosaic-built instruments never trigger: signature blocks
   embed their field tags at render time (ADR-0027), with roles in
   document order matching `--to` order. *(tested:
-  tests/test_esign.py; pleading/tests/test_signblocks.py)*
-- **`sc esign status <id>`** prints per-signer state; exit 0 only
+  tests/test_docuseal.py; pleading/tests/test_signblocks.py)*
+- **`sc docuseal status <id>`** prints per-signer state; exit 0 only
   when the submission is completed, 2 while anything is pending —
-  scriptable polling. *(tested: tests/test_esign.py)*
-- **`sc esign fetch <id> [--out DIR]`** downloads the signed
+  scriptable polling. *(tested: tests/test_docuseal.py)*
+- **`sc docuseal fetch <id> [--out DIR]`** downloads the signed
   document(s) AND the audit log for a completed submission, and
   refuses (exit 2, nothing written) while the submission is
   incomplete — a half-signed document must never land looking like
-  an original. *(tested: tests/test_esign.py)*
+  an original. *(tested: tests/test_docuseal.py)*
 
-- **The matter learns on the sync schedule.** `sc esign poll
-  [matter]` — and the `esign` connector, which is a thin relay to
-  it — walks every `*.esign.json` receipt, checks pending
-  submissions, fetches completed ones into `inbox/esign/<id>/`
+- **The matter learns on the sync schedule.** `sc docuseal poll
+  [matter]` — and the `docuseal` connector, which is a thin relay to
+  it — walks every `*.docuseal.json` receipt, checks pending
+  submissions, fetches completed ones into `inbox/docuseal/<id>/`
   (documents + audit log) printing `NEW` lines for triage, and marks
   the receipt so a completed submission is never polled again.
-  Enable `connectors: {esign: {}}` in matter.yaml and the 12-hourly
+  Enable `connectors: {docuseal: {}}` in matter.yaml and the 12-hourly
   sync (or any manual `sc sync .`) carries it; no webhook server, by
-  design — a local-first matter polls. *(tested: tests/test_esign.py)*
+  design — a local-first matter polls. *(tested: tests/test_docuseal.py)*
 
 ## Non-obvious constraints
 

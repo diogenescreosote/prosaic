@@ -47,7 +47,7 @@ California wills.
       not witness), § 4402.
 - [ ] Health care directive: two qualified witnesses (statutory
       declarations, § 4701) or a notary, § 4673-4675.
-- [ ] E-signature ceremonies (`sc esign`) work for the notarized
+- [ ] E-signature ceremonies (`sc docuseal`) work for the notarized
       documents where your notary/RON flow accepts them — never for
       the will.
 

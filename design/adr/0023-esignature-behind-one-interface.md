@@ -12,7 +12,7 @@ it the rare case where "local-first" and "just works today" are the
 same integration.
 
 ## Decision
-`esign/client.py` (surfaced as `sc esign`) speaks the DocuSeal API
+`docuseal-client/client.py` (surfaced as `sc docuseal`) speaks the DocuSeal API
 with three subcommands: `send` (create a template from a PDF, create
 a submission, email the signers, write a receipt beside the
 document), `status`, and `fetch` (signed PDFs plus the audit log,

@@ -275,9 +275,15 @@ def cmd_flow(args: argparse.Namespace) -> int:
     ).returncode
 
 
-def cmd_esign(args: argparse.Namespace) -> int:
+def cmd_proof(args: argparse.Namespace) -> int:
     return subprocess.run(
-        [sys.executable, str(ROOT / "esign" / "client.py"), *args.rest]
+        [sys.executable, str(ROOT / "proof-client" / "client.py"), *args.rest]
+    ).returncode
+
+
+def cmd_docuseal(args: argparse.Namespace) -> int:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "docuseal-client" / "client.py"), *args.rest]
     ).returncode
 
 
@@ -733,10 +739,15 @@ def main() -> int:
                     help="passed through to flows/run.py")
     sp.set_defaults(func=cmd_flow)
 
-    sp = sub.add_parser("esign", help="e-signature via DocuSeal: send, status, fetch")
+    sp = sub.add_parser("proof", help="remote online notarization via Proof: send, status, fetch, poll")
     sp.add_argument("rest", nargs=argparse.REMAINDER,
-                    help="passed through to esign/client.py")
-    sp.set_defaults(func=cmd_esign)
+                    help="passed through to proof-client/client.py")
+    sp.set_defaults(func=cmd_proof)
+
+    sp = sub.add_parser("docuseal", help="e-signature via DocuSeal: send, status, fetch")
+    sp.add_argument("rest", nargs=argparse.REMAINDER,
+                    help="passed through to docuseal-client/client.py")
+    sp.set_defaults(func=cmd_docuseal)
 
     sp = sub.add_parser("connectors", help="list available connectors")
     sp.set_defaults(func=cmd_connectors)

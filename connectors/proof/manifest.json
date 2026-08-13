@@ -1,0 +1,8 @@
+{
+  "name": "proof",
+  "description": "Polls Proof (proof.com) for the matter's pending remote-online-notarization transactions (every *.proof.json receipt) and fetches completed notarized documents into inbox/proof/<transaction_id>/.",
+  "entry": "pull.js",
+  "configKey": "connectors.proof",
+  "auth": "PROOF_API_KEY env or macOS Keychain generic password (service: prosaic.proof)",
+  "output": "inbox/proof/<transaction_id>/<notarized>.pdf (staging; triage routes onward)"
+}

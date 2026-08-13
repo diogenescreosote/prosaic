@@ -7,7 +7,7 @@ whereof style owns the clause and the signature area as one block, so
 the date appears exactly once. Also pinned here: the legacy macros
 still build (deprecation warning, never a failure), and every signing
 area carries DocuSeal field tags with roles numbered in document
-order — the same order `sc esign send --to` assigns.
+order — the same order `sc docuseal send --to` assigns.
 """
 
 from __future__ import annotations
@@ -106,7 +106,7 @@ def test_legacy_macros_still_build_with_a_warning(tmp_path):
 
 def test_esign_tags_number_signers_in_document_order(tmp_path):
     """A will's shape: testator (whereof) then two witnesses. Roles
-    must come out Signer 1..3 so `sc esign send --to` order maps."""
+    must come out Signer 1..3 so `sc docuseal send --to` order maps."""
     proc = build(tmp_path,
                  "\\signblock{whereof}{JANE ROE}{Testator}{Will}\n\n"
                  "## Witness Attestation\n\nWe attest.\n\n"

@@ -20,7 +20,7 @@ gets a field there. The pleading language can put such tags in
 source; a PDF without any tags still sends, with a warning, and the
 signer places their signature manually.
 
-`send` writes a receipt beside the PDF (<pdf>.esign.json): the
+`send` writes a receipt beside the PDF (<pdf>.docuseal.json): the
 submission id, signers, and URLs — the record `status` and `fetch`
 work from, and the thing a triage commit catalogs.
 """
@@ -48,7 +48,7 @@ CREDENTIAL_REF = "prosaic.docuseal"
 def api_base() -> str:
     # DOCUSEAL_URL is prosaic's original spelling; DOCUSEAL_SERVER is
     # the official CLI/skill's. Either works, so one configuration
-    # serves sc esign, the docuseal CLI, and the vendored skill.
+    # serves sc docuseal, the docuseal CLI, and the vendored skill.
     return (
         os.environ.get("DOCUSEAL_URL") or os.environ.get("DOCUSEAL_SERVER") or DEFAULT_URL
     ).rstrip("/")
@@ -257,7 +257,7 @@ def cmd_send(args: argparse.Namespace) -> int:
             for e in entries
         ],
     }
-    receipt_path = pdf.with_name(pdf.name + ".esign.json")
+    receipt_path = pdf.with_name(pdf.name + ".docuseal.json")
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
     print(f"submission {submission_id} created; receipt: {receipt_path}")
     for e in receipt["submitters"]:
@@ -309,14 +309,16 @@ def cmd_fetch(args: argparse.Namespace) -> int:
 
 
 def cmd_poll(args: argparse.Namespace) -> int:
-    """Walk the matter for e-sign receipts, check each pending
-    submission, and fetch what completed into inbox/esign/ — the
-    connector engine (specs/esign.md): prints "NEW <abs path>" per
+    """Walk the matter for DocuSeal receipts, check each pending
+    submission, and fetch what completed into inbox/docuseal/ — the
+    connector engine (specs/docuseal.md): prints "NEW <abs path>" per
     fetched file for the sync/triage pipeline, updates each receipt
     so a completed submission is never polled again."""
     matter = Path(args.matter_dir or ".").resolve()
     receipts = [
-        p for p in matter.rglob("*.esign.json") if ".git" not in p.parts and "inbox" not in p.parts
+        p
+        for p in matter.rglob("*.docuseal.json")
+        if ".git" not in p.parts and "inbox" not in p.parts
     ]
     if not receipts:
         return 0
@@ -328,7 +330,7 @@ def cmd_poll(args: argparse.Namespace) -> int:
         except (json.JSONDecodeError, OSError) as e:
             print(f"WARN: unreadable receipt {receipt_path}: {e}", file=sys.stderr)
             continue
-        if receipt.get("completed"):
+        if receipt.get("completed") or receipt.get("terminal"):
             continue
         sid = receipt.get("submission_id")
         if not sid:
@@ -337,13 +339,27 @@ def cmd_poll(args: argparse.Namespace) -> int:
         sub = sdk_call(ds.get_submission, sid)
         status = sub.get("status", "unknown")
         receipt["last_status"] = status
+        # DocuSeal's documented lifecycle: pending, completed,
+        # declined, expired. Declined and expired are terminal: mark
+        # the receipt so it never polls again, and say so loudly --
+        # a dead ceremony is a fact the matter needs, not a retry.
+        if status in ("declined", "expired"):
+            receipt["terminal"] = status
+            receipt["completed"] = False
+            receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
+            print(
+                f"docuseal: submission {sid} {status.upper()} -- no "
+                f"documents will come; re-send if still wanted",
+                file=sys.stderr,
+            )
+            continue
         if status != "completed":
             pending += 1
             receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
-            print(f"esign: submission {sid} still {status}", file=sys.stderr)
+            print(f"docuseal: submission {sid} still {status}", file=sys.stderr)
             continue
 
-        out = matter / "inbox" / "esign" / str(sid)
+        out = matter / "inbox" / "docuseal" / str(sid)
         out.mkdir(parents=True, exist_ok=True)
         docs = sdk_call(ds.get_submission_documents, sid)
         doc_list = docs.get("documents") if isinstance(docs, dict) else docs
@@ -365,11 +381,11 @@ def cmd_poll(args: argparse.Namespace) -> int:
         receipt["fetched"] = fetched
         receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
         print(
-            f"esign: submission {sid} completed; {len(fetched)} file(s) fetched to {out}",
+            f"docuseal: submission {sid} completed; {len(fetched)} file(s) fetched to {out}",
             file=sys.stderr,
         )
     if pending:
-        print(f"esign: {pending} submission(s) still pending", file=sys.stderr)
+        print(f"docuseal: {pending} submission(s) still pending", file=sys.stderr)
     return 0
 
 
@@ -406,7 +422,7 @@ def main() -> None:
     sp = sub.add_parser(
         "poll",
         help="check every pending receipt in a matter; fetch completed "
-        "submissions into inbox/esign/ (the connector engine)",
+        "submissions into inbox/docuseal/ (the connector engine)",
     )
     sp.add_argument("matter_dir", nargs="?", default=".")
     sp.set_defaults(func=cmd_poll)

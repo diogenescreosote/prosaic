@@ -1,8 +1,0 @@
-{
-  "name": "esign",
-  "description": "Polls DocuSeal for the matter's pending e-signature submissions (every *.esign.json receipt) and fetches completed signed documents plus audit logs into inbox/esign/<submission_id>/.",
-  "entry": "pull.js",
-  "configKey": "connectors.esign",
-  "auth": "DOCUSEAL_API_KEY env or macOS Keychain generic password (service: prosaic.docuseal)",
-  "output": "inbox/esign/<submission_id>/<signed>.pdf + audit log (staging; triage routes onward)"
-}

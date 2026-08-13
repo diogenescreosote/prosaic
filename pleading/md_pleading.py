@@ -397,7 +397,7 @@ WHEREOF_TAIL_GRID_LINES = 5          # blank + rule + blank + name (+role)
 # 6 pt text over the blanks: invisible on paper, machine-readable in
 # the text layer, and stripped from the executed document by
 # DocuSeal's default remove_tags. Signer roles number in document
-# order -- the same order `sc esign send --to` assigns them.
+# order -- the same order `sc docuseal send --to` assigns them.
 ESIGN_TAG_FONT_SIZE = 6
 ESIGN_ROLE_PREFIX = "Signer"
 
@@ -2306,7 +2306,7 @@ DEFAULT_DRAFT_BANNER = {
     "letter": "DRAFT—NOT SENT",
 }
 # PDF metadata key stamped alongside the banner, so outbound tooling
-# (sc esign) can refuse a draft deterministically whatever the text.
+# (sc docuseal) can refuse a draft deterministically whatever the text.
 DRAFT_METADATA_KEY = "/ProsaicDraftBanner"
 
 
@@ -2469,7 +2469,7 @@ def stamp_draft_banner(pdf_path: Path, text: Optional[str]) -> None:
 
     overlay = PdfReader(buf)
     # Machine-readable twin of the visual stamp: outbound tools (sc
-    # esign send) refuse a PDF carrying this key unless overridden.
+    # docuseal send) refuse a PDF carrying this key unless overridden.
     writer.add_metadata({DRAFT_METADATA_KEY: text})
     for i, page in enumerate(writer.pages):
         scale, tx = geometry[i]
@@ -3257,7 +3257,7 @@ class PleadingPDF:
     def _emit_sigrow(self, block: Block, current_line: int) -> int:
         """Side-by-side signature rules with labels beneath: the left
         rule takes the signature, the right typically the date. One
-        signer per row (esign role assigned accordingly)."""
+        signer per row (e-sign role assigned accordingly)."""
         left_labels = [s.strip() for s in block.text.split("\\\\")]
         right_labels = [s.strip() for s in
                         (block.spans[0].text if block.spans else "").split("\\\\")]

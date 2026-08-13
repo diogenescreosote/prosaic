@@ -82,11 +82,11 @@ unstranded — your job is ordering and density. General discipline:
 
 Walk the user through `templates/estate/EXECUTION.md`: the will is
 paper-with-both-witnesses-present, the rest notarize (RON works;
-`sc esign` can carry the notarized-document ceremonies, never the
+`sc docuseal` can carry the notarized-document ceremonies, never the
 will). After execution: scan, `sc attest sign --timestamp`,
 `sc attest manifest write --timestamp`, verify from a clean
 directory, and make sure the successor fiduciaries hold
 `KEY-PROTOCOL.md` and know where the originals live.
 
 References: `templates/estate/README.md`, ADR-0025, ADR-0022,
-[crypto-attest](../crypto-attest/SKILL.md), [esign](../esign/SKILL.md).
+[crypto-attest](../crypto-attest/SKILL.md), [docuseal](../docuseal/SKILL.md).

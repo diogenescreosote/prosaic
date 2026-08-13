@@ -137,7 +137,7 @@ YAML comment, which no one can mistake for configuration.
 A build with no `--final` flag stamps a red banner on every page —
 `DRAFT—NOT FILED` (pleadings), `DRAFT—NOT EXECUTED` (documents),
 `DRAFT—NOT SENT` (letters) — and writes a machine-readable twin into
-the PDF metadata, which `sc esign send` refuses unless overridden.
+the PDF metadata, which `sc docuseal send` refuses unless overridden.
 Rendered output is what circulates, and an unmarked draft is the
 accident waiting to happen. Suppression is per-invocation only
 (`sc build <envelope> --final`, `make <envelope> FINAL=1`); a
@@ -1146,7 +1146,7 @@ dates, locations, residences) in white 6 pt text in the inter-line
 gap: invisible in print, machine-readable in the text layer, and
 stripped from the executed document by DocuSeal's default
 `remove_tags`. Signer roles number in document order — the same
-order `sc esign send --to` assigns submitters — so a built PDF is
+order `sc docuseal send --to` assigns submitters — so a built PDF is
 e-sign-ready with fields already placed. A `--sign` render's dated
 and decl blocks carry no tags (the signature line is already
 executed); notarial certificates carry none (a notary's ceremony is

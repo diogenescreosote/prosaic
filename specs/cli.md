@@ -43,10 +43,13 @@ subcommand's real promises live in that component's spec.
   (`flows/run.py`): judgment work as a files-first graph with agent,
   command, judge, and gate steps. The real promises live in
   [flows.md](flows.md). *(tested: tests/test_flows.py)*
-- **`sc esign ...`** passes through to the e-signature client
-  (`esign/client.py`): send for signature, poll, fetch the signed
+- **`sc docuseal ...`** passes through to the e-signature client
+  (`docuseal-client/client.py`): send for signature, poll, fetch the signed
   originals and audit log. The real promises live in
-  [esign.md](esign.md). *(tested: tests/test_esign.py)*
+  [docuseal.md](docuseal.md). *(tested: tests/test_docuseal.py)*
+- **`sc proof ...`** passes through to the remote-online-notarization
+  client (`proof-client/client.py`). The real promises live in
+  [proof.md](proof.md). *(tested: tests/test_proof.py)*
 - **`sc connectors`** lists available connectors with their
   descriptions and auth requirements. *(untested)*
 - **`sc schedule <dir> [times]`** installs the 12-hourly background

@@ -56,7 +56,7 @@ pull orphan lines forward to justify a heading.
 
 Every build is DRAFT-bannered by default; `--final` (or
 `make ... FINAL=1`) is the explicit act of releasing, per invocation,
-never persisted in a source. `sc esign send` refuses draft-stamped
+never persisted in a source. `sc docuseal send` refuses draft-stamped
 PDFs without `--allow-draft`. `notreal:` remains for hypotheticals
 and simulations whose banner should say what they are. Never build
 `--final` on your own initiative — releasing is the human's act.

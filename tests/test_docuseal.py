@@ -23,7 +23,7 @@ from typing import Any, ClassVar
 import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
-DOCUSEAL = REPO_ROOT / "esign" / "client.py"
+DOCUSEAL = REPO_ROOT / "docuseal-client" / "client.py"
 
 PDF_BYTES = b"%PDF-1.4 fake test document"
 
@@ -129,7 +129,7 @@ def mock_api() -> object:
     server.shutdown()
 
 
-def run_esign(*args: str, url: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+def run_docuseal(*args: str, url: str, cwd: Path) -> subprocess.CompletedProcess[str]:
     return subprocess.run(
         [sys.executable, str(DOCUSEAL), *args],
         capture_output=True,
@@ -146,7 +146,7 @@ def run_esign(*args: str, url: str, cwd: Path) -> subprocess.CompletedProcess[st
 def test_send_posts_the_document_and_writes_a_receipt(mock_api: str, tmp_path: Path) -> None:
     pdf = tmp_path / "will.pdf"
     pdf.write_bytes(PDF_BYTES)
-    proc = run_esign(
+    proc = run_docuseal(
         "send", "will.pdf", "--to", "Jane Roe <jane@example.com>", url=mock_api, cwd=tmp_path
     )
     assert proc.returncode == 0, proc.stderr
@@ -159,7 +159,7 @@ def test_send_posts_the_document_and_writes_a_receipt(mock_api: str, tmp_path: P
     assert submitter == {"name": "Jane Roe", "email": "jane@example.com", "role": "Signer"}
     assert req["payload"]["send_email"] is True
 
-    receipt = json.loads((tmp_path / "will.pdf.esign.json").read_text())
+    receipt = json.loads((tmp_path / "will.pdf.docuseal.json").read_text())
     assert receipt["submission_id"] == 123
     assert receipt["submitters"][0]["email"] == "jane@example.com"
 
@@ -167,7 +167,7 @@ def test_send_posts_the_document_and_writes_a_receipt(mock_api: str, tmp_path: P
 def test_signing_order_maps_to_numbered_roles(mock_api: str, tmp_path: Path) -> None:
     pdf = tmp_path / "trust.pdf"
     pdf.write_bytes(PDF_BYTES)
-    proc = run_esign(
+    proc = run_docuseal(
         "send",
         "trust.pdf",
         "--to",
@@ -184,13 +184,13 @@ def test_signing_order_maps_to_numbered_roles(mock_api: str, tmp_path: Path) -> 
 
 
 def test_status_exit_codes_distinguish_done_from_pending(mock_api: str, tmp_path: Path) -> None:
-    assert run_esign("status", "123", url=mock_api, cwd=tmp_path).returncode == 0
+    assert run_docuseal("status", "123", url=mock_api, cwd=tmp_path).returncode == 0
     MockDocuSeal.submission_status = "pending"
-    assert run_esign("status", "123", url=mock_api, cwd=tmp_path).returncode == 2
+    assert run_docuseal("status", "123", url=mock_api, cwd=tmp_path).returncode == 2
 
 
 def test_fetch_brings_back_documents_and_audit_log(mock_api: str, tmp_path: Path) -> None:
-    proc = run_esign("fetch", "123", "--out", "signed", url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("fetch", "123", "--out", "signed", url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
     assert (tmp_path / "signed" / "signed.pdf").read_bytes() == PDF_BYTES
     assert (tmp_path / "signed" / "submission-123-audit-log.pdf").exists()
@@ -198,7 +198,7 @@ def test_fetch_brings_back_documents_and_audit_log(mock_api: str, tmp_path: Path
 
 def test_fetch_refuses_an_incomplete_submission(mock_api: str, tmp_path: Path) -> None:
     MockDocuSeal.submission_status = "pending"
-    proc = run_esign("fetch", "123", url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("fetch", "123", url=mock_api, cwd=tmp_path)
     assert proc.returncode == 2
     assert not list(tmp_path.iterdir()), "nothing may be written for a pending submission"
 
@@ -234,12 +234,12 @@ def test_send_refuses_a_draft_stamped_pdf(mock_api: str, tmp_path: Path) -> None
     with pdf.open("wb") as fh:
         w.write(fh)
 
-    proc = run_esign("send", "draft.pdf", "--to", "jane@example.com", url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("send", "draft.pdf", "--to", "jane@example.com", url=mock_api, cwd=tmp_path)
     assert proc.returncode != 0
     assert "refusing to send a draft" in proc.stderr
-    assert not (tmp_path / "draft.pdf.esign.json").exists()
+    assert not (tmp_path / "draft.pdf.docuseal.json").exists()
 
-    proc = run_esign(
+    proc = run_docuseal(
         "send", "draft.pdf", "--to", "jane@example.com", "--allow-draft", url=mock_api, cwd=tmp_path
     )
     assert proc.returncode == 0, proc.stderr
@@ -261,7 +261,7 @@ def test_envelope_signers_roster(mock_api: str, tmp_path: Path) -> None:
         "        note: Lender\n"
     )
     (tmp_path / "note.pdf").write_bytes(PDF_BYTES)
-    proc = run_esign("send", "note.pdf", "--envelope", "note", url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("send", "note.pdf", "--envelope", "note", url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
     req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
     subs = req["payload"]["submitters"]
@@ -271,7 +271,7 @@ def test_envelope_signers_roster(mock_api: str, tmp_path: Path) -> None:
 
 def test_envelope_and_to_are_mutually_exclusive(mock_api: str, tmp_path: Path) -> None:
     (tmp_path / "note.pdf").write_bytes(PDF_BYTES)
-    proc = run_esign(
+    proc = run_docuseal(
         "send",
         "note.pdf",
         "--envelope",
@@ -296,7 +296,7 @@ def test_signer_count_must_match_the_documents_tags(mock_api: str, tmp_path: Pat
     c.drawString(72, 650, "{{Signature 2;role=Signer 2;type=signature}}")
     c.save()
 
-    proc = run_esign("send", "two.pdf", "--to", "only@example.com", url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("send", "two.pdf", "--to", "only@example.com", url=mock_api, cwd=tmp_path)
     assert proc.returncode != 0
     assert "signer mismatch" in proc.stderr
     assert "expect 2" in proc.stderr
@@ -304,20 +304,20 @@ def test_signer_count_must_match_the_documents_tags(mock_api: str, tmp_path: Pat
 
 def test_poll_fetches_completed_and_skips_done(mock_api: str, tmp_path: Path) -> None:
     """The connector engine: a pending receipt whose submission
-    completed gets its documents pulled into inbox/esign/ with NEW
+    completed gets its documents pulled into inbox/docuseal/ with NEW
     lines for triage, and the receipt is marked so it never polls
     again; an already-completed receipt is not touched."""
     (tmp_path / "out" / "note").mkdir(parents=True)
-    receipt = tmp_path / "out" / "note" / "note.pdf.esign.json"
+    receipt = tmp_path / "out" / "note" / "note.pdf.docuseal.json"
     receipt.write_text(json.dumps({"submission_id": 123, "document": "note.pdf"}))
-    done = tmp_path / "out" / "note" / "old.pdf.esign.json"
+    done = tmp_path / "out" / "note" / "old.pdf.docuseal.json"
     done.write_text(json.dumps({"submission_id": 999, "completed": True}))
 
-    proc = run_esign("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
     new_lines = [ln for ln in proc.stdout.splitlines() if ln.startswith("NEW ")]
     assert len(new_lines) == 2, proc.stdout  # signed.pdf + audit log
-    fetched = tmp_path / "inbox" / "esign" / "123"
+    fetched = tmp_path / "inbox" / "docuseal" / "123"
     assert (fetched / "signed.pdf").read_bytes() == PDF_BYTES
     assert (fetched / "submission-123-audit-log.pdf").exists()
     updated = json.loads(receipt.read_text())
@@ -329,12 +329,30 @@ def test_poll_fetches_completed_and_skips_done(mock_api: str, tmp_path: Path) ->
 
 def test_poll_leaves_pending_submissions_alone(mock_api: str, tmp_path: Path) -> None:
     MockDocuSeal.submission_status = "pending"
-    receipt = tmp_path / "doc.pdf.esign.json"
+    receipt = tmp_path / "doc.pdf.docuseal.json"
     receipt.write_text(json.dumps({"submission_id": 123}))
-    proc = run_esign("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
+    proc = run_docuseal("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
     assert "NEW " not in proc.stdout
     assert not (tmp_path / "inbox").exists()
     updated = json.loads(receipt.read_text())
     assert updated.get("completed") is not True
     assert updated["last_status"] == "pending"
+
+
+def test_poll_marks_declined_terminal_and_stops(mock_api: str, tmp_path: Path) -> None:
+    """DocuSeal's lifecycle is pending/completed/declined/expired: a
+    declined ceremony is a fact, not a retry."""
+    MockDocuSeal.submission_status = "declined"
+    receipt = tmp_path / "doc.pdf.docuseal.json"
+    receipt.write_text(json.dumps({"submission_id": 123}))
+    proc = run_docuseal("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    assert "DECLINED" in proc.stderr
+    updated = json.loads(receipt.read_text())
+    assert updated["terminal"] == "declined"
+
+    MockDocuSeal.requests.clear()
+    proc = run_docuseal("poll", str(tmp_path), url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0
+    assert not MockDocuSeal.requests, "terminal receipts are never re-polled"

@@ -26,11 +26,11 @@ that knowledge away.
    docuseal.com/docs/api) in white 6 pt in the inter-line gap:
    invisible in print, machine-readable in the text layer, stripped
    from executed documents by DocuSeal's default remove_tags. Roles
-   number in document order, the order `sc esign send --to` assigns.
+   number in document order, the order `sc docuseal send --to` assigns.
    Overlapping tags stagger vertically, and tags sit below their
    blanks so text extraction keeps printed lines whole (the
    typography suite enforces both).
-3. **The official integration surface.** esign/client.py now speaks
+3. **The official integration surface.** docuseal-client/client.py now speaks
    through DocuSeal's published Python SDK (pypi: docuseal) instead
    of a hand-rolled HTTP client — create_submission_from_pdf is
    exactly the one-off flow. DOCUSEAL_SERVER (the official CLI's
@@ -40,13 +40,13 @@ that knowledge away.
    clone, in CI configuration, and in two tool breakages (the gitlink
    crashed the leak guard's readers; ruff reformatted vendored files)
    -- all for reference documentation nothing in the build executes.
-   The esign skill points at their supported channel
+   The docuseal skill points at their supported channel
    (npx skills add docusealco/docuseal-agent-skills); the API
    contract prosaic actually depends on is pinned by the SDK version
    in the lockfile.
 
 ## Consequences
-A built instrument is e-sign-ready the moment it renders: `sc esign
+A built instrument is e-sign-ready the moment it renders: `sc docuseal
 send --to` in signing order and DocuSeal places every field. The
 mock tests now pin prosaic's payloads THROUGH the SDK (the mock had
 to learn HTTP/1.1 manners the real API has). Costs: a hidden text
