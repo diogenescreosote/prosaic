@@ -282,7 +282,7 @@ BARCODE_FORMATS = ("qr", "code128", "pdf417")
 # rather than style. The size fits the block's longest line to the
 # text column (Courier advance = 0.6 em).
 FIXEDWIDTH_FONT = "Courier"
-FIXEDWIDTH_MAX_SIZE = 10
+FIXEDWIDTH_MAX_SIZE = 12
 FIXEDWIDTH_MIN_SIZE = 6
 FIXEDWIDTH_ADVANCE_EM = 0.6
 

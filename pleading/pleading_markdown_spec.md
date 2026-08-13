@@ -1209,7 +1209,7 @@ for armored key blocks, hashes, fingerprints, and anything where a
 substituted character is corruption rather than style — a `-----`
 armor header that renders as em dashes will never re-import into gpg
 from paper. Font size fits the block's longest line to the text
-column (10 pt down to 6 pt). Fenced code blocks (```` ``` ````) are
+column (12 pt down to 6 pt). Fenced code blocks (```` ``` ````) are
 NOT supported; use this.
 
 ```
