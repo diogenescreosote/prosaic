@@ -135,7 +135,11 @@ def run_esign(*args: str, url: str, cwd: Path) -> subprocess.CompletedProcess[st
         capture_output=True,
         text=True,
         cwd=cwd,
-        env={"DOCUSEAL_URL": url, "DOCUSEAL_API_KEY": "test-key-123", "PATH": "/usr/bin:/bin"},
+        env={
+            "DOCUSEAL_URL": url,
+            "DOCUSEAL_API_KEY": "test-key-123",
+            "PATH": "/opt/homebrew/bin:/usr/local/bin:/usr/bin:/bin",
+        },
     )
 
 
@@ -239,3 +243,60 @@ def test_send_refuses_a_draft_stamped_pdf(mock_api: str, tmp_path: Path) -> None
         "send", "draft.pdf", "--to", "jane@example.com", "--allow-draft", url=mock_api, cwd=tmp_path
     )
     assert proc.returncode == 0, proc.stderr
+
+
+def test_envelope_signers_roster(mock_api: str, tmp_path: Path) -> None:
+    """The declarative path: signing roster from envelopes.yaml, in
+    document order, instead of emails retyped from a conversation."""
+    (tmp_path / "envelopes.yaml").write_text(
+        "envelopes:\n"
+        "  note:\n"
+        "    sources: [note.md]\n"
+        "    signers:\n"
+        "      - name: Jane Roe\n"
+        "        email: jane@example.com\n"
+        "        note: Borrower\n"
+        "      - name: Sue Smith\n"
+        "        email: sue@example.com\n"
+        "        note: Lender\n"
+    )
+    (tmp_path / "note.pdf").write_bytes(PDF_BYTES)
+    proc = run_esign("send", "note.pdf", "--envelope", "note", url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
+    subs = req["payload"]["submitters"]
+    assert [s["email"] for s in subs] == ["jane@example.com", "sue@example.com"]
+    assert [s["role"] for s in subs] == ["Signer 1", "Signer 2"]
+
+
+def test_envelope_and_to_are_mutually_exclusive(mock_api: str, tmp_path: Path) -> None:
+    (tmp_path / "note.pdf").write_bytes(PDF_BYTES)
+    proc = run_esign(
+        "send",
+        "note.pdf",
+        "--envelope",
+        "note",
+        "--to",
+        "x@example.com",
+        url=mock_api,
+        cwd=tmp_path,
+    )
+    assert proc.returncode != 0
+    assert "not both" in proc.stderr
+
+
+def test_signer_count_must_match_the_documents_tags(mock_api: str, tmp_path: Path) -> None:
+    """A two-signer instrument sent to one signer is a defective
+    ceremony waiting to happen; the embedded tags know the truth."""
+    from reportlab.pdfgen import canvas
+
+    pdf = tmp_path / "two.pdf"
+    c = canvas.Canvas(str(pdf))
+    c.drawString(72, 700, "{{Signature 1;role=Signer 1;type=signature}}")
+    c.drawString(72, 650, "{{Signature 2;role=Signer 2;type=signature}}")
+    c.save()
+
+    proc = run_esign("send", "two.pdf", "--to", "only@example.com", url=mock_api, cwd=tmp_path)
+    assert proc.returncode != 0
+    assert "signer mismatch" in proc.stderr
+    assert "expect 2" in proc.stderr

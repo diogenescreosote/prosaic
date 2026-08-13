@@ -31,6 +31,7 @@ import argparse
 import base64
 import json
 import os
+import re
 import shutil
 import subprocess
 import sys
@@ -120,6 +121,57 @@ def draft_banner_of(pdf: Path) -> str | None:
         return None
 
 
+def envelope_signers(envelope: str) -> list[dict]:
+    """The signing roster declared in the matter's envelopes.yaml:
+
+        envelopes:
+          note:
+            sources: [...]
+            signers:              # signing order = signature-block order
+              - name: Jane Roe
+                email: jane@example.com
+                note: Borrower    # human annotation; role stays Signer N
+
+    Declarative intent beats emails retyped from a conversation, and
+    the roster is versioned with the matter."""
+    import yaml
+
+    path = Path("envelopes.yaml")
+    if not path.exists():
+        raise SystemExit(
+            "--envelope needs an envelopes.yaml in the working directory (run from the matter)"
+        )
+    data = yaml.safe_load(path.read_text()) or {}
+    entry = (data.get("envelopes") or {}).get(envelope)
+    if entry is None:
+        raise SystemExit(f"no envelope {envelope!r} in envelopes.yaml")
+    signers = entry.get("signers")
+    if not signers:
+        raise SystemExit(
+            f"envelope {envelope!r} declares no signers: add a signers: "
+            f"list (name, email, optional note) in signing order"
+        )
+    out = []
+    for s in signers:
+        if not s.get("email"):
+            raise SystemExit(f"envelope {envelope!r}: every signer needs an email")
+        rec = {"email": s["email"]}
+        if s.get("name"):
+            rec["name"] = s["name"]
+        out.append(rec)
+    return out
+
+
+def tagged_role_count(pdf: Path) -> int | None:
+    """How many distinct Signer roles the document's embedded field
+    tags declare, or None when undetectable."""
+    if not shutil.which("pdftotext"):
+        return None
+    text = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
+    roles = set(re.findall(r"\{\{Signature (\d+);role=Signer \d+;", text))
+    return len(roles) if roles else None
+
+
 def cmd_send(args: argparse.Namespace) -> int:
     pdf = Path(args.pdf)
     if not pdf.exists():
@@ -134,9 +186,28 @@ def cmd_send(args: argparse.Namespace) -> int:
         )
     configure_sdk()
 
-    submitters = [parse_signer(s) for s in args.to]
+    if args.envelope and args.to:
+        raise SystemExit("give --envelope OR --to, not both")
+    if args.envelope:
+        submitters = envelope_signers(args.envelope)
+    elif args.to:
+        submitters = [parse_signer(s) for s in args.to]
+    else:
+        raise SystemExit(
+            "who signs? --envelope <name> (the signers: "
+            'roster in envelopes.yaml) or --to "Name <email>"'
+        )
     for i, sub in enumerate(submitters):
         sub["role"] = f"Signer {i + 1}" if len(submitters) > 1 else "Signer"
+
+    expected = tagged_role_count(pdf)
+    if expected is not None and expected != len(submitters):
+        raise SystemExit(
+            f"signer mismatch: the document's field tags expect {expected} "
+            f"signer(s), {len(submitters)} given. Signing order is the "
+            f"document's signature-block order; fix the roster (or the "
+            f"document) before sending."
+        )
 
     payload = {
         "name": args.name or pdf.stem,
@@ -244,9 +315,12 @@ def main() -> None:
     sp = sub.add_parser("send", help="create a submission from a PDF and email signers")
     sp.add_argument("pdf")
     sp.add_argument(
+        "--envelope",
+        help="take the signing roster from this envelope's signers: list in envelopes.yaml",
+    )
+    sp.add_argument(
         "--to",
         action="append",
-        required=True,
         help='signer, "Name <email>" (repeatable, in signing order)',
     )
     sp.add_argument("--name", help="template name (default: the file stem)")

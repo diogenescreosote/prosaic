@@ -26,6 +26,17 @@ does prosaic's side.
   metadata carries the prosaic draft stamp (every non-`--final`
   build) unless `--allow-draft` is passed for deliberate circulation.
   *(tested: tests/test_esign.py)*
+- **The signing roster is declarative.** `sc esign send <pdf>
+  --envelope <name>` takes the signers from that envelope's
+  `signers:` list in the matter's envelopes.yaml (name, email,
+  optional human `note:`), in signing order — versioned intent
+  instead of emails retyped from a conversation. `--to` remains for
+  ad-hoc sends; the two are mutually exclusive. *(tested:
+  tests/test_esign.py)*
+- **The document is consulted before sending.** When the PDF's
+  embedded field tags declare N signer roles, a roster of any other
+  size refuses to send — a two-signer instrument dispatched to one
+  signer is a defective ceremony. *(tested: tests/test_esign.py)*
 - **`sc esign send <pdf> --to "Name <email>" [--to ...]`** uploads
   the document byte-identically, creates one submission with signers
   in the given order (roles `Signer 1..N`), emails them (unless

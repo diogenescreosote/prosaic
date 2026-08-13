@@ -1149,8 +1149,9 @@ stripped from the executed document by DocuSeal's default
 order `sc esign send --to` assigns submitters — so a built PDF is
 e-sign-ready with fields already placed. A `--sign` render's dated
 and decl blocks carry no tags (the signature line is already
-executed), and notarial certificates carry none (a notary's ceremony
-is not an e-sign flow). Overlapping tags stagger
+executed); notarial certificates carry none (a notary's ceremony is
+not an e-sign flow); and judge blocks carry none — a judicial
+signature line is a space for wet ink, never a DocuSeal role. Overlapping tags stagger
 vertically; text extraction keeps every printed line whole.
 
 ## Output specification

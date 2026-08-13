@@ -37,12 +37,29 @@ the `docuseal` SDK version in the lockfile, not by a vendored copy.
 
 ## The loop
 
+Declare the roster once in envelopes.yaml (signing order = the
+document's signature-block order), then send by envelope name:
+
 ```
-<prosaic>/cli/sc esign send out/<envelope>/document.pdf \
-    --to "Jane Roe <jane@example.com>" --to "John Smith <john@example.com>"
+envelopes:
+  note:
+    sources: [Promissory Note.md]
+    signers:
+      - {name: Jane Roe, email: jane@example.com, note: Borrower}
+      - {name: Sue Smith, email: sue@example.com, note: Lender}
+```
+
+```
+<prosaic>/cli/sc esign send "out/note/Promissory Note.pdf" --envelope note
 <prosaic>/cli/sc esign status <submission_id>     # exit 0 = completed
 <prosaic>/cli/sc esign fetch <submission_id> --out inbox/
 ```
+
+`--to "Name <email>"` (repeatable) covers ad-hoc sends. Either way
+the send validates the roster size against the document's embedded
+field tags and refuses a mismatch. Judicial signature lines
+(\signblock{judge}) are wet-ink spaces: never tagged, never part of
+a roster, never e-signed.
 
 - `send` writes `<pdf>.esign.json` beside the document — commit it
   (`config` or `docket` per the matter's conventions) so the

@@ -8,3 +8,7 @@ envelopes: {}
 #      - Declaration of Jane Roe.md
 #      - file: Memorandum of Points and Authorities.md
 #        docx: true                 # also emit .docx
+#    signers:                       # e-signature roster (sc esign send
+#      - name: Jane Roe             #   --envelope <name>), in the
+#        email: jane@example.com    #   document's signature-block order
+#        note: Declarant            # human annotation only
