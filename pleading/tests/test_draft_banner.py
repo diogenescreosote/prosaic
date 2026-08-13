@@ -297,3 +297,21 @@ def test_absent_marker_yields_the_doctype_default():
 def _mkdirs(tmp_path):
     (tmp_path / "a").mkdir(exist_ok=True)
     (tmp_path / "b").mkdir(exist_ok=True)
+
+
+def test_final_refuses_a_source_still_marked_notreal(tmp_path):
+    """--final never outranks the author's notreal: disclaimer; the
+    marker must be removed (the human act) before a final build."""
+    src = tmp_path / "doc.md"
+    src.write_text(
+        "---\ndoctype: document\nnotreal: draft---not executed\n---\n\nBody.\n"
+    )
+    out = tmp_path / "doc.pdf"
+    proc = subprocess.run(
+        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out), "--final"],
+        capture_output=True, text=True,
+    )
+    assert proc.returncode != 0
+    assert "notreal" in proc.stderr
+    assert not out.exists()
+

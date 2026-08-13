@@ -2186,7 +2186,10 @@ def warn_unknown_front_matter_keys(meta: Dict, source_name: str) -> None:
     recognized = recognized_front_matter_keys()
     if not recognized:
         return
-    unknown = sorted(k for k in meta if k not in recognized)
+    # Underscore keys are the build system's own (e.g. _final, set by
+    # the --final flag after sources are stripped of it); the warning
+    # is about keys an AUTHOR wrote that nothing reads.
+    unknown = sorted(k for k in meta if k not in recognized and not k.startswith("_"))
     for key in unknown:
         token = (source_name, key)
         if token in _warned_unknown_keys:
@@ -4162,6 +4165,18 @@ def main() -> None:
     # default draft banner, and it does so per invocation.
     meta.pop("_final", None)
     if args.final:
+        if meta.get("notreal") is not None:
+            # `notreal:` is the human's declaration that this source is
+            # not ready to be real. --final must not outrank it: the
+            # execution sequence is remove the marker (the human's
+            # act), THEN build final — never a final build of a source
+            # its author still disclaims.
+            raise SystemExit(
+                f"{input_path.name}: refusing --final while the source "
+                f"carries notreal: {meta['notreal']!r}. Removing that "
+                f"marker is the author's declaration that the document "
+                f"is ready; do that first, then rebuild --final."
+            )
         meta["_final"] = True
     warn_unknown_front_matter_keys(meta, input_path.name)
     require_attachment_has_no_caption(meta, input_path.name)
