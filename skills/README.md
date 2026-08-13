@@ -35,6 +35,7 @@ depends on a particular harness.
 
 | Skill | What it does |
 |---|---|
+| [estate-plan](estate-plan/SKILL.md) | Draft, execute, and cryptographically bind a California estate plan from the estate pack |
 | [esign](esign/SKILL.md) | Send a document for e-signature via DocuSeal and bring the signed original + audit log back |
 | [crypto-attest](crypto-attest/SKILL.md) | Sign, verify, hash, manifest, and timestamp matter documents against a paper-anchored key |
 | [build-envelope](build-envelope/SKILL.md) | Build a filing packet (pleading PDF/DOCX, exhibits, cover forms) from a matter's markdown sources |

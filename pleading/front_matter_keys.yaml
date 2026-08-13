@@ -54,7 +54,8 @@ case:
   - caption_divider_shift    # points to shift the ")" column right
 
 document:
-  - doctype                  # pleading | letter
+  - doctype                  # pleading | letter | document
+  - heading_numbers          # false: headings carry their own enumeration
   - paper_title
   - paper_subtitle
   - short_title              # JC cover-sheet short title; never the footer

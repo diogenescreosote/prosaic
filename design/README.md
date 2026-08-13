@@ -45,6 +45,7 @@ project accretes decisions instead of middleware.
 - [0022](adr/0022-paper-anchored-attestation.md) Paper-anchored attestation: pinned keys, dual hashes, a signed manifest
 - [0023](adr/0023-esignature-behind-one-interface.md) E-signature through DocuSeal, cloud or self-hosted behind one interface
 - [0024](adr/0024-files-first-flows.md) Judgment work as files-first flows; build work stays in Make
+- [0025](adr/0025-estate-pack.md) An estate pack: plain-document instruments on the attestation protocol
 
 Also:
 

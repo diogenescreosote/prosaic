@@ -650,8 +650,12 @@ def build_body_letter(doc: Document, body: str, meta: dict,
             else:
                 h3 += 1
                 prefix = f"{h3}."
+            # heading_numbers: false — headings that carry their own
+            # enumeration ("Article I. ...") skip the auto prefix.
+            if not meta.get("heading_numbers", True):
+                prefix = ""
             add_blank(doc)
-            _add_styled_para(doc, f"{prefix} {heading_text}", bold=True,
+            _add_styled_para(doc, f"{prefix} {heading_text}".strip(), bold=True,
                              footnote_numbers=footnote_numbers)
             continue
 

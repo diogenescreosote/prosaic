@@ -221,7 +221,9 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
             footnote_numbers[fid] = len(footnote_numbers) + 1
 
     doctype = meta.get("doctype", "pleading")
-    blocks = mp.number_headings(mp.parse_markdown_blocks(body, doctype=doctype))
+    blocks = mp.parse_markdown_blocks(body, doctype=doctype)
+    if meta.get("heading_numbers", True):
+        blocks = mp.number_headings(blocks)
 
     # Build (line, tight) pairs. Consecutive tight items (list members) are
     # joined by a single newline; everything else is separated by a blank line.

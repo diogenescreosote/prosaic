@@ -141,7 +141,7 @@ Run the test suite with `uv run pytest`.
   beside it, captioned from the same front matter, never merged into the
   document it accompanies.
 
-347 tests, with `ruff` and `mypy --strict` clean.
+363 tests, with `ruff` and `mypy --strict` clean.
 
 **Status:** 0.1.0. Young code: the engine and the six forms are tested
 against the statutes and the official blanks, but no filing produced by this
@@ -160,6 +160,7 @@ for the end-to-end tour.
 | Getting documents out | [forms.md](docs/forms.md) |
 | Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
 | Working on it | [skills/](skills/README.md) · [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) |
+| Estate planning | [templates/estate/](templates/estate/README.md) |
 | Where it's going | [ROADMAP.md](ROADMAP.md) |
 
 Decisions are recorded twice, by scope: [docs/DECISIONS.md](docs/DECISIONS.md)

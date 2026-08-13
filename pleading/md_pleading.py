@@ -183,9 +183,15 @@ REQUIRED_FIELDS_LETTER = [
     "to_name", "to_address_lines", "paper_title",
 ]
 
+# Plain documents (contracts, estate instruments, attestations): a
+# centered title, ordinary letter-size text, page numbers — no court
+# caption, no letterhead, no 28-line grid.
+REQUIRED_FIELDS_DOCUMENT = ["paper_title"]
+
 REQUIRED_FIELDS_BY_DOCTYPE = {
     "pleading": REQUIRED_FIELDS_PLEADING,
     "letter": REQUIRED_FIELDS_LETTER,
+    "document": REQUIRED_FIELDS_DOCUMENT,
 }
 
 SUPPORTED_EXHIBIT_EXTS = {".pdf", ".png", ".jpg", ".jpeg"}
@@ -2228,10 +2234,14 @@ class PleadingPDF:
         self.sign_name = sign_name
         self.sign_date = sign_date
         self.is_letter = meta.get("doctype") == "letter"
-        self.left_margin = LETTER_LEFT_MARGIN if self.is_letter else LEFT_MARGIN
-        self.text_width = LETTER_TEXT_WIDTH if self.is_letter else TEXT_WIDTH
-        self.leading = LETTER_LEADING if self.is_letter else LEADING
-        self.lines_per_page = LETTER_LINES_PER_PAGE if self.is_letter else LINES_PER_PAGE
+        self.is_document = meta.get("doctype") == "document"
+        # Documents share the letter geometry: same margins, same
+        # single-spaced leading — they differ only in the header.
+        plain = self.is_letter or self.is_document
+        self.left_margin = LETTER_LEFT_MARGIN if plain else LEFT_MARGIN
+        self.text_width = LETTER_TEXT_WIDTH if plain else TEXT_WIDTH
+        self.leading = LETTER_LEADING if plain else LEADING
+        self.lines_per_page = LETTER_LINES_PER_PAGE if plain else LINES_PER_PAGE
         self.c = canvas.Canvas(output_path, pagesize=letter)
         self.c.setTitle(meta.get("paper_title", "Pleading"))
         # The footer always carries the caption's paper title (spec:
@@ -2268,7 +2278,7 @@ class PleadingPDF:
         draw_grid_line_numbers(self.c, self.line_y, self.lines_per_page)
 
     def draw_footer(self) -> None:
-        if self.is_letter:
+        if self.is_letter or self.is_document:
             self.c.setFont(FONT_NAME, FONT_SIZE_SMALL)
             self.c.drawCentredString(CENTER_X, LETTER_PAGE_NUM_Y, str(self.page_num))
         else:
@@ -2283,7 +2293,7 @@ class PleadingPDF:
         self._fn_area_lines = 0
         self.c.setStrokeColor(black)
         self.c.setFillColor(black)
-        if not self.is_letter:
+        if not (self.is_letter or self.is_document):
             self.draw_line_numbers()
         self.draw_footer()
         # The `notreal:` banner is NOT drawn here. It is stamped over
@@ -2413,7 +2423,20 @@ class PleadingPDF:
 
         return cur
 
+    def _document_header(self) -> int:
+        """A plain document opens with its centered bold title."""
+        title = typographic_subs(str(self.meta["paper_title"]))
+        cur = 1
+        for line in wrap_text(title.upper(), self.text_width,
+                              FONT_NAME_BOLD, FONT_SIZE):
+            self.c.setFont(FONT_NAME_BOLD, FONT_SIZE)
+            self.c.drawCentredString(CENTER_X, self.line_y(cur), line)
+            cur += 1
+        return cur + 1
+
     def first_page_caption_end_line(self) -> int:
+        if self.is_document:
+            return self._document_header()
         if self.is_letter:
             return self._letter_header()
 
@@ -3386,7 +3409,11 @@ def main() -> None:
     body = flatten_lettersignblock(body)
     body = autonumber_list_items(body)
     body, footnote_defs = extract_footnote_defs(body)
-    blocks = number_headings(parse_markdown_blocks(body, doctype=doctype))
+    blocks = parse_markdown_blocks(body, doctype=doctype)
+    # heading_numbers: false — for documents whose headings carry their
+    # own enumeration ("Article I. ..."), auto-numbering would double it.
+    if meta.get("heading_numbers", True):
+        blocks = number_headings(blocks)
 
     os.makedirs(output_path.parent, exist_ok=True)
 

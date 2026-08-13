@@ -1098,6 +1098,19 @@ The block renders as `Sincerely,`, a signature line, and then the
 name lines beneath the signature, with one blank line of trailing
 separation.
 
+## Plain documents (`doctype: document`)
+
+`doctype: document` renders a plain letter-size document: the
+`paper_title` centered in bold at the top, single-spaced body at the
+letter geometry, a bare page number — no court caption, no
+letterhead, no 28-line grid. It is the doctype for instruments that
+are not filings: contracts, estate documents, attestations. Only
+`paper_title` is required.
+
+`heading_numbers: false` (any doctype) turns off the automatic
+I./A./1. heading enumeration, for documents whose headings carry
+their own ("Article I. ...").
+
 ## QR blocks — machine-readable payloads on the page
 
 `\qrblock{payload}{caption}` renders a QR symbol at the text margin,
