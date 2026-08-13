@@ -215,3 +215,27 @@ def test_missing_api_key_is_a_clear_error(tmp_path: Path) -> None:
     # the unreachable-API error from the sentinel URL. Both prove the
     # key was never defaulted silently.
     assert "DOCUSEAL_API_KEY" in proc.stderr or "unreachable" in proc.stderr
+
+
+def test_send_refuses_a_draft_stamped_pdf(mock_api: str, tmp_path: Path) -> None:
+    """The default-draft policy's outbound guard: a PDF whose metadata
+    carries the prosaic draft key does not go into the world without
+    --allow-draft."""
+    from pypdf import PdfWriter
+
+    pdf = tmp_path / "draft.pdf"
+    w = PdfWriter()
+    w.add_blank_page(width=612, height=792)
+    w.add_metadata({"/ProsaicDraftBanner": "DRAFT—NOT EXECUTED"})
+    with pdf.open("wb") as fh:
+        w.write(fh)
+
+    proc = run_esign("send", "draft.pdf", "--to", "jane@example.com", url=mock_api, cwd=tmp_path)
+    assert proc.returncode != 0
+    assert "refusing to send a draft" in proc.stderr
+    assert not (tmp_path / "draft.pdf.esign.json").exists()
+
+    proc = run_esign(
+        "send", "draft.pdf", "--to", "jane@example.com", "--allow-draft", url=mock_api, cwd=tmp_path
+    )
+    assert proc.returncode == 0, proc.stderr

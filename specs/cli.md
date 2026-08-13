@@ -22,7 +22,10 @@ subcommand's real promises live in that component's spec.
 - **`sc build <envelope>` / `sc list`** build and enumerate filing
   envelopes from a matter directory, honoring the generator's
   staleness, variant, signing, and sent-envelope semantics (see
-  [pleading/generator.md](pleading/generator.md)). *(untested)*
+  [pleading/generator.md](pleading/generator.md)). Every build is
+  DRAFT-bannered unless `--final` is passed — suppression is a
+  per-invocation act, never a property of the source. *(tested:
+  pleading/tests/test_draft_banner.py)*
 - **`sc ocr <pdf> <outdir>`** OCR-supplements one PDF under the
   originals-are-sacred rules (adds text only to pages lacking it,
   never modifies the input, skips already-searchable files).

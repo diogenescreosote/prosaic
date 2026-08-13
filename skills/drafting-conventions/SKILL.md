@@ -52,6 +52,15 @@ pull orphan lines forward to justify a heading.
   should be hard to mis-mate: identify the document, date, and
   signer near (never inside) the statutory wording.
 
+## Release discipline (enforced)
+
+Every build is DRAFT-bannered by default; `--final` (or
+`make ... FINAL=1`) is the explicit act of releasing, per invocation,
+never persisted in a source. `sc esign send` refuses draft-stamped
+PDFs without `--allow-draft`. `notreal:` remains for hypotheticals
+and simulations whose banner should say what they are. Never build
+`--final` on your own initiative — releasing is the human's act.
+
 ## Source ranking, when conventions conflict
 
 Statutes / Rules of Court / local rules (validity — enforceable)

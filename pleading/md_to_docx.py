@@ -1169,6 +1169,8 @@ def main() -> None:
                              "and redactions. When omitted, redaction-bearing "
                              "documents build the PUBLIC variant (with a "
                              "warning); see md_pleading.effective_variant.")
+    parser.add_argument("--final", action="store_true",
+                        help="Suppress the default DRAFT banner")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -1189,6 +1191,9 @@ def main() -> None:
             flush=True,
         )
     meta = apply_variant_to_meta(meta, variant)
+    meta.pop("_final", None)
+    if args.final:
+        meta["_final"] = True
 
     # Exhibit citations resolve through the shared substitute_exhibit_refs
     # (both \exhibit{} and \attachment{}, doctype-aware label, en-dash page

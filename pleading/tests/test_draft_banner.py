@@ -71,7 +71,7 @@ FILLER = "\n\n".join(
 )
 
 
-def render(tmp_path: Path, marker: str | None) -> str:
+def render(tmp_path: Path, marker: str | None, final: bool = False) -> str:
     """Render a source with (or without) a marker; return its PDF text."""
     front = SOURCE.format(marker=marker or "", filler=FILLER)
     if marker is None:
@@ -81,10 +81,10 @@ def render(tmp_path: Path, marker: str | None) -> str:
     src = tmp_path / "decl.md"
     src.write_text(front)
     out = tmp_path / "decl.pdf"
-    subprocess.run(
-        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)],
-        check=True, capture_output=True,
-    )
+    cmd = [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)]
+    if final:
+        cmd.append("--final")
+    subprocess.run(cmd, check=True, capture_output=True)
     return subprocess.run(
         ["pdftotext", "-layout", str(out), "-"],
         check=True, capture_output=True, text=True,
@@ -107,11 +107,40 @@ def test_banner_says_what_the_marker_says(tmp_path):
     assert "SIMULATION" in render(tmp_path, "AI-generated simulation")
 
 
-def test_no_banner_without_a_marker(tmp_path):
-    """The failure that would matter most: a banner on a real filing."""
+def test_default_banner_without_a_marker(tmp_path):
+    """Every build is a draft until --final says otherwise: an
+    unmarked pleading source gets the doctype default."""
     text = render(tmp_path, None)
+    pages = [p for p in text.split("\f") if p.strip()]
+    for i, page in enumerate(pages):
+        assert "DRAFT—NOT FILED" in page, f"default banner missing from page {i + 1}"
+
+
+def test_final_build_clears_the_banner(tmp_path):
+    """The failure that would matter most: a banner on a real filing —
+    now reachable only through the explicit --final flag."""
+    text = render(tmp_path, None, final=True)
     for token in ("DRAFT", "NOT FILED", "NOT SENT", "SIMULATION"):
         assert token not in text.upper().replace("DECLARATION", "")
+
+
+def test_a_source_cannot_finalize_itself(tmp_path):
+    """_final in front matter is stripped: only the build flag clears
+    the banner."""
+    front = SOURCE.format(marker="", filler=FILLER)
+    front = front.replace("notreal: \"\"", "_final: true")
+    src = tmp_path / "decl.md"
+    src.write_text(front)
+    out = tmp_path / "decl.pdf"
+    subprocess.run(
+        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)],
+        check=True, capture_output=True,
+    )
+    text = subprocess.run(
+        ["pdftotext", "-layout", str(out), "-"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    assert "DRAFT—NOT FILED" in text
 
 
 def test_banner_does_not_move_the_line_grid(tmp_path):
@@ -122,10 +151,14 @@ def test_banner_does_not_move_the_line_grid(tmp_path):
     line citation taken against the draft would be wrong in the thing
     actually filed.
     """
-    with_banner = render(tmp_path / "a", "DRAFT---not filed")
-    (tmp_path / "b").mkdir(parents=True, exist_ok=True)
-    without = render(tmp_path / "b", None)
-    assert len(with_banner.split("\f")) == len(without.split("\f"))
+    for sub in ("a", "b", "c"):
+        (tmp_path / sub).mkdir(parents=True, exist_ok=True)
+    with_marker = render(tmp_path / "a", "DRAFT---not filed")
+    finaled = render(tmp_path / "b", None, final=True)
+    defaulted = render(tmp_path / "c", None)
+    assert (len(with_marker.split("\f"))
+            == len(finaled.split("\f"))
+            == len(defaulted.split("\f")))
 
 
 def _render_to(tmp_path: Path, script: str, suffix: str, marker: str) -> Path:
@@ -254,12 +287,13 @@ def test_marker_normalized_to_the_house_dash_rule():
     assert " — " not in banner
 
 
-def test_absent_marker_yields_no_banner():
-    assert mp.draft_banner_text({}) is None
-    assert mp.draft_banner_text({"notreal": "   "}) is None
+def test_absent_marker_yields_the_doctype_default():
+    assert mp.draft_banner_text({}) == "DRAFT—NOT FILED"
+    assert mp.draft_banner_text({"doctype": "document"}) == "DRAFT—NOT EXECUTED"
+    assert mp.draft_banner_text({"doctype": "letter"}) == "DRAFT—NOT SENT"
+    assert mp.draft_banner_text({"_final": True}) is None
+    assert mp.draft_banner_text({"_final": True, "notreal": "x"}) is None
 
-
-@pytest.fixture(autouse=True)
 def _mkdirs(tmp_path):
     (tmp_path / "a").mkdir(exist_ok=True)
     (tmp_path / "b").mkdir(exist_ok=True)

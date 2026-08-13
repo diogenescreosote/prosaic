@@ -57,8 +57,11 @@ def build(tmp_path: Path, body: str) -> Path:
     src = tmp_path / "doc.md"
     src.write_text(FRONT.format(body=body))
     out = tmp_path / "doc.pdf"
+    # --final: the default DRAFT banner contains an em dash, and the
+    # fixedwidth tests assert none leaks into verbatim content.
     proc = subprocess.run(
-        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)],
+        [sys.executable, str(PLEADING_DIR / "md_pleading.py"),
+         str(src), str(out), "--final"],
         capture_output=True, text=True, cwd=tmp_path,
     )
     assert proc.returncode == 0, proc.stderr
@@ -181,7 +184,7 @@ def test_fixedwidth_in_docx_and_txt_stay_verbatim(tmp_path):
     for renderer, out_name in (("md_to_txt.py", "doc.txt"),):
         proc = subprocess.run(
             [sys.executable, str(PLEADING_DIR / renderer),
-             str(src), str(tmp_path / out_name)],
+             str(src), str(tmp_path / out_name), "--final"],
             capture_output=True, text=True, cwd=tmp_path,
         )
         assert proc.returncode == 0, proc.stderr
@@ -192,7 +195,7 @@ def test_fixedwidth_in_docx_and_txt_stay_verbatim(tmp_path):
     import zipfile
     proc = subprocess.run(
         [sys.executable, str(PLEADING_DIR / "md_to_docx.py"),
-         str(src), str(tmp_path / "doc.docx")],
+         str(src), str(tmp_path / "doc.docx"), "--final"],
         capture_output=True, text=True, cwd=tmp_path,
     )
     assert proc.returncode == 0, proc.stderr

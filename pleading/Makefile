@@ -22,6 +22,9 @@ BUILD_FLAGS :=
 ifdef FORCE
 BUILD_FLAGS += --force
 endif
+ifdef FINAL
+BUILD_FLAGS += --final
+endif
 ifdef VARIANT
 BUILD_FLAGS += --variant "$(VARIANT)"
 endif

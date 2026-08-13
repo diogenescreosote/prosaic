@@ -342,6 +342,8 @@ def main() -> None:
     parser.add_argument("--attachments-dir", metavar="DIR", default=None,
                         help="Also copy each exhibit's source file into DIR under "
                              "its numbered name (Exhibit_NN_shortname.ext)")
+    parser.add_argument("--final", action="store_true",
+                        help="Suppress the default DRAFT banner")
     args = parser.parse_args()
 
     input_path = Path(args.input)
@@ -353,6 +355,9 @@ def main() -> None:
     meta, body = mp.parse_front_matter(raw)
     mp.warn_unknown_front_matter_keys(meta, Path(args.input).name)
     meta = mp.apply_variant_to_meta(meta, args.variant)
+    meta.pop("_final", None)
+    if args.final:
+        meta["_final"] = True
 
     text = render_text(meta, body, args.variant)
 

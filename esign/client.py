@@ -104,10 +104,34 @@ def parse_signer(spec: str) -> dict:
     return {"email": spec}
 
 
+DRAFT_METADATA_KEY = "/ProsaicDraftBanner"
+
+
+def draft_banner_of(pdf: Path) -> str | None:
+    """The DRAFT banner a prosaic build stamped into this PDF's
+    metadata, or None for a --final build (or a foreign PDF)."""
+    try:
+        from pypdf import PdfReader
+
+        info = PdfReader(str(pdf)).metadata or {}
+        value = info.get(DRAFT_METADATA_KEY)
+        return str(value) if value else None
+    except Exception:
+        return None
+
+
 def cmd_send(args: argparse.Namespace) -> int:
     pdf = Path(args.pdf)
     if not pdf.exists():
         raise SystemExit(f"no such file: {pdf}")
+    banner = draft_banner_of(pdf)
+    if banner and not args.allow_draft:
+        raise SystemExit(
+            f"refusing to send a draft: this PDF is stamped "
+            f"{banner!r}. Rebuild with --final for the version that "
+            f"goes into the world, or pass --allow-draft to "
+            f"deliberately circulate the draft."
+        )
     configure_sdk()
 
     submitters = [parse_signer(s) for s in args.to]
@@ -230,6 +254,9 @@ def main() -> None:
     sp.add_argument("--message", help="email body")
     sp.add_argument(
         "--no-email", action="store_true", help="create the submission but let me deliver the links"
+    )
+    sp.add_argument(
+        "--allow-draft", action="store_true", help="send even though the PDF carries a DRAFT banner"
     )
     sp.set_defaults(func=cmd_send)
 

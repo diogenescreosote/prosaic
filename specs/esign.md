@@ -22,6 +22,10 @@ does prosaic's side.
   first, then the `prosaic.docuseal` Keychain entry, and a missing
   key is a clear how-to-configure error — never a silent default.
   *(tested: tests/test_esign.py)*
+- **A draft never ships by accident.** `send` refuses a PDF whose
+  metadata carries the prosaic draft stamp (every non-`--final`
+  build) unless `--allow-draft` is passed for deliberate circulation.
+  *(tested: tests/test_esign.py)*
 - **`sc esign send <pdf> --to "Name <email>" [--to ...]`** uploads
   the document byte-identically, creates one submission with signers
   in the given order (roles `Signer 1..N`), emails them (unless

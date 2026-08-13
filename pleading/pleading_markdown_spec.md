@@ -132,7 +132,19 @@ one that works — and gets copied into new files as a
 demonstrated-correct example. If you want a note for a human, use a
 YAML comment, which no one can mistake for configuration.
 
-### `notreal` — the unfiled/unsent marker, and it prints
+### Every build is a draft until `--final`
+
+A build with no `--final` flag stamps a red banner on every page —
+`DRAFT—NOT FILED` (pleadings), `DRAFT—NOT EXECUTED` (documents),
+`DRAFT—NOT SENT` (letters) — and writes a machine-readable twin into
+the PDF metadata, which `sc esign send` refuses unless overridden.
+Rendered output is what circulates, and an unmarked draft is the
+accident waiting to happen. Suppression is per-invocation only
+(`sc build <envelope> --final`, `make <envelope> FINAL=1`); a
+front-matter `_final:` is stripped, so a source can never finalize
+itself. *(tested: pleading/tests/test_draft_banner.py)*
+
+### `notreal` — the custom marker for hypotheticals, and it prints
 
 ```yaml
 notreal: "DRAFT---not served as of August 7, 2026"

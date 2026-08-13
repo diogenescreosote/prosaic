@@ -27,6 +27,7 @@ import yaml
 
 # Resolve paths to sibling scripts relative to this file's location.
 PLEADING_GEN = Path(__file__).resolve().parent / "md_pleading.py"
+FINAL_BUILD = False  # set from --final in main()
 MD_TO_DOCX = Path(__file__).resolve().parent / "md_to_docx.py"
 MD_TO_TXT = Path(__file__).resolve().parent / "md_to_txt.py"
 REDACT_PDF = Path(__file__).resolve().parent / "redact_pdf.py"
@@ -405,6 +406,8 @@ def _build_txt_source(
         print(f"  building {input_path.name}", flush=True)
 
     cmd = [sys.executable, str(MD_TO_TXT), str(input_path), str(output_txt)]
+    if FINAL_BUILD:
+        cmd.append("--final")
     if variant:
         cmd += ["--variant", variant]
     if copy_attachments:
@@ -539,6 +542,8 @@ def build_envelope(
             print(f"  force rebuilding {entry.file}", flush=True)
 
         cmd = [sys.executable, str(PLEADING_GEN), str(input_path), str(output_pdf)]
+        if FINAL_BUILD:
+            cmd.append("--final")
         if variant:
             cmd += ["--variant", variant]
         if sign:
@@ -558,6 +563,8 @@ def build_envelope(
             output_docx = out_dir / f"{stem}.docx"
             docx_cmd = [sys.executable, str(MD_TO_DOCX),
                         str(input_path), str(output_docx)]
+            if FINAL_BUILD:
+                docx_cmd.append("--final")
             if variant:
                 docx_cmd += ["--variant", variant]
             render_jobs.append(RenderJob(
@@ -677,6 +684,9 @@ def main() -> None:
                              "one per line (used by `sc clean`)")
     parser.add_argument("--check-stale", action="store_true",
                         help="Fail if outputs are missing or older than sources/exhibits")
+    parser.add_argument("--final", action="store_true",
+                        help="Suppress the default DRAFT banner on every "
+                             "rendered artifact: this build goes into the world")
     parser.add_argument("--force", action="store_true",
                         help="Allow rebuilding envelopes marked sent")
     parser.add_argument("--jobs", "-j", type=int, default=None, metavar="N",
@@ -690,6 +700,8 @@ def main() -> None:
     parser.add_argument("--date", metavar="YYYY-MM-DD", default=None,
                         help="Date for signature blocks")
     args = parser.parse_args()
+    global FINAL_BUILD
+    FINAL_BUILD = bool(getattr(args, "final", False))
 
     yaml_path = Path("envelopes.yaml")
     if not yaml_path.exists():

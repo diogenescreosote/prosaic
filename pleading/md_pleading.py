@@ -2296,6 +2296,20 @@ def require_attachment_has_no_caption(meta: Dict, source_name: str) -> None:
     )
 
 
+# Every build is a draft until someone says otherwise (--final): the
+# rendered artifact is what circulates, and an unmarked draft is the
+# accident waiting to happen. Per-doctype defaults, because "not
+# filed", "not executed", and "not sent" are different facts.
+DEFAULT_DRAFT_BANNER = {
+    "pleading": "DRAFT—NOT FILED",
+    "document": "DRAFT—NOT EXECUTED",
+    "letter": "DRAFT—NOT SENT",
+}
+# PDF metadata key stamped alongside the banner, so outbound tooling
+# (sc esign) can refuse a draft deterministically whatever the text.
+DRAFT_METADATA_KEY = "/ProsaicDraftBanner"
+
+
 def draft_banner_text(meta: Dict) -> Optional[str]:
     """The banner a not-yet-real document carries, or None.
 
@@ -2312,9 +2326,15 @@ def draft_banner_text(meta: Dict) -> Optional[str]:
     makes clearing it a deliberate act by someone who knows the
     document is going out.
     """
+    if meta.get("_final"):
+        # Set only by the build system's --final flag (main() strips
+        # any front-matter attempt): suppression is a per-invocation
+        # act, never a property a source can grant itself.
+        return None
     marker = meta.get("notreal")
     if marker is None:
-        return None
+        doctype = str(meta.get("doctype", "pleading"))
+        return DEFAULT_DRAFT_BANNER.get(doctype, "DRAFT")
     text = typographic_subs(str(marker)).strip().upper()
     # `notreal:` markers predate being rendered, so they are written
     # however their author felt — usually with spaces around the dash.
@@ -2448,6 +2468,9 @@ def stamp_draft_banner(pdf_path: Path, text: Optional[str]) -> None:
     buf.seek(0)
 
     overlay = PdfReader(buf)
+    # Machine-readable twin of the visual stamp: outbound tools (sc
+    # esign send) refuse a PDF carrying this key unless overridden.
+    writer.add_metadata({DRAFT_METADATA_KEY: text})
     for i, page in enumerate(writer.pages):
         scale, tx = geometry[i]
         page.add_transformation(Transformation().scale(scale).translate(tx, 0))
@@ -4099,6 +4122,9 @@ def main() -> None:
                         help="Sign all \\signblock and \\declsignblock blocks with a cursive rendering of NAME")
     parser.add_argument("--date", metavar="YYYY-MM-DD", default=None,
                         help="Fill in signature block dates (default: today)")
+    parser.add_argument("--final", action="store_true",
+                        help="Suppress the default DRAFT banner: this build is "
+                             "the one going into the world")
     args = parser.parse_args()
 
     sign_name: Optional[str] = args.sign
@@ -4132,6 +4158,11 @@ def main() -> None:
             flush=True,
         )
     meta = apply_variant_to_meta(meta, variant)
+    # A source cannot self-finalize: only the build flag clears the
+    # default draft banner, and it does so per invocation.
+    meta.pop("_final", None)
+    if args.final:
+        meta["_final"] = True
     warn_unknown_front_matter_keys(meta, input_path.name)
     require_attachment_has_no_caption(meta, input_path.name)
     exhibits = validate_meta(meta, input_path, variant)
