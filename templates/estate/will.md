@@ -71,7 +71,7 @@ The Anchored Key's fingerprint (SHA-1, as gpg prints it) is:
 5EDF 79A0 477D BBDE 38AC  F791 6676 E412 5898 C933
 }
 
-\barcodefile{qr}{assets/anchor-key.asc}{The Anchored Key, machine-readable.}
+\barcodefile{qr}{assets/anchor-key.asc}{The Anchored Key, encoded as a QR code (ISO/IEC 18004).}
 
 Any non-testamentary record bearing a cryptographic signature
 verifiable against the Anchored Key and carrying a trusted timestamp

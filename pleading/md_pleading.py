@@ -251,8 +251,21 @@ LETTERSIGNBLOCK_BASE_GRID_LINES = 4  # Sincerely + blank + rule + blank (+1 per 
 # at 0.5 mm; a symbol wider than the text column is scaled down to it.
 # PDF417 aims at a 3:1 width:height ratio (its sweet spot for handheld
 # scanners), chosen by searching zint's column count.
-BARCODE_MODULE_MM = 0.5              # printed module size, mm
-BARCODE_MODULE_PT = BARCODE_MODULE_MM * 72 / 25.4
+# Printed module size per format, mm. PDF417 at 0.5 mm (its stacked
+# rows tolerate less X-dimension); QR and Code 128 at 0.75 mm, the
+# GS1 general-distribution neighborhood, because these symbols must
+# survive a recorder's office scanner and camscanned nearly-flat
+# paper, not just a crisp screenshot.
+BARCODE_MODULE_MM = {"qr": 0.75, "code128": 0.75, "pdf417": 0.5}
+MM_TO_PT = 72 / 25.4
+# Symbols are scaled UP so their smaller side is at least this: a
+# symbol that decodes from a crisp screenshot still has to survive a
+# recorder's office scanner and a camscanned page that is almost but
+# not quite flat. Modules grow past 0.5 mm as needed; the text-column
+# cap still wins for payloads too wide to fit (prefer a 2D format for
+# those).
+BARCODE_MIN_SIDE_MM = 40
+BARCODE_MIN_SIDE_PT = BARCODE_MIN_SIDE_MM * 72 / 25.4
 BARCODE_CAPTION_EXTRA_LINE = 1       # + caption line when one prints
 BARCODE_PX_PER_MODULE = 8            # render resolution (zint --scale 4)
 PDF417_TARGET_ASPECT = 3.0           # width / height
@@ -3622,8 +3635,16 @@ def barcode_image(fmt: str, payload: str, out_path: str) -> Tuple[float, float]:
     else:
         render_barcode_png(fmt, payload, out_path)
     img = Image.open(out_path)
-    w = img.width / BARCODE_PX_PER_MODULE * BARCODE_MODULE_PT
-    h = img.height / BARCODE_PX_PER_MODULE * BARCODE_MODULE_PT
+    module_pt = BARCODE_MODULE_MM[fmt] * MM_TO_PT
+    w = img.width / BARCODE_PX_PER_MODULE * module_pt
+    h = img.height / BARCODE_PX_PER_MODULE * module_pt
+    # Enforce the scannability floor: grow the symbol (uniformly, so
+    # module geometry survives) until its smaller side reaches the
+    # minimum. The emitter's text-column cap still applies after.
+    smaller = min(w, h)
+    if smaller < BARCODE_MIN_SIDE_PT:
+        scale = BARCODE_MIN_SIDE_PT / smaller
+        w, h = w * scale, h * scale
     return w, h
 
 

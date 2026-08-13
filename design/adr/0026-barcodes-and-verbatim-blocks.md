@@ -18,9 +18,13 @@ verbatim.
 1. **`\barcode{format}{payload}{caption}`** (and `\barcodefile` for
    file payloads) replaces the QR-specific macros. Formats: `qr`
    (qrencode, as before), `code128` and `pdf417` (zint, declared
-   optional in the manifest). Symbols print at **0.5 mm per module**
-   — the geometry scanners are engineered for — scaled down only when
-   wider than the text column. PDF417 targets a **3:1 width:height
+   optional in the manifest). Symbols print at
+   **0.75 mm modules** (qr, code128; the GS1 general-distribution
+   neighborhood) or **0.5 mm** (pdf417, whose stacked rows tolerate
+   less X-dimension), and are scaled up until the smaller side
+   reaches **40 mm** — sized for recorder-office scanners and
+   camscanned nearly-flat paper — scaled down only when wider than
+   the text column. PDF417 targets a **3:1 width:height
    ratio** (its handheld-scanner sweet spot), found by searching
    zint's column count; a symbol at the target that would overflow
    the column is capped at column width. Payloads reach generators

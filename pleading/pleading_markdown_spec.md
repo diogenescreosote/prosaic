@@ -1171,15 +1171,19 @@ matter directory); a missing payload file fails the build.
 
 Formats and their generators (system-dependencies.yaml):
 
-| format | symbol | generator |
-|---|---|---|
-| `qr` | QR code, error correction M, 4-module quiet zone | qrencode |
-| `code128` | Code 128 1D bar, 15 mm tall | zint |
-| `pdf417` | PDF417 stacked 2D, aiming at a 3:1 width:height ratio | zint |
+| format | symbol | module | generator |
+|---|---|---|---|
+| `qr` | QR code (ISO/IEC 18004), error correction M, 4-module quiet zone | 0.75 mm | qrencode |
+| `code128` | Code 128 1D bar (ISO/IEC 15417), 15 mm tall | 0.75 mm | zint |
+| `pdf417` | PDF417 stacked 2D (ISO/IEC 15438), 3:1 width:height target | 0.5 mm | zint |
 
-Symbols print at their physical module size — 0.5 mm per module — so
-scanners see the geometry the symbology specs assume; a symbol wider
-than the text column is scaled down to fit it. PDF417's 3:1 target is
+Module sizes are chosen for a recorder's office scanner and
+camscanned nearly-flat paper, not a crisp screenshot; symbols are
+additionally scaled up until their smaller side reaches 40 mm. A
+symbol wider than the text column is scaled down to fit it (prefer a
+2D format for long payloads). Captions should name the encoding
+format — a stranger with the paper needs to know what to scan it
+as. PDF417's 3:1 target is
 met by searching zint's column count for the nearest geometry. Both
 macros must appear alone on a line. Payloads reach the generators via
 stdin or a temp file, never argv.
@@ -1192,7 +1196,7 @@ and compares).
 ```
 The following key verifies every document in this matter:
 
-\barcodefile{qr}{assets/anchor-key.asc}{Public key, machine-readable.}
+\barcodefile{qr}{assets/anchor-key.asc}{Public key, encoded as a QR code.}
 ```
 
 ## Fixed-width blocks — verbatim or not at all
