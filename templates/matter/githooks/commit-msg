@@ -17,7 +17,8 @@ sc=""
 for candidate in \
     "${PROSAIC_ROOT:+$PROSAIC_ROOT/cli/sc}" \
     "$(git rev-parse --show-toplevel)/../prosaic/cli/sc" \
-    "$HOME/prosaic/cli/sc"; do
+    "$HOME/prosaic/cli/sc" \
+    "$HOME/code/prosaic/cli/sc"; do
   [ -n "$candidate" ] || continue
   if [ -x "$candidate" ]; then sc="$candidate"; break; fi
 done
