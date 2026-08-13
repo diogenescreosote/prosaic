@@ -40,4 +40,5 @@ depends on a particular harness.
 | [build-envelope](build-envelope/SKILL.md) | Build a filing packet (pleading PDF/DOCX, exhibits, cover forms) from a matter's markdown sources |
 | [fill-form](fill-form/SKILL.md) | Fill a Judicial Council form from its YAML descriptor, with the verification discipline |
 | [triage-inbox](triage-inbox/SKILL.md) | Move new material from inbox/ to assets/ under the matter conventions |
+| [run-flow](run-flow/SKILL.md) | Run or write a files-first flow: agent/judge/gate graphs for drafting loops and review passes |
 | [new-matter](new-matter/SKILL.md) | Scaffold a matter directory: layout, git, hooks, contracts, backup |

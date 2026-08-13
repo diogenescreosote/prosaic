@@ -1,0 +1,55 @@
+# Adversarial drafting loop: review as the opponent, revise, judge,
+# and only a human clears the result for use. Judgment work in a
+# graph (ADR-0024); the deterministic build that follows stays in the
+# Makefile where it belongs.
+#
+#   sc flow run flows/draft-review.yaml --input source=src/Declaration.md
+#
+# The flow never edits the source: revisions land in the run
+# directory for a human to adopt (originals are sacred; drafting
+# authority stays with the person).
+
+name: draft-review
+description: Draft -> adversarial review -> revision -> judge loop -> human gate
+inputs:
+  - source
+
+steps:
+  - id: review
+    kind: agent
+    prompt: |
+      You are opposing counsel. Read the draft at {source} and write
+      the review your client is paying for: every factual assertion
+      that lacks support, every legal conclusion stated as fact,
+      every ambiguity you would exploit, every internal
+      inconsistency. Number the problems, worst first. Do not
+      rewrite the draft; find what is wrong with it.
+
+  - id: revise
+    kind: agent
+    prompt: |
+      Read the draft at {source} and the adversarial review at
+      {review}. Produce a revised draft that answers every numbered
+      problem the review raises without weakening what was right.
+      Preserve the original's front matter, structure, and voice.
+      Output ONLY the complete revised draft, nothing else.
+    output: revised.md
+
+  - id: quality
+    kind: judge
+    threshold: 8
+    on_fail: revise
+    max_rounds: 3
+    prompt: |
+      Read the original draft at {source}, the adversarial review at
+      {review}, and the revision at {revised}. Score the revision
+      0-10: a 10 answers every problem the review raised, introduces
+      no new unsupported assertions, and preserves the original's
+      structure and front matter. Any fabricated fact is a 0.
+
+  - id: human
+    kind: gate
+    message: |
+      The revision passed adversarial review. Read revised.md and the
+      review beside it. Adopting any of it into src/ is your
+      decision, made by hand.
