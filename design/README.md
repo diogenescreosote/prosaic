@@ -43,6 +43,7 @@ project accretes decisions instead of middleware.
 - [0020](adr/0020-agent-harness-agnostic.md) One agent-CLI seam; contracts named AGENTS.md
 - [0021](adr/0021-skills-as-capability-packaging.md) Skills: capability packaging for agents, one SKILL.md each
 - [0022](adr/0022-paper-anchored-attestation.md) Paper-anchored attestation: pinned keys, dual hashes, a signed manifest
+- [0023](adr/0023-esignature-behind-one-interface.md) E-signature through DocuSeal, cloud or self-hosted behind one interface
 
 Also:
 

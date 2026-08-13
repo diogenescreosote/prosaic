@@ -36,6 +36,10 @@ subcommand's real promises live in that component's spec.
   (`crypto/attest.py`): dual hashes, detached signatures, pinned-key
   verification, the signed manifest, timestamps. The real promises
   live in [attest.md](attest.md). *(tested: tests/test_attest.py)*
+- **`sc esign ...`** passes through to the e-signature client
+  (`esign/docuseal.py`): send for signature, poll, fetch the signed
+  originals and audit log. The real promises live in
+  [esign.md](esign.md). *(tested: tests/test_esign.py)*
 - **`sc connectors`** lists available connectors with their
   descriptions and auth requirements. *(untested)*
 - **`sc schedule <dir> [times]`** installs the 12-hourly background

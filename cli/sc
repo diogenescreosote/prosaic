@@ -267,6 +267,12 @@ def cmd_attest(args: argparse.Namespace) -> int:
     ).returncode
 
 
+def cmd_esign(args: argparse.Namespace) -> int:
+    return subprocess.run(
+        [sys.executable, str(ROOT / "esign" / "docuseal.py"), *args.rest]
+    ).returncode
+
+
 def cmd_connectors(_args: argparse.Namespace) -> int:
     for manifest in sorted((ROOT / "connectors").glob("*/manifest.json")):
         m = json.loads(manifest.read_text())
@@ -711,6 +717,11 @@ def main() -> int:
     sp.add_argument("rest", nargs=argparse.REMAINDER,
                     help="passed through to crypto/attest.py")
     sp.set_defaults(func=cmd_attest)
+
+    sp = sub.add_parser("esign", help="e-signature via DocuSeal: send, status, fetch")
+    sp.add_argument("rest", nargs=argparse.REMAINDER,
+                    help="passed through to esign/docuseal.py")
+    sp.set_defaults(func=cmd_esign)
 
     sp = sub.add_parser("connectors", help="list available connectors")
     sp.set_defaults(func=cmd_connectors)
