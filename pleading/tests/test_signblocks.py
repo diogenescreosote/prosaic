@@ -119,12 +119,12 @@ def test_esign_tags_number_signers_in_document_order(tmp_path):
         check=True, capture_output=True, text=True,
     ).stdout
     flat = " ".join(raw.split())
-    assert "{{Signature 1;role=Signer 1;type=signature}}" in flat
-    assert "{{Signature 2;role=Signer 2;type=signature}}" in flat
-    assert "{{Signature 3;role=Signer 3;type=signature}}" in flat
-    assert "{{Location 1;role=Signer 1;type=text}}" in flat
-    assert "{{Date 2;role=Signer 2;type=date}}" in flat
-    assert "{{Residence 3;role=Signer 3;type=text}}" in flat
+    assert "{{Signature 1;role=Signer 1;type=signature;width=" in flat
+    assert "{{Signature 2;role=Signer 2;type=signature;width=" in flat
+    assert "{{Signature 3;role=Signer 3;type=signature;width=" in flat
+    assert "{{Location 1;role=Signer 1;type=text;width=" in flat
+    assert "{{Date 2;role=Signer 2;type=date;width=" in flat
+    assert "{{Residence 3;role=Signer 3;type=text;width=" in flat
 
 
 def test_tags_do_not_disturb_printed_lines(tmp_path):
@@ -163,3 +163,20 @@ def test_headings_are_never_stranded_at_a_page_bottom(tmp_path, pad):
     assert "On the date written above" in after, (
         f"pad={pad}: heading stranded without its content"
     )
+
+
+def test_dated_blank_is_a_date_field_with_no_preprinted_year(tmp_path):
+    """The dated style takes the WHOLE date in one blank: the field is
+    type=date (a real date entry, not freeform text) and no ", <year>"
+    is pre-printed — a December build signed in January would lie."""
+    proc = build(tmp_path, "\\signblock{dated}{Jane Roe}")
+    assert proc.returncode == 0, proc.stderr
+    raw = subprocess.run(
+        ["pdftotext", str(tmp_path / "doc.pdf"), "-"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    flat = " ".join(raw.split())
+    assert "{{Date 1;role=Signer 1;type=date;width=" in flat
+    dated = next(ln for ln in raw.splitlines() if ln.strip().startswith("Dated:"))
+    assert ", 20" not in dated
+

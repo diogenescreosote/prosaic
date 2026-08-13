@@ -187,7 +187,7 @@ def _signature_block_text(block: mp.Block, meta: Dict) -> str:
         role_override = block.spans[0].text.strip() if block.spans else ""
         role = (role_override.title() if role_override
                 else str(meta.get("filer_role", "")).title())
-        date_line = mp.unsigned_dated_line(year)
+        date_line = mp.unsigned_dated_line()
     lines = [date_line, "", "____________________________________", "", name]
     if role:
         lines.append(role)

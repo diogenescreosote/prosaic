@@ -80,6 +80,6 @@ def test_sigrow_labels_and_per_row_esign_roles(tmp_path):
         ["pdftotext", str(tmp_path / "doc.pdf"), "-"],
         check=True, capture_output=True, text=True,
     ).stdout.split())
-    assert "{{Signature 1;role=Signer 1;type=signature}}" in raw
-    assert "{{Date 1;role=Signer 1;type=date}}" in raw
-    assert "{{Signature 2;role=Signer 2;type=signature}}" in raw
+    assert "{{Signature 1;role=Signer 1;type=signature;width=" in raw
+    assert "{{Date 1;role=Signer 1;type=date;width=" in raw
+    assert "{{Signature 2;role=Signer 2;type=signature;width=" in raw

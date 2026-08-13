@@ -601,9 +601,15 @@ def unsigned_decl_execution_line(year: int, location: str) -> str:
     return f"Executed this _____ day of _________________, {year}, at {location}."
 
 
-def unsigned_dated_line(year: int) -> str:
-    """Fill-in-the-blank date line for an unsigned \\signblock."""
-    return f"Dated: _________________, {year}"
+def unsigned_dated_line() -> str:
+    """Fill-in-the-blank date line for an unsigned \\signblock.
+
+    A bare full-date blank, deliberately: a pre-printed ", <year>"
+    reads nicely but forces freeform text into the blank (the year is
+    already spoken for) and is wrong the moment a December build is
+    signed in January. The blank takes the whole date, so the e-sign
+    field can be type=date."""
+    return "Dated: _________________________"
 
 
 def _format_letter_date(raw: str) -> str:
@@ -3001,38 +3007,64 @@ class PleadingPDF:
         self.c.drawString(x, y, text)
         self.c.setFillColor(black)
 
-    # Tags sit in the whitespace just BELOW their blank or rule: the
-    # field anchors where DocuSeal needs it, and a text extraction of
-    # the page keeps every printed line intact (the tag comes out as
-    # its own line instead of interleaving).
-    ESIGN_TAG_DROP = 9  # pt below the target baseline
+    # Field geometry (first live test-mode run): DocuSeal anchors a
+    # field on the tag TEXT's own box — a 6 pt tag 9 pt below the
+    # line gave a sliver of a field hanging under the rule. So every
+    # tag now carries explicit width/height (DocuSeal reads the PDF
+    # at 72 dpi, so its "pixels" are page points), and the tag text
+    # is placed so the field's BOTTOM edge sits on the rule or blank
+    # it fills — ink above the line, like a pen.
+    ESIGN_SIG_FIELD_HEIGHT = 34   # signature box above its rule
+    ESIGN_TEXT_FIELD_HEIGHT = 15  # one-line text/date entry
+    ESIGN_TAG_ASCENT = 5          # ~cap height of the 6 pt tag text
+
+    def _esign_field(self, x: float, rule_y: float, spec: str,
+                     width: float, height: float) -> None:
+        """A field of explicit size whose bottom edge rests on rule_y.
+
+        DocuSeal takes the tag text's top-left corner as the field's
+        top-left and extends the box down by height, so the tag's
+        baseline goes at rule_y + height - ascent."""
+        tag = f"{{{{{spec};width={round(width)};height={round(height)}}}}}"
+        self._esign_tag(x, rule_y + height - self.ESIGN_TAG_ASCENT, tag)
 
     def _tag_blanks(self, line_no: int, text: str, specs: List[Optional[str]],
                     font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
-        """Place tags under the ``___`` blank runs of a drawn line, in
-        order; a None spec skips that blank. A 6 pt tag is wider than
-        the gap between adjacent blanks, so tags that would overlap
-        stagger one level deeper -- overprinted tags interleave in the
-        text layer and DocuSeal would read garbage."""
-        base_y = self.line_y(line_no) - self.ESIGN_TAG_DROP
+        """Place fields over the ``___`` blank runs of a drawn line, in
+        order; a None spec skips that blank. Each field is sized to
+        its blank and bottoms out on the underscore rule. A 6 pt tag
+        is wider than the gap between adjacent blanks, so tags that
+        would overlap stagger one level UP -- overprinted tags
+        interleave in the text layer and DocuSeal would read garbage
+        -- with the field height grown to keep its bottom edge on the
+        same rule."""
+        rule_y = self.line_y(line_no) - 2  # underscores sit under the baseline
         level_end_x: List[float] = []
         for m, tag in zip(re.finditer(r"_{3,}", text), specs):
             if tag is None:
                 continue
             x = self.left_margin + pdfmetrics.stringWidth(text[:m.start()], font, size) + 2
-            width = pdfmetrics.stringWidth(tag, NOTARIAL_FONT, ESIGN_TAG_FONT_SIZE)
+            blank_w = pdfmetrics.stringWidth(m.group(0), font, size)
+            tag_probe = f"{{{{{tag};width=000;height=00}}}}"
+            tag_w = pdfmetrics.stringWidth(tag_probe, NOTARIAL_FONT, ESIGN_TAG_FONT_SIZE)
             level = next((i for i, end in enumerate(level_end_x) if x >= end + 4),
                          len(level_end_x))
             if level == len(level_end_x):
                 level_end_x.append(0.0)
-            level_end_x[level] = x + width
-            self._esign_tag(x, base_y - level * (ESIGN_TAG_FONT_SIZE + 1), tag)
+            level_end_x[level] = x + tag_w
+            height = self.ESIGN_TEXT_FIELD_HEIGHT + level * (ESIGN_TAG_FONT_SIZE + 1)
+            self._esign_field(x, rule_y, tag, blank_w, height)
 
-    def _tag_signature(self, line_no: int, role: int) -> None:
-        self._esign_tag(self.left_margin + 4,
-                        self.line_y(line_no) - self.ESIGN_TAG_DROP,
-                        f"{{{{Signature {role};role={ESIGN_ROLE_PREFIX} {role};"
-                        f"type=signature}}}}")
+    UNSIGNED_RULE = "____________________________________"
+
+    def _tag_signature(self, line_no: int, role: int,
+                       width: Optional[float] = None) -> None:
+        if width is None:
+            width = pdfmetrics.stringWidth(self.UNSIGNED_RULE, FONT_NAME, FONT_SIZE)
+        self._esign_field(self.left_margin + 4, self.line_y(line_no) - 2,
+                          f"Signature {role};role={ESIGN_ROLE_PREFIX} {role}"
+                          f";type=signature",
+                          width - 4, self.ESIGN_SIG_FIELD_HEIGHT)
 
     def _emit_signblock(self, block: Block, current_line: int) -> int:
         """Render a \\signblock or \\declsignblock.
@@ -3068,7 +3100,7 @@ class PleadingPDF:
             if is_decl:
                 date_text = unsigned_decl_execution_line(year, location)
             else:
-                date_text = unsigned_dated_line(year)
+                date_text = unsigned_dated_line()
 
         # Keep the entire signature block on one page (heights defined once
         # at module top, shared with _sig_block_lines_needed).
@@ -3082,11 +3114,11 @@ class PleadingPDF:
             n = self._next_esign_role()
             if is_decl:
                 self._tag_blanks(current_line, date_text, [
-                    f"{{{{Day {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
-                    f"{{{{Month {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}"])
+                    f"Day {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
+                    f"Month {n};role={ESIGN_ROLE_PREFIX} {n};type=text"])
             else:
                 self._tag_blanks(current_line, date_text, [
-                    f"{{{{Date {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}"])
+                    f"Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date"])
         current_line += 2  # skip blank line
         self._draw_signature_line(current_line)
         if not self.sign_name:
@@ -3121,10 +3153,10 @@ class PleadingPDF:
 
         n = self._next_esign_role()
         blank_tags = [
-            f"{{{{Day {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
-            f"{{{{Month {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
-            f"{{{{Year {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
-            f"{{{{Location {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}",
+            f"Day {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
+            f"Month {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
+            f"Year {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
+            f"Location {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
         ]
         for text in clause_lines:
             self.draw_text_line(current_line, text)
@@ -3279,11 +3311,13 @@ class PleadingPDF:
         self.c.line(self.left_margin, y, self.left_margin + rule_w, y)
         self.c.line(rx, y, rx + rule_w, y)
         n = self._next_esign_role()
-        self._esign_tag(self.left_margin + 4, y - self.ESIGN_TAG_DROP,
-                        f"{{{{Signature {n};role={ESIGN_ROLE_PREFIX} {n};"
-                        f"type=signature}}}}")
-        self._esign_tag(rx + 4, y - self.ESIGN_TAG_DROP,
-                        f"{{{{Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date}}}}")
+        self._esign_field(self.left_margin + 4, y,
+                          f"Signature {n};role={ESIGN_ROLE_PREFIX} {n}"
+                          f";type=signature",
+                          rule_w - 4, self.ESIGN_SIG_FIELD_HEIGHT)
+        self._esign_field(rx + 4, y,
+                          f"Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date",
+                          rule_w - 4, self.ESIGN_TEXT_FIELD_HEIGHT)
         current_line += 1
         for i in range(max(len(left_labels), len(right_labels))):
             ly = self.line_y(current_line)
@@ -3446,22 +3480,25 @@ class PleadingPDF:
             self.c.setLineWidth(0.5)
             self.c.setStrokeColor(black)
             self.c.line(self.left_margin, rule_y, self.left_margin + 220, rule_y)
-            self._tag_signature(current_line, n)
+            self._tag_signature(current_line, n, width=220)
             self.draw_text_line(current_line, "Date: _______________", indent=260)
-            self._esign_tag(
+            self._esign_field(
                 self.left_margin + 260
                 + pdfmetrics.stringWidth("Date: ", FONT_NAME, FONT_SIZE) + 2,
-                rule_y - self.ESIGN_TAG_DROP,
-                f"{{{{Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date}}}}")
+                rule_y - 2,
+                f"Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date",
+                pdfmetrics.stringWidth("_______________", FONT_NAME, FONT_SIZE),
+                self.ESIGN_TEXT_FIELD_HEIGHT)
             current_line += 1
             self.draw_text_line(current_line, f"Signature of {name}",
                                 font=FONT_NAME, size=FONT_SIZE_SMALL)
             current_line += 2
             rule_y = self.line_y(current_line)
             self.c.line(self.left_margin, rule_y, self.left_margin + 220, rule_y)
-            self._esign_tag(
-                self.left_margin + 4, rule_y - self.ESIGN_TAG_DROP,
-                f"{{{{Residence {n};role={ESIGN_ROLE_PREFIX} {n};type=text}}}}")
+            self._esign_field(
+                self.left_margin + 4, rule_y,
+                f"Residence {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
+                216, self.ESIGN_TEXT_FIELD_HEIGHT)
             current_line += 1
             self.draw_text_line(current_line, "Residing at (city and state)",
                                 font=FONT_NAME, size=FONT_SIZE_SMALL)

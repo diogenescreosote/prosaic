@@ -662,7 +662,7 @@ def _emit_signblock(doc: Document, name: str, role: str) -> None:
     / blank / NAME / Role."""
     year = datetime.date.today().year
     start = len(doc.paragraphs)
-    _add_styled_para(doc, unsigned_dated_line(year))
+    _add_styled_para(doc, unsigned_dated_line())
     add_blank(doc)
     _add_styled_para(doc, "____________________________________")
     add_blank(doc)
