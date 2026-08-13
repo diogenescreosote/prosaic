@@ -1111,6 +1111,54 @@ are not filings: contracts, estate documents, attestations. Only
 I./A./1. heading enumeration, for documents whose headings carry
 their own ("Article I. ...").
 
+## Signature authentication blocks
+
+Two families, one conceptual parent: **notarial certificates** (the
+officer's certificate, in the officer's visual register) and the
+**witness attestation grid** (part of the instrument itself). All are
+rendered objects with keep-together semantics — never split across a
+page break — because a certificate a notary cannot read whole, sign,
+and seal in one place is a defective certificate.
+
+### Notarial certificates (California)
+
+```
+\acknowledgment{SIGNER NAME(S)}
+\jurat{SIGNER NAME(S)}
+\proofofexecution{SUBSCRIBING WITNESS}{PRINCIPAL(S)}
+```
+
+Each renders a bordered, sans-serif certificate matching the
+Secretary of State's published forms: centered title, the statutory
+consumer disclosure in its own enclosed box (required by the 2015
+amendments to all three statutes), venue lines, the certificate
+paragraph with the named signer(s) inserted (an empty argument
+leaves a ruled blank), and a signature line beneath a clear zone
+(~2.6in x 1.4in) reserved for the seal, which must stay
+photographically reproducible. Wording is verbatim statutory:
+Civ. Code § 1189 (acknowledgment, with the penalty-of-perjury
+paragraph), Gov. Code § 8202 (jurat), Civ. Code § 1195 (proof of
+execution). The statutory texts live as named constants in
+`md_pleading.py`, and the DOCX and TXT renderers consume the same
+constants so the three outputs cannot drift.
+
+Proof of execution may not be used for powers of attorney, deeds,
+other instruments affecting real property, or documents requiring a
+journal thumbprint (Gov. Code § 27287; Civ. Code § 1195(b)) — the
+renderer does not police document types; the drafter must.
+
+### Witness attestation grids
+
+```
+\witnessattestation{Name One\\Name Two}
+```
+
+One signing grid per `\\`-separated witness: a signature rule with a
+date line, the printed-name caption, and a residence line. The
+attestation *prose* (what the witnesses are attesting) stays
+ordinary document text above the macro; the grid is only the
+structured signing area, kept together as one object per witness.
+
 ## QR blocks — machine-readable payloads on the page
 
 `\qrblock{payload}{caption}` renders a QR symbol at the text margin,

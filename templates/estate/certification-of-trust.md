@@ -46,26 +46,4 @@ State of California:
 
 \declsignblock{JANE ROE, Trustee}{Springfield, California}
 
-## Acknowledgment
-
-*A notary public or other officer completing this certificate
-verifies only the identity of the individual who signed the document
-to which this certificate is attached, and not the truthfulness,
-accuracy, or validity of that document.*
-
-State of California, County of ______________________.
-
-On ____________ before me, ______________________________, Notary
-Public, personally appeared JANE ROE, who proved to me on the basis
-of satisfactory evidence to be the person whose name is subscribed
-to the within instrument and acknowledged to me that she executed
-the same in her authorized capacity, and that by her signature on
-the instrument the person, or the entity upon behalf of which the
-person acted, executed the instrument.
-
-I certify under PENALTY OF PERJURY under the laws of the State of
-California that the foregoing paragraph is true and correct.
-
-WITNESS my hand and official seal.
-
-\signblock{Notary Public}{Signature and Seal}
+\acknowledgment{JANE ROE}

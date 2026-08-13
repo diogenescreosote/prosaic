@@ -512,6 +512,53 @@ def _attach_lead(doc: Document,
             break
 
 
+def _emit_notarial(doc: Document, block) -> None:
+    """A California notarial certificate as a bordered one-cell table,
+    sans-serif, mirroring the PDF object (statutory wording from
+    md_pleading's constants so the renderers cannot drift)."""
+    table = doc.add_table(rows=1, cols=1)
+    table.style = "Table Grid"
+    cell = table.cell(0, 0)
+    cell.text = ""
+
+    def para(text, bold=False, center=False, size=9.5):
+        pr = cell.add_paragraph()
+        if center:
+            pr.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = pr.add_run(text)
+        run.font.name = "Arial"
+        run.font.size = Pt(size)
+        run.bold = bold
+        return pr
+
+    para(mp.NOTARIAL_TITLES[block.kind], bold=True, center=True, size=10.5)
+    para(mp.NOTARIAL_DISCLOSURE, size=8.5)
+    para("State of California")
+    para("County of _____________________________ )")
+    para(mp.notarial_text(block))
+    if block.kind == "acknowledgment":
+        para(mp.ACK_PERJURY)
+    if block.kind in ("acknowledgment", "proofexec"):
+        para(mp.ACK_WITNESS_LINE)
+    for _ in range(5):  # clear zone for the seal
+        para("")
+    para("Signature _________________________________          (Seal)")
+    add_blank(doc)
+
+
+def _emit_witnessattest(doc: Document, names_raw: str) -> None:
+    for name in [n.strip() for n in names_raw.split("\\\\") if n.strip()]:
+        add_blank(doc)
+        p1 = doc.add_paragraph()
+        p1.add_run("____________________________      Date: ______________")
+        cap = doc.add_paragraph()
+        cap.add_run(f"Signature of {name}").font.size = Pt(9)
+        p2 = doc.add_paragraph()
+        p2.add_run("____________________________")
+        cap2 = doc.add_paragraph()
+        cap2.add_run("Residing at (city and state)").font.size = Pt(9)
+
+
 def _emit_qrblock(doc: Document, payload: str, caption: str) -> None:
     """Embed a QR image (rendered through md_pleading's qrencode seam)
     with its caption below. 2 inches square mirrors the PDF's six grid
@@ -569,6 +616,10 @@ _DECLSIGNBLOCK_RE = re.compile(
     r"^\\declsignblock\{(.+?)\}\{(.+?)\}(?:\{(.*?)\})?\s*$"
 )
 _JUDGESIGNBLOCK_RE = re.compile(r"^\\judgesignblock\{(.+?)\}\s*$")
+_ACK_RE = re.compile(r"^\\acknowledgment\{(.*?)\}\s*$")
+_JURAT_RE = re.compile(r"^\\jurat\{(.*?)\}\s*$")
+_PROOF_RE = re.compile(r"^\\proofofexecution\{(.*?)\}\{(.*?)\}\s*$")
+_WATT_RE = re.compile(r"^\\witnessattestation\{(.+?)\}\s*$")
 _QRBLOCK_RE = re.compile(r"^\\qrblock\{(.+?)\}(?:\{(.*?)\})?\s*$")
 _QRBLOCKFILE_RE = re.compile(r"^\\qrblockfile\{(.+?)\}(?:\{(.*?)\})?\s*$")
 
@@ -834,6 +885,27 @@ def build_body(doc: Document, body: str, meta: dict,
             _emit_declsignblock(doc, name, location, role)
             continue
 
+        m = _ACK_RE.match(text)
+        if m:
+            _attach_lead(doc)
+            _emit_notarial(doc, mp.Block("acknowledgment", m.group(1).strip()))
+            continue
+        m = _JURAT_RE.match(text)
+        if m:
+            _attach_lead(doc)
+            _emit_notarial(doc, mp.Block("jurat", m.group(1).strip()))
+            continue
+        m = _PROOF_RE.match(text)
+        if m:
+            _attach_lead(doc)
+            _emit_notarial(doc, mp.Block("proofexec", m.group(1).strip(),
+                                         spans=[mp.TextSpan(m.group(2).strip())]))
+            continue
+        m = _WATT_RE.match(text)
+        if m:
+            _attach_lead(doc)
+            _emit_witnessattest(doc, m.group(1).strip())
+            continue
         m = _QRBLOCK_RE.match(text)
         if m:
             _attach_lead(doc)
@@ -989,6 +1061,15 @@ def main() -> None:
     if is_letter:
         build_letter_header(doc, meta)
         build_body_letter(doc, body, meta, footnote_numbers, footnote_defs)
+    elif doctype == "document":
+        # A plain document (contract, estate instrument): centered bold
+        # title, no caption -- mirrors the PDF renderer's document mode.
+        title_para = doc.add_paragraph()
+        title_para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+        run = title_para.add_run(str(meta.get("paper_title", "")).upper())
+        run.bold = True
+        add_blank(doc)
+        build_body(doc, body, meta, footnote_numbers, footnote_defs)
     else:
         # An attachment to a JC form continues that form and must not
         # reintroduce the caption. The PDF renderer has honored this

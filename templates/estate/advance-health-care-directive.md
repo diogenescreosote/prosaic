@@ -81,6 +81,4 @@ blood, marriage, or adoption and takes nothing under the principal's
 will or trust. Copy the current statutory declarations here, or
 execute before a notary instead.]*
 
-\declsignblock{JOHN SMITH, Witness}{Springfield, California}
-
-\declsignblock{MARY MAJOR, Witness}{Springfield, California}
+\witnessattestation{First Witness\\Second Witness}

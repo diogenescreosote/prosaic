@@ -236,6 +236,28 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
         if block.kind in ("signblock", "declsignblock"):
             items.append((_signature_block_text(block, meta), False))
             continue
+        if block.kind in ("acknowledgment", "jurat", "proofexec"):
+            title = mp.NOTARIAL_TITLES[block.kind]
+            parts_n = [f"[{title}]", mp.NOTARIAL_DISCLOSURE, "",
+                       "State of California", "County of ____________________ )",
+                       "", mp.notarial_text(block)]
+            if block.kind == "acknowledgment":
+                parts_n += ["", mp.ACK_PERJURY]
+            if block.kind in ("acknowledgment", "proofexec"):
+                parts_n += ["", mp.ACK_WITNESS_LINE]
+            parts_n += ["", "Signature ____________________________  (Seal)"]
+            items.append(("\n".join(parts_n), False))
+            continue
+        if block.kind == "witnessattest":
+            names = [n.strip() for n in block.text.split("\\\\") if n.strip()]
+            grids = []
+            for name in names:
+                grids.append("____________________________   Date: ____________\n"
+                             f"Signature of {name}\n"
+                             "____________________________\n"
+                             "Residing at (city and state)")
+            items.append(("\n\n".join(grids), False))
+            continue
         if block.kind in ("qrblock", "qrblockfile"):
             # Text output has no pixels; the honest equivalent is the
             # payload itself, labeled, which is what the QR encodes.

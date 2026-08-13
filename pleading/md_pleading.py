@@ -255,6 +255,93 @@ QR_ERROR_CORRECTION = "M"            # qrencode -l: L/M/Q/H
 QR_MODULE_PIXELS = 10                # qrencode -s: render resolution
 QR_MARGIN_MODULES = 4                # qrencode -m: quiet-zone width
 
+# ---------------------------------------------------------------------------
+# Notarial certificates (California) — drawn objects, not text expansion.
+#
+# The wording is statutory and verbatim: Civ. Code 1189 (acknowledgment),
+# Gov. Code 8202 (jurat), Civ. Code 1195 (proof of execution by
+# subscribing witness), each with the consumer disclosure that must
+# appear "in an enclosed box" at the top (all three statutes, as amended
+# by SB 1050, eff. 2015). Layout follows the Secretary of State's
+# published forms: the whole certificate inside a border, the disclosure
+# in its own inner box, venue lines, the certificate paragraph, and a
+# signature line with clear space for the seal (which must remain
+# photographically reproducible -- a recorder may reject an illegible
+# or overlapping seal). A certificate is never split across pages, and
+# it renders in its own sans-serif face so it reads as the officer's
+# certificate rather than the instrument's prose.
+# ---------------------------------------------------------------------------
+
+NOTARIAL_FONT = "Helvetica"
+NOTARIAL_FONT_BOLD = "Helvetica-Bold"
+NOTARIAL_FONT_SIZE = 9.5
+NOTARIAL_LEADING = 12.5              # pt between certificate text lines
+NOTARIAL_PAD = 12                    # inner padding of the outer box, pt
+NOTARIAL_DISCLOSURE_FRAC = 0.62      # disclosure box width / text width
+NOTARIAL_SEAL_W = 190                # clear seal zone, pt (~2.6 in)
+NOTARIAL_SEAL_H = 100                # clear seal zone, pt (~1.4 in)
+NOTARIAL_RULE = 0.8                  # border line width, pt
+
+NOTARIAL_DISCLOSURE = (
+    "A notary public or other officer completing this certificate "
+    "verifies only the identity of the individual who signed the "
+    "document to which this certificate is attached, and not the "
+    "truthfulness, accuracy, or validity of that document."
+)
+
+ACK_BODY = (
+    "On ____________________ before me, "
+    "___________________________________________ (insert name and title "
+    "of the officer), personally appeared {signer}, who proved to me on "
+    "the basis of satisfactory evidence to be the person(s) whose "
+    "name(s) is/are subscribed to the within instrument and acknowledged "
+    "to me that he/she/they executed the same in his/her/their "
+    "authorized capacity(ies), and that by his/her/their signature(s) on "
+    "the instrument the person(s), or the entity upon behalf of which "
+    "the person(s) acted, executed the instrument."
+)
+ACK_PERJURY = (
+    "I certify under PENALTY OF PERJURY under the laws of the State of "
+    "California that the foregoing paragraph is true and correct."
+)
+ACK_WITNESS_LINE = "WITNESS my hand and official seal."
+
+JURAT_BODY = (
+    "Subscribed and sworn to (or affirmed) before me on this _____ day "
+    "of ______________, 20___, by {signer}, proved to me on the basis "
+    "of satisfactory evidence to be the person(s) who appeared before me."
+)
+
+PROOF_BODY = (
+    "On ____________________ (date), before me, "
+    "___________________________________________ (name and title of "
+    "officer), personally appeared {witness} (name of subscribing "
+    "witness), proved to me to be the person whose name is subscribed "
+    "to the within instrument, as a witness thereto, on the oath of "
+    "____________________ (name of credible witness), a credible "
+    "witness who is known to me and provided a satisfactory identifying "
+    "document. {witness}, being by me duly sworn, said that he/she was "
+    "present and saw/heard {principal} (name[s] of principal[s]), the "
+    "same person(s) described in and whose name(s) is/are subscribed to "
+    "the within or attached instrument in his/her/their authorized "
+    "capacity(ies) as (a) party(ies) thereto, execute or acknowledge "
+    "executing the same, and that said affiant subscribed his/her name "
+    "to the within or attached instrument as a witness at the request "
+    "of {principal}."
+)
+
+NOTARIAL_TITLES = {
+    "acknowledgment": "ACKNOWLEDGMENT",
+    "jurat": "JURAT",
+    "proofexec": "PROOF OF EXECUTION BY SUBSCRIBING WITNESS",
+}
+
+# Witness signature grids (\witnessattestation): per witness, a
+# signature rule plus printed-name, residence, and date lines. Part of
+# the instrument (unlike a notarial certificate), so it stays in the
+# document face; it is still an object the page-break logic keeps whole.
+WITNESS_GRID_LINES_EACH = 6          # rule + name + residing + date + 2 blanks
+
 
 # ---------------------------------------------------------------------------
 # Data structures
@@ -324,6 +411,10 @@ class Block:
     declsignblock: text=name, spans[0].text=location, spans[1].text=role (optional; if empty, no role line printed)
     qrblock:       text=payload to encode, spans[0].text=caption (optional)
     qrblockfile:   text=path whose contents are the payload, spans[0].text=caption
+    acknowledgment: text=signer name(s), blank lines if empty (CA Civ. Code 1189)
+    jurat:          text=signer name(s) (CA Gov. Code 8202)
+    proofexec:      text=subscribing witness, spans[0].text=principal(s) (CA Civ. Code 1195)
+    witnessattest:  text=witness names separated by \\ (signature grids)
     table:         text="", rows=[[col1, col2, ...], ...] (first row is header)
     """
     kind: str
@@ -1734,6 +1825,27 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
             blocks.append(Block("qrblockfile", m_qrfile.group(1).strip(),
                                 spans=[TextSpan((m_qrfile.group(2) or "").strip())]))
             continue
+        m_ack = re.match(r"^\\acknowledgment\{(.*?)\}\s*$", line)
+        if m_ack:
+            flush_para()
+            blocks.append(Block("acknowledgment", m_ack.group(1).strip()))
+            continue
+        m_jurat = re.match(r"^\\jurat\{(.*?)\}\s*$", line)
+        if m_jurat:
+            flush_para()
+            blocks.append(Block("jurat", m_jurat.group(1).strip()))
+            continue
+        m_proof = re.match(r"^\\proofofexecution\{(.*?)\}\{(.*?)\}\s*$", line)
+        if m_proof:
+            flush_para()
+            blocks.append(Block("proofexec", m_proof.group(1).strip(),
+                                spans=[TextSpan(m_proof.group(2).strip())]))
+            continue
+        m_watt = re.match(r"^\\witnessattestation\{(.+?)\}\s*$", line)
+        if m_watt:
+            flush_para()
+            blocks.append(Block("witnessattest", m_watt.group(1).strip()))
+            continue
         m = re.match(r"^(#{1,3})\s+(.*)$", line)
         if m:
             flush_para()
@@ -2814,8 +2926,148 @@ class PleadingPDF:
 
         return current_line
 
+    _NOTARIAL_KINDS = ("acknowledgment", "jurat", "proofexec")
+
+    def _notarial_layout(self, block: Block) -> dict:
+        """Wrapped text and measured heights for a notarial certificate.
+
+        One source of truth for geometry: the emitter draws from this,
+        and the keep-together math reads the same total, so the two
+        cannot disagree about whether the certificate fits a page.
+        """
+        inner_w = self.text_width - 2 * NOTARIAL_PAD
+        disc_w = inner_w * NOTARIAL_DISCLOSURE_FRAC - 12
+        disclosure = wrap_text(NOTARIAL_DISCLOSURE, disc_w,
+                               NOTARIAL_FONT, NOTARIAL_FONT_SIZE)
+        body = wrap_text(notarial_text(block), inner_w,
+                         NOTARIAL_FONT, NOTARIAL_FONT_SIZE)
+        perjury = (wrap_text(ACK_PERJURY, inner_w, NOTARIAL_FONT,
+                             NOTARIAL_FONT_SIZE)
+                   if block.kind == "acknowledgment" else [])
+
+        h = NOTARIAL_PAD                              # top padding
+        h += NOTARIAL_LEADING * 1.5                   # title
+        h += len(disclosure) * NOTARIAL_LEADING + 14  # disclosure box + pad
+        h += NOTARIAL_LEADING * 0.6                   # gap
+        h += 2 * NOTARIAL_LEADING                     # venue lines
+        h += NOTARIAL_LEADING * 0.6                   # gap
+        h += len(body) * NOTARIAL_LEADING
+        if perjury:
+            h += NOTARIAL_LEADING * 0.6
+            h += len(perjury) * NOTARIAL_LEADING
+        if block.kind in ("acknowledgment", "proofexec"):
+            h += NOTARIAL_LEADING * 0.8
+            h += NOTARIAL_LEADING                     # WITNESS my hand...
+        h += NOTARIAL_SEAL_H                          # clear zone for the seal
+        h += NOTARIAL_LEADING                         # signature row
+        h += NOTARIAL_PAD                             # bottom padding
+        return {"disclosure": disclosure, "body": body, "perjury": perjury,
+                "height": h}
+
+    def _notarial_lines_needed(self, block: Block) -> int:
+        return math.ceil(self._notarial_layout(block)["height"] / self.leading) + 1
+
+    def _emit_notarial(self, block: Block, current_line: int) -> int:
+        """Draw a California notarial certificate as one bordered object.
+
+        Never split across pages: a certificate the notary cannot read
+        whole, sign, and seal in one place is a defective certificate.
+        The seal zone stays clear because the stamp must remain
+        photographically reproducible.
+        """
+        lines_needed = self._notarial_lines_needed(block)
+        if current_line != 1 and current_line + lines_needed - 1 > self.lines_per_page:
+            self.start_page()
+            current_line = 1
+
+        lay = self._notarial_layout(block)
+        c = self.c
+        left = self.left_margin
+        right = self.left_margin + self.text_width
+        top = self.line_y(current_line) + FONT_SIZE
+        bottom = top - lay["height"]
+
+        c.setLineWidth(NOTARIAL_RULE)
+        c.setStrokeColor(black)
+        c.rect(left, bottom, self.text_width, lay["height"])
+
+        x = left + NOTARIAL_PAD
+        y = top - NOTARIAL_PAD - NOTARIAL_LEADING
+        c.setFont(NOTARIAL_FONT_BOLD, NOTARIAL_FONT_SIZE + 1)
+        c.drawCentredString((left + right) / 2, y, NOTARIAL_TITLES[block.kind])
+        y -= NOTARIAL_LEADING * 0.5
+
+        # The statutory consumer disclosure, in its own enclosed box.
+        disc_h = len(lay["disclosure"]) * NOTARIAL_LEADING + 10
+        disc_w = (self.text_width - 2 * NOTARIAL_PAD) * NOTARIAL_DISCLOSURE_FRAC
+        c.rect(x, y - disc_h, disc_w, disc_h)
+        ty = y - 6 - NOTARIAL_FONT_SIZE
+        c.setFont(NOTARIAL_FONT, NOTARIAL_FONT_SIZE)
+        for line in lay["disclosure"]:
+            c.drawString(x + 6, ty, line)
+            ty -= NOTARIAL_LEADING
+        y -= disc_h + NOTARIAL_LEADING * 0.6
+
+        y -= NOTARIAL_FONT_SIZE
+        c.drawString(x, y, "State of California")
+        y -= NOTARIAL_LEADING
+        c.drawString(x, y, "County of _____________________________ )")
+        y -= NOTARIAL_LEADING * 0.6 + NOTARIAL_FONT_SIZE
+
+        for line in lay["body"]:
+            c.drawString(x, y, line)
+            y -= NOTARIAL_LEADING
+        if lay["perjury"]:
+            y -= NOTARIAL_LEADING * 0.6
+            for line in lay["perjury"]:
+                c.drawString(x, y, line)
+                y -= NOTARIAL_LEADING
+        if block.kind in ("acknowledgment", "proofexec"):
+            y -= NOTARIAL_LEADING * 0.8
+            c.drawString(x, y, ACK_WITNESS_LINE)
+            y -= NOTARIAL_LEADING
+
+        # Signature row at the bottom; everything above it (the seal
+        # zone) stays clear for the stamp.
+        sig_y = bottom + NOTARIAL_PAD + 2
+        c.drawString(x, sig_y,
+                     "Signature _________________________________")
+        c.setFont(NOTARIAL_FONT_BOLD, NOTARIAL_FONT_SIZE)
+        c.drawString(x + 250, sig_y, "(Seal)")
+
+        return current_line + lines_needed + 1  # + trailing blank line
+
+    def _emit_witnessattest(self, block: Block, current_line: int) -> int:
+        """Signature grids for attesting witnesses: per witness, a
+        signature rule with a date line, then printed-name and
+        residence lines. The attestation prose stays document text;
+        this is the structured signing area under it."""
+        names = [n.strip() for n in block.text.split("\\") if n.strip()]
+        for name in names:
+            lines_needed = WITNESS_GRID_LINES_EACH
+            if current_line + lines_needed - 1 > self.lines_per_page:
+                self.start_page()
+                current_line = 1
+            rule_y = self.line_y(current_line)
+            self.c.setLineWidth(0.5)
+            self.c.setStrokeColor(black)
+            self.c.line(self.left_margin, rule_y, self.left_margin + 220, rule_y)
+            self.draw_text_line(current_line, "Date: _______________", indent=260)
+            current_line += 1
+            self.draw_text_line(current_line, f"Signature of {name}",
+                                font=FONT_NAME, size=FONT_SIZE_SMALL)
+            current_line += 2
+            rule_y = self.line_y(current_line)
+            self.c.line(self.left_margin, rule_y, self.left_margin + 220, rule_y)
+            current_line += 1
+            self.draw_text_line(current_line, "Residing at (city and state)",
+                                font=FONT_NAME, size=FONT_SIZE_SMALL)
+            current_line += 2
+        return current_line
+
     _SIG_KINDS = {"signblock", "declsignblock", "judgesignblock", "lettersignblock",
-                  "qrblock", "qrblockfile"}
+                  "qrblock", "qrblockfile", "acknowledgment", "jurat", "proofexec",
+                  "witnessattest"}
 
     def _is_lead_block(self, block: Block) -> bool:
         """A heading or short paragraph/list item that must not be stranded
@@ -2833,6 +3085,11 @@ class PleadingPDF:
             block, self.exhibit_letters, self.text_width, self.footnote_numbers))
 
     def _sig_block_lines_needed(self, block: Block) -> int:
+        if block.kind in self._NOTARIAL_KINDS:
+            return self._notarial_lines_needed(block)
+        if block.kind == "witnessattest":
+            names = [n for n in block.text.split("\\") if n.strip()]
+            return WITNESS_GRID_LINES_EACH * max(len(names), 1)
         if block.kind in ("qrblock", "qrblockfile"):
             return QRBLOCK_GRID_LINES + QRBLOCK_CAPTION_EXTRA_LINE
         if block.kind == "judgesignblock":
@@ -2910,6 +3167,12 @@ class PleadingPDF:
                 continue
             if block.kind in ("qrblock", "qrblockfile"):
                 current_line = self._emit_qrblock(block, current_line)
+                continue
+            if block.kind in self._NOTARIAL_KINDS:
+                current_line = self._emit_notarial(block, current_line)
+                continue
+            if block.kind == "witnessattest":
+                current_line = self._emit_witnessattest(block, current_line)
                 continue
             if block.kind == "table":
                 current_line = self._emit_table(block, current_line)
@@ -3182,6 +3445,23 @@ def image_to_letter_pdf(image_path: Path, out_path: str) -> None:
     c.drawImage(ImageReader(img), x, y, width=draw_w, height=draw_h,
                 preserveAspectRatio=True, mask='auto')
     c.save()
+
+
+BLANK_SIGNER = "_______________________________________________"
+
+
+def notarial_text(block: Block) -> str:
+    """The certificate paragraph for a notarial block, statutory wording
+    with the typed name(s) inserted (or ruled blanks when none given)."""
+    if block.kind == "acknowledgment":
+        return ACK_BODY.format(signer=block.text or BLANK_SIGNER)
+    if block.kind == "jurat":
+        return JURAT_BODY.format(signer=block.text or BLANK_SIGNER)
+    if block.kind == "proofexec":
+        principal = block.spans[0].text if block.spans else ""
+        return PROOF_BODY.format(witness=block.text or BLANK_SIGNER,
+                                 principal=principal or BLANK_SIGNER)
+    raise ValueError(f"not a notarial block: {block.kind}")
 
 
 def qr_payload(block: Block) -> str:

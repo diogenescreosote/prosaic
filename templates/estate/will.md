@@ -103,6 +103,4 @@ fraud, or undue influence. We declare under penalty of perjury under
 the laws of the State of California that the foregoing is true and
 correct.
 
-\declsignblock{JOHN SMITH, Witness}{Springfield, California}
-
-\declsignblock{MARY MAJOR, Witness}{Springfield, California}
+\witnessattestation{Witness John Smith\\Witness Mary Major}
