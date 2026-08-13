@@ -1077,6 +1077,24 @@ and the tab sheets read `ATTACHMENT A` instead of `EXHIBIT A`.
 and is preferred in letters. Both macros are interchangeable: each is
 resolved to the doctype's label at render time.
 
+## Document layout primitives (plain instruments)
+
+For `doctype: document` instruments (notes, contracts) whose grammar
+is tabbed alignment rather than a pleading grid:
+
+```
+\leftright{$20,000.00}{August 13, 2026}   left at margin, right flush right
+\center{text}                             one centered line
+\sigrow{Name, Borrower}{Date}             side-by-side signature rules
+```
+
+`\leftright` and `\center` take inline styling (**bold** etc.).
+`\sigrow` draws two rules with labels beneath (one signer per row —
+signature left, date right; the labels take `\\` for a second line,
+e.g. `{Sue Smith, Lender\\Accepted and agreed}`), is atomic across
+page breaks, and carries the signer's e-sign field tags like any
+signature block. *(tested: pleading/tests/test_document_layout.py)*
+
 ## Signature blocks — one macro, five styles
 
 ```

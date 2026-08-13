@@ -401,6 +401,17 @@ WHEREOF_TAIL_GRID_LINES = 5          # blank + rule + blank + name (+role)
 ESIGN_TAG_FONT_SIZE = 6
 ESIGN_ROLE_PREFIX = "Signer"
 
+# Document-layout primitives for plain instruments (notes, contracts):
+#   \leftright{left}{right}   one line, left at margin, right flush right
+#   \center{text}             one centered line
+#   \sigrow{left label}{right label}
+#       side-by-side signature rules with labels beneath -- the
+#       borrower/date row of a promissory note. Labels take \\ for a
+#       second line ("Sue Yarvin, Lender\\Accepted and agreed").
+SIGROW_RULE_FRAC = 0.44              # each rule's width / text width
+SIGROW_RIGHT_START_FRAC = 0.54       # right rule's left edge / text width
+SIGROW_GRID_LINES_BASE = 4           # blank + rule + label + blank
+
 # Witness signature grids (\witnessattestation): per witness, a
 # signature rule plus printed-name, residence, and date lines. Part of
 # the instrument (unlike a notarial certificate), so it stays in the
@@ -478,6 +489,9 @@ class Block:
     barcode:       text=payload, spans[0]=format (qr|code128|pdf417), spans[1]=caption
     barcodefile:   text=path whose contents are the payload, spans as barcode
     fixedwidth:    text=verbatim lines joined by newline; no typographic subs
+    leftright:     text=left text, spans[0]=right text (both styled)
+    centerline:    text=centered line (styled)
+    sigrow:        text=left label(s), spans[0]=right label(s); \\ splits lines
     acknowledgment: text=signer name(s), blank lines if empty (CA Civ. Code 1189)
     jurat:          text=signer name(s) (CA Gov. Code 8202)
     proofexec:      text=subscribing witness, spans[0].text=principal(s) (CA Civ. Code 1195)
@@ -1928,6 +1942,24 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
                   "\\signblock{letter}{Name\\\\Firm\\\\Role}", file=sys.stderr)
             blocks.append(Block("lettersignblock", m_letter_sign.group(1).strip()))
             continue
+        m_lr = re.match(r"^\\leftright\{(.*?)\}\{(.*?)\}\s*$", line)
+        if m_lr:
+            flush_para()
+            blocks.append(Block("leftright",
+                                typographic_subs(m_lr.group(1).strip()),
+                                spans=[TextSpan(typographic_subs(m_lr.group(2).strip()))]))
+            continue
+        m_ctr = re.match(r"^\\center\{(.*?)\}\s*$", line)
+        if m_ctr:
+            flush_para()
+            blocks.append(Block("centerline", typographic_subs(m_ctr.group(1).strip())))
+            continue
+        m_srow = re.match(r"^\\sigrow\{(.*?)\}\{(.*?)\}\s*$", line)
+        if m_srow:
+            flush_para()
+            blocks.append(Block("sigrow", m_srow.group(1).strip(),
+                                spans=[TextSpan(m_srow.group(2).strip())]))
+            continue
         m_bar = re.match(r"^\\barcode\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$", line)
         if m_bar:
             flush_para()
@@ -3159,6 +3191,88 @@ class PleadingPDF:
         caption = block.spans[1].text if len(block.spans) > 1 else ""
         return 8 + (BARCODE_CAPTION_EXTRA_LINE if caption else 0)
 
+    def _styled_width(self, words, font_size: int = FONT_SIZE) -> float:
+        """Width draw_styled_words will occupy (same spacing math)."""
+        space_w = pdfmetrics.stringWidth(" ", FONT_NAME, font_size)
+        total = 0.0
+        for i, w in enumerate(words):
+            if i > 0 and not w.no_space_before:
+                total += space_w
+            total += w.width(font_size)
+        return total
+
+    def _emit_leftright(self, block: Block, current_line: int) -> int:
+        """One line: left text at the margin, right text flush right --
+        the note-header idiom ($20,000.00 ... August 13, 2026)."""
+        if current_line > self.lines_per_page - self._fn_area_lines:
+            self.start_page()
+            current_line = 1
+        y = self.line_y(current_line)
+        left_words = spans_to_styled_words(parse_inline_styles(block.text),
+                                           self.footnote_numbers)
+        right_text = block.spans[0].text if block.spans else ""
+        right_words = spans_to_styled_words(parse_inline_styles(right_text),
+                                            self.footnote_numbers)
+        draw_styled_words(self.c, self.left_margin, y, left_words)
+        rw = self._styled_width(right_words)
+        draw_styled_words(self.c, self.left_margin + self.text_width - rw, y,
+                          right_words)
+        return current_line + 1
+
+    def _emit_centerline(self, block: Block, current_line: int) -> int:
+        if current_line > self.lines_per_page - self._fn_area_lines:
+            self.start_page()
+            current_line = 1
+        words = spans_to_styled_words(parse_inline_styles(block.text),
+                                      self.footnote_numbers)
+        w = self._styled_width(words)
+        draw_styled_words(self.c,
+                          self.left_margin + (self.text_width - w) / 2,
+                          self.line_y(current_line), words)
+        return current_line + 1
+
+    def _emit_sigrow(self, block: Block, current_line: int) -> int:
+        """Side-by-side signature rules with labels beneath: the left
+        rule takes the signature, the right typically the date. One
+        signer per row (esign role assigned accordingly)."""
+        left_labels = [s.strip() for s in block.text.split("\\\\")]
+        right_labels = [s.strip() for s in
+                        (block.spans[0].text if block.spans else "").split("\\\\")]
+        lines_needed = SIGROW_GRID_LINES_BASE + max(len(left_labels),
+                                                    len(right_labels)) - 1
+        if current_line + lines_needed - 1 > self.lines_per_page:
+            self.start_page()
+            current_line = 1
+
+        current_line += 1  # breathing room above the rules
+        rule_w = self.text_width * SIGROW_RULE_FRAC
+        rx = self.left_margin + self.text_width * SIGROW_RIGHT_START_FRAC
+        y = self.line_y(current_line)
+        self.c.setLineWidth(0.5)
+        self.c.setStrokeColor(black)
+        self.c.line(self.left_margin, y, self.left_margin + rule_w, y)
+        self.c.line(rx, y, rx + rule_w, y)
+        n = self._next_esign_role()
+        self._esign_tag(self.left_margin + 4, y - self.ESIGN_TAG_DROP,
+                        f"{{{{Signature {n};role={ESIGN_ROLE_PREFIX} {n};"
+                        f"type=signature}}}}")
+        self._esign_tag(rx + 4, y - self.ESIGN_TAG_DROP,
+                        f"{{{{Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date}}}}")
+        current_line += 1
+        for i in range(max(len(left_labels), len(right_labels))):
+            ly = self.line_y(current_line)
+            if i < len(left_labels) and left_labels[i]:
+                self.c.setFont(FONT_NAME, FONT_SIZE)
+                self.c.drawString(self.left_margin, ly,
+                                  typographic_subs(left_labels[i]))
+            if i < len(right_labels) and right_labels[i]:
+                self.c.setFont(FONT_NAME, FONT_SIZE)
+                self.c.drawString(rx, ly, typographic_subs(right_labels[i]))
+            current_line += 1
+        current_line += 1  # trailing blank
+
+        return current_line
+
     def _fixedwidth_size(self, block: Block) -> float:
         longest = max((len(ln) for ln in block.text.split("\n")), default=1)
         fitted = self.text_width / max(longest, 1) / FIXEDWIDTH_ADVANCE_EM
@@ -3328,7 +3442,7 @@ class PleadingPDF:
             current_line += 2
         return current_line
 
-    _SIG_KINDS = {"signblock", "declsignblock", "whereofsignblock", "judgesignblock",
+    _SIG_KINDS = {"sigrow", "signblock", "declsignblock", "whereofsignblock", "judgesignblock",
                   "lettersignblock", "barcode", "barcodefile", "acknowledgment",
                   "jurat", "proofexec", "witnessattest"}
 
@@ -3353,6 +3467,8 @@ class PleadingPDF:
         if block.kind == "witnessattest":
             names = [n for n in block.text.split("\\") if n.strip()]
             return WITNESS_GRID_LINES_EACH * max(len(names), 1)
+        if block.kind == "sigrow":
+            return SIGROW_GRID_LINES_BASE + 1
         if block.kind in ("barcode", "barcodefile"):
             return self._barcode_lines_needed(block)
         if block.kind == "whereofsignblock":
@@ -3438,6 +3554,15 @@ class PleadingPDF:
                 continue
             if block.kind == "fixedwidth":
                 current_line = self._emit_fixedwidth(block, current_line)
+                continue
+            if block.kind == "leftright":
+                current_line = self._emit_leftright(block, current_line)
+                continue
+            if block.kind == "centerline":
+                current_line = self._emit_centerline(block, current_line)
+                continue
+            if block.kind == "sigrow":
+                current_line = self._emit_sigrow(block, current_line)
                 continue
             if block.kind in self._NOTARIAL_KINDS:
                 current_line = self._emit_notarial(block, current_line)

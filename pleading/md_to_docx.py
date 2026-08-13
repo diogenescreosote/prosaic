@@ -584,6 +584,36 @@ def _emit_barcode(doc: Document, fmt: str, payload: str, caption: str) -> None:
     add_blank(doc)
 
 
+def _emit_leftright(doc: Document, left: str, right: str) -> None:
+    """Left text at the margin, right text flush right via a
+    right-aligned tab stop at the text edge."""
+    from docx.enum.text import WD_TAB_ALIGNMENT
+    from docx.shared import Inches as _In
+
+    para = doc.add_paragraph()
+    para.paragraph_format.line_spacing = Pt(BODY_LINE_SPACING_PT)
+    para.paragraph_format.space_after = Pt(0)
+    para.paragraph_format.tab_stops.add_tab_stop(
+        _In(6.5), WD_TAB_ALIGNMENT.RIGHT)
+    _add_spans(para, left)
+    para.add_run("\t")
+    _add_spans(para, right)
+
+
+def _emit_sigrow_docx(doc: Document, left_raw: str, right_raw: str) -> None:
+    left = [s.strip() for s in left_raw.split("\\\\")]
+    right = [s.strip() for s in right_raw.split("\\\\")]
+    add_blank(doc)
+    para = doc.add_paragraph()
+    para.add_run("_" * 34 + "        " + "_" * 34)
+    for i in range(max(len(left), len(right))):
+        row = doc.add_paragraph()
+        lft = left[i] if i < len(left) else ""
+        rgt = right[i] if i < len(right) else ""
+        row.add_run(f"{lft:<44}{rgt}")
+    add_blank(doc)
+
+
 def _emit_fixedwidth(doc: Document, text: str) -> None:
     """Verbatim monospace lines; no typographic substitutions."""
     for raw in text.split("\n"):
@@ -673,6 +703,9 @@ _ACK_RE = re.compile(r"^\\acknowledgment\{(.*?)\}\s*$")
 _JURAT_RE = re.compile(r"^\\jurat\{(.*?)\}\s*$")
 _PROOF_RE = re.compile(r"^\\proofofexecution\{(.*?)\}\{(.*?)\}\s*$")
 _WATT_RE = re.compile(r"^\\witnessattestation\{(.+?)\}\s*$")
+_LEFTRIGHT_RE = re.compile(r"^\\leftright\{(.*?)\}\{(.*?)\}\s*$")
+_CENTER_RE = re.compile(r"^\\center\{(.*?)\}\s*$")
+_SIGROW_RE = re.compile(r"^\\sigrow\{(.*?)\}\{(.*?)\}\s*$")
 _BARCODE_RE = re.compile(r"^\\barcode\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$")
 _BARCODEFILE_RE = re.compile(r"^\\barcodefile\{([a-z0-9]+)\}\{(.+?)\}(?:\{(.*?)\})?\s*$")
 
@@ -975,6 +1008,20 @@ def build_body(doc: Document, body: str, meta: dict,
         if m:
             _attach_lead(doc)
             _emit_witnessattest(doc, m.group(1).strip(), esign_role_counter)
+            continue
+        m = _LEFTRIGHT_RE.match(text)
+        if m:
+            _emit_leftright(doc, m.group(1).strip(), m.group(2).strip())
+            continue
+        m = _CENTER_RE.match(text)
+        if m:
+            para = _add_styled_para(doc, m.group(1).strip())
+            para.alignment = WD_ALIGN_PARAGRAPH.CENTER
+            continue
+        m = _SIGROW_RE.match(text)
+        if m:
+            _attach_lead(doc)
+            _emit_sigrow_docx(doc, m.group(1).strip(), m.group(2).strip())
             continue
         m = re.match(r"^@@FIXEDWIDTH(\d+)@@$", text)
         if m:

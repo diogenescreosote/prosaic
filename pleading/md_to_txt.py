@@ -282,6 +282,31 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
         if block.kind == "fixedwidth":
             items.append((block.text, False))
             continue
+        if block.kind == "leftright":
+
+            def _plain(s: str) -> str:
+                return "".join(sp.text for sp in mp.parse_inline_styles(s))
+
+            left_p = _plain(block.text)
+            right_p = _plain(block.spans[0].text if block.spans else "")
+            pad = max(2, 72 - len(left_p) - len(right_p))
+            items.append((left_p + " " * pad + right_p, False))
+            continue
+        if block.kind == "centerline":
+            plain = "".join(sp.text for sp in mp.parse_inline_styles(block.text))
+            items.append((plain.center(72).rstrip(), False))
+            continue
+        if block.kind == "sigrow":
+            left = [s.strip() for s in block.text.split("\\\\")]
+            right = [s.strip() for s in
+                     (block.spans[0].text if block.spans else "").split("\\\\")]
+            rows = ["_" * 32 + "    " + "_" * 32]
+            for i in range(max(len(left), len(right))):
+                lft = left[i] if i < len(left) else ""
+                rgt = right[i] if i < len(right) else ""
+                rows.append(f"{lft:<36}{rgt}")
+            items.append(("\n".join(rows), False))
+            continue
         items.append((block_to_line(block, footnote_numbers), _is_tight(block)))
 
     # Footnotes: inline [n] markers point at an end-of-document notes
