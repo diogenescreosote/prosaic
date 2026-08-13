@@ -78,13 +78,17 @@ def load_matter_config(start: Path) -> None:
 
 
 def keychain_lookup(ref: str) -> str | None:
-    if sys.platform != "darwin":
+    # Not gated on sys.platform: the question is whether a `security`
+    # command exists on PATH (macOS Keychain, or a compatible shim on
+    # another OS), not what the OS calls itself.
+    try:
+        proc = subprocess.run(
+            ["security", "find-generic-password", "-s", ref, "-w"],
+            capture_output=True,
+            text=True,
+        )
+    except FileNotFoundError:
         return None
-    proc = subprocess.run(
-        ["security", "find-generic-password", "-s", ref, "-w"],
-        capture_output=True,
-        text=True,
-    )
     if proc.returncode == 0 and proc.stdout.strip():
         return proc.stdout.strip()
     return None
