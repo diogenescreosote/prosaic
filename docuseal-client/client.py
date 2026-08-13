@@ -97,6 +97,19 @@ def api_base() -> str:
     return (env or matter or DEFAULT_URL).rstrip("/")
 
 
+def signing_base() -> str:
+    """The web origin for signer links (/s/<slug>). The hosted API
+    lives on api.docuseal.com but signers sign on docuseal.com; a
+    self-hosted instance serves both from one origin, with the API
+    mounted under /api. (A naive '/api' strip ate the 'api.'
+    subdomain of the hosted service — caught by the first live
+    test-mode run.)"""
+    base = api_base()
+    if base == DEFAULT_URL:
+        return "https://docuseal.com"
+    return base.removesuffix("/api")
+
+
 def api_key() -> str:
     key = os.environ.get("DOCUSEAL_API_KEY")
     if key:
@@ -312,9 +325,7 @@ def cmd_send(args: argparse.Namespace) -> int:
                 "slug": e.get("slug"),
                 "role": e.get("role"),
                 "status": e.get("status"),
-                "sign_url": (
-                    f"{api_base().replace('/api', '')}/s/{e['slug']}" if e.get("slug") else None
-                ),
+                "sign_url": (f"{signing_base()}/s/{e['slug']}" if e.get("slug") else None),
             }
             for e in entries
         ],

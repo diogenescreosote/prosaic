@@ -406,3 +406,21 @@ def test_matter_without_credential_reference_refuses(tmp_path: Path) -> None:
     )
     assert proc.returncode != 0
     assert "credential" in proc.stderr and "ADR-0031" in proc.stderr
+
+
+def test_signing_base_hosted_vs_self_hosted(monkeypatch: pytest.MonkeyPatch) -> None:
+    """Signer links: hosted API (api.docuseal.com) signs on
+    docuseal.com; a self-hosted instance strips only a trailing /api
+    — never the 'api.' subdomain (the first live test-mode run
+    caught exactly that mangling)."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("docuseal_client", DOCUSEAL)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+
+    monkeypatch.delenv("DOCUSEAL_SERVER", raising=False)
+    monkeypatch.setenv("DOCUSEAL_URL", "https://api.docuseal.com")
+    assert mod.signing_base() == "https://docuseal.com"
+    monkeypatch.setenv("DOCUSEAL_URL", "https://sign.example.com/api")
+    assert mod.signing_base() == "https://sign.example.com"
