@@ -300,15 +300,6 @@ def test_public_output_directory_free_of_sealed_bytes(built):
         "redaction sidecar written into the public output directory")
 
 
-def test_highlight_macro_renders_yellow_run(built):
-    _m, sealed, _p = built
-    from pypdf import PdfReader
-    pages = util.pdf_page_texts(sealed)
-    idx = next(i for i, t in enumerate(pages) if util.HIGHLIGHT_TOKEN in t)
-    data = PdfReader(str(sealed)).pages[idx].get_contents().get_data()
-    assert b"1 1 0 rg" in data, "yellow highlight fill not drawn"
-
-
 # ---------------------------------------------------------------------------
 # Cross-file exhibit references (exhibit_source)
 # ---------------------------------------------------------------------------

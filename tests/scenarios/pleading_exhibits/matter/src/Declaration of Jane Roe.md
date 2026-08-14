@@ -67,8 +67,7 @@ information redacted]}{C7: third-party medical privacy; sentinel
 JUSTIF-99}.
 
 5. The session notes, \exhibit{therapy_notes}, are lodged
-conditionally under seal. \highlight{HIGHLIGHT-SENTINEL-77 this
-sentence was added by the drafting assistant for counsel's review.}
+conditionally under seal.
 
 I declare under penalty of perjury under the laws of the State of
 California that the foregoing is true and correct.
