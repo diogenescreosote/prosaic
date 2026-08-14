@@ -1138,21 +1138,32 @@ The legacy spellings (`\declsignblock`, `\judgesignblock`,
 the styles above with a stderr deprecation warning — a live matter
 mid-filing never breaks on a taxonomy change.
 
-### E-signature field tags, embedded automatically
+### E-signature fields, computed automatically
 
-Every signature block and witness grid also draws DocuSeal text tags
-(`{{Signature 1;role=Signer 1;type=signature}}` and kindred for
-dates, locations, residences) in white 6 pt text in the inter-line
-gap: invisible in print, machine-readable in the text layer, and
-stripped from the executed document by DocuSeal's default
-`remove_tags`. Signer roles number in document order — the same
-order `sc docuseal send --to` assigns submitters — so a built PDF is
-e-sign-ready with fields already placed. A `--sign` render's dated
-and decl blocks carry no tags (the signature line is already
-executed); notarial certificates carry none (a notary's ceremony is
-not an e-sign flow); and judge blocks carry none — a judicial
-signature line is a space for wet ink, never a DocuSeal role. Overlapping tags stagger
-vertically; text extraction keeps every printed line whole.
+Every signature block and witness grid records an e-sign field
+(signature, date, location, residence) sized to its rule or blank.
+Front-matter `esign` picks the transport: absent (the default), the
+geometry is written to a `<pdf>.fields.json` sidecar and NOTHING
+enters the PDF text layer — embedded tags were invisible on paper
+but rode along on every copy-paste; `esign: tags` draws classic
+DocuSeal `{{...}}` text tags in white 6 pt (the only mode the free
+web UI's tag parser reads; overlapping tags stagger vertically);
+`esign: false` emits nothing at all — the wet-ink mode for
+instruments e-signature cannot lawfully execute (wills, Prob. Code
+6110; negotiable notes, UETA's Article 3 exclusion). Signer roles
+number in document order — the same order `sc docuseal send --to`
+assigns submitters. A `--sign` render's dated and decl blocks carry
+no fields (the signature line is already executed); notarial
+certificates carry none (a notary's ceremony is not an e-sign
+flow); and judge blocks carry none — a judicial signature line is a
+space for wet ink, never a DocuSeal role.
+
+### Fill-in blanks: `\blank{<length>}`
+
+`\blank{2in}` (units: `in`, `pt`, `cm`, `mm`) renders a fill-in
+rule of that length — write intent, not underscore runs. Expansion
+is shared by the PDF, TXT, and DOCX renderers, and the result still
+reads as a blank run to the e-sign field machinery above.
 
 ## Output specification
 

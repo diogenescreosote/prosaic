@@ -114,7 +114,8 @@ def test_esign_tags_number_signers_in_document_order(tmp_path):
     proc = build(tmp_path,
                  "\\signblock{whereof}{JANE ROE}{Testator}{Will}\n\n"
                  "## Witness Attestation\n\nWe attest.\n\n"
-                 "\\witnessattestation{First Witness\\\\Second Witness}")
+                 "\\witnessattestation{First Witness\\\\Second Witness}",
+                 extra_meta="esign: tags")
     assert proc.returncode == 0, proc.stderr
     # Raw (reading-order) extraction keeps each drawn tag string whole;
     # -layout would scatter column-positioned fragments.
@@ -173,7 +174,7 @@ def test_dated_blank_is_a_date_field_with_no_preprinted_year(tmp_path):
     """The dated style takes the WHOLE date in one blank: the field is
     type=date (a real date entry, not freeform text) and no ", <year>"
     is pre-printed — a December build signed in January would lie."""
-    proc = build(tmp_path, "\\signblock{dated}{Jane Roe}")
+    proc = build(tmp_path, "\\signblock{dated}{Jane Roe}", extra_meta="esign: tags")
     assert proc.returncode == 0, proc.stderr
     raw = subprocess.run(
         ["pdftotext", str(tmp_path / "doc.pdf"), "-"],
@@ -197,3 +198,27 @@ def test_esign_false_suppresses_every_field_tag(tmp_path):
         check=True, capture_output=True, text=True,
     ).stdout
     assert "{{" not in raw
+
+
+def test_default_mode_writes_sidecar_and_keeps_text_layer_clean(tmp_path):
+    """Without an esign: key, field geometry goes to <pdf>.fields.json
+    and NOTHING enters the PDF text layer — embedded tags were
+    invisible on paper but rode along on every copy-paste."""
+    import json
+    proc = build(tmp_path, "\\signblock{dated}{Jane Roe}")
+    assert proc.returncode == 0, proc.stderr
+    raw = subprocess.run(
+        ["pdftotext", str(tmp_path / "doc.pdf"), "-"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    assert "{{" not in raw
+    sidecar = json.loads((tmp_path / "doc.pdf.fields.json").read_text())
+    fields = {f["name"]: f for f in sidecar["fields"]}
+    assert fields["Signature 1"]["type"] == "signature"
+    assert fields["Signature 1"]["role"] == "Signer 1"
+    assert fields["Date 1"]["type"] == "date"
+    for f in sidecar["fields"]:
+        assert 0 < f["x"] < sidecar["page_width"]
+        assert 0 < f["y_top"] < sidecar["page_height"]
+        assert f["w"] > 0 and f["h"] > 0 and f["page"] >= 1
+

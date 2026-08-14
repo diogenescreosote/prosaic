@@ -24,6 +24,7 @@ FRONT = """---
 doctype: document
 heading_numbers: false
 paper_title: "Layout Test"
+esign: tags   # embedded-tag mode: half this module asserts tag text
 ---
 
 {body}

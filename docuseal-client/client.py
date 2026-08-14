@@ -241,9 +241,52 @@ def envelope_signers(envelope: str) -> list[dict]:
     return out
 
 
+def field_sidecar(pdf: Path) -> dict | None:
+    """The build's <pdf>.fields.json — field geometry the renderer
+    computed, kept out of the PDF so the text layer stays clean."""
+    path = pdf.with_name(pdf.name + ".fields.json")
+    if not path.exists():
+        return None
+    try:
+        data = json.loads(path.read_text())
+    except (json.JSONDecodeError, OSError) as e:
+        raise SystemExit(f"unreadable field sidecar {path}: {e}") from None
+    if not data.get("fields"):
+        return None
+    return data
+
+
+def sidecar_api_fields(sidecar: dict) -> list[dict]:
+    """Sidecar geometry (points, top-left origin) as the API's field
+    objects (page-fraction areas, 1-based pages)."""
+    pw = float(sidecar["page_width"])
+    ph = float(sidecar["page_height"])
+    return [
+        {
+            "name": f["name"],
+            "type": f["type"],
+            "role": f["role"],
+            "areas": [
+                {
+                    "x": round(f["x"] / pw, 4),
+                    "y": round(f["y_top"] / ph, 4),
+                    "w": round(f["w"] / pw, 4),
+                    "h": round(f["h"] / ph, 4),
+                    "page": f["page"],
+                }
+            ],
+        }
+        for f in sidecar["fields"]
+    ]
+
+
 def tagged_role_count(pdf: Path) -> int | None:
-    """How many distinct Signer roles the document's embedded field
-    tags declare, or None when undetectable."""
+    """How many distinct Signer roles the document declares — from the
+    field sidecar when the build wrote one, else from embedded text
+    tags (the esign: tags mode the free web UI needs), else None."""
+    sidecar = field_sidecar(pdf)
+    if sidecar:
+        return len({f["role"] for f in sidecar["fields"]})
     if not shutil.which("pdftotext"):
         return None
     text = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
@@ -288,14 +331,16 @@ def cmd_send(args: argparse.Namespace) -> int:
             f"document) before sending."
         )
 
+    document: dict = {
+        "name": pdf.name,
+        "file": base64.b64encode(pdf.read_bytes()).decode(),
+    }
+    sidecar = field_sidecar(pdf)
+    if sidecar:
+        document["fields"] = sidecar_api_fields(sidecar)
     payload = {
         "name": args.name or pdf.stem,
-        "documents": [
-            {
-                "name": pdf.name,
-                "file": base64.b64encode(pdf.read_bytes()).decode(),
-            }
-        ],
+        "documents": [document],
         "submitters": submitters,
         "send_email": not args.no_email,
     }
@@ -309,13 +354,13 @@ def cmd_send(args: argparse.Namespace) -> int:
     )
     submission_id = entries[0].get("submission_id") or submission.get("id")
 
-    if shutil.which("pdftotext"):
+    if not sidecar and shutil.which("pdftotext"):
         text = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
         if "{{" not in text:
             print(
-                "WARNING: no {{...}} field tags detected in the document; "
-                "signers will have to place their own fields "
-                "(prosaic signature blocks embed tags automatically)",
+                "WARNING: no field sidecar and no {{...}} tags in the "
+                "document; signers will have to place their own fields "
+                "(prosaic builds write <pdf>.fields.json automatically)",
                 file=sys.stderr,
             )
 

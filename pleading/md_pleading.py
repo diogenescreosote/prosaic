@@ -945,6 +945,30 @@ def apply_variant_to_meta(meta: Dict, variant: str) -> Dict:
     return resolved
 
 
+BLANK_MACRO = re.compile(r"\\blank\{([0-9]*\.?[0-9]+)\s*(in|pt|cm|mm)\}")
+
+
+def expand_blank_macros(body: str) -> str:
+    """``\blank{2in}`` becomes a fill-in rule of that length.
+
+    Sources used to spell blanks as literal underscore runs (and, worse,
+    escaped ones), which is unreadable and couples the source to the
+    body font's underscore width. The macro names the intent and a
+    LENGTH; expansion to underscores happens here, shared by all three
+    renderers, so PDF/TXT/DOCX agree and downstream machinery that
+    recognizes ``_{3,}`` blank runs (e-sign field placement) keeps
+    working. Sized against the body font; a blank inside a heading
+    will run a little long, which a blank can afford."""
+    unit_pt = {"in": 72.0, "pt": 1.0, "cm": 28.3465, "mm": 2.83465}
+
+    def sub(m: "re.Match[str]") -> str:
+        length = float(m.group(1)) * unit_pt[m.group(2)]
+        one = pdfmetrics.stringWidth("_", FONT_NAME, FONT_SIZE)
+        return "_" * max(3, round(length / one))
+
+    return BLANK_MACRO.sub(sub, body)
+
+
 def parse_front_matter(text: str) -> Tuple[Dict, str]:
     if not text.startswith("---\n"):
         raise ValueError("Input must begin with YAML front matter delimited by ---")
@@ -956,7 +980,7 @@ def parse_front_matter(text: str) -> Tuple[Dict, str]:
     data = yaml.safe_load(raw_yaml) or {}
     if not isinstance(data, dict):
         raise ValueError("YAML front matter must parse to a mapping/object")
-    return data, body
+    return data, expand_blank_macros(body)
 
 
 def _parse_braced_argument(text: str, open_brace_idx: int) -> Tuple[str, int]:
@@ -2546,6 +2570,7 @@ class PleadingPDF:
         self.draft_banner = draft_banner_text(meta)
         self.page_num = 0
         self.link_rects: List[LinkRect] = []
+        self.esign_fields: List[Dict] = []  # sidecar e-sign fields (points, top-left origin)
 
         # Footnotes: assign numbers in document (reading) order, then cache
         # wrapped text. Per-page state tracks which notes land on the current
@@ -3035,11 +3060,37 @@ class PleadingPDF:
                      width: float, height: float) -> None:
         """A field of explicit size whose bottom edge rests on rule_y.
 
-        DocuSeal takes the tag text's top-left corner as the field's
-        top-left and extends the box down by height, so the tag's
-        baseline goes at rule_y + height - ascent."""
-        tag = f"{{{{{spec};width={round(width)};height={round(height)}}}}}"
-        self._esign_tag(x, rule_y + height - self.ESIGN_TAG_ASCENT, tag)
+        Three modes, set by front-matter `esign`:
+        - absent (default): the field is RECORDED for the sidecar
+          (<pdf>.fields.json) and nothing enters the PDF text layer —
+          embedded tags were invisible on paper but rode along on
+          every copy-paste from the document.
+        - `tags`: DocuSeal text tags drawn in white 6 pt (the only
+          mode the free web UI's tag parser can read). DocuSeal takes
+          the tag text's top-left corner as the field's top-left and
+          extends the box down by height, so the tag's baseline goes
+          at rule_y + height - ascent.
+        - `false`: nothing at all (wet-ink instruments).
+        """
+        mode = self.meta.get("esign")
+        if mode is False:
+            return
+        name, _, rest = spec.partition(";")
+        attrs = dict(kv.split("=", 1) for kv in rest.split(";") if "=" in kv)
+        if mode == "tags":
+            tag = f"{{{{{spec};width={round(width)};height={round(height)}}}}}"
+            self._esign_tag(x, rule_y + height - self.ESIGN_TAG_ASCENT, tag)
+            return
+        self.esign_fields.append({
+            "name": name,
+            "role": attrs.get("role", "Signer"),
+            "type": attrs.get("type", "text"),
+            "page": self.page_num,
+            "x": round(x, 2),
+            "y_top": round(PAGE_HEIGHT - (rule_y + height), 2),
+            "w": round(width, 2),
+            "h": round(height, 2),
+        })
 
     def _tag_blanks(self, line_no: int, text: str, specs: List[Optional[str]],
                     font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
@@ -3065,7 +3116,9 @@ class PleadingPDF:
             if level == len(level_end_x):
                 level_end_x.append(0.0)
             level_end_x[level] = x + tag_w
-            height = self.ESIGN_TEXT_FIELD_HEIGHT + level * (ESIGN_TAG_FONT_SIZE + 1)
+            height = self.ESIGN_TEXT_FIELD_HEIGHT
+            if self.meta.get("esign") == "tags":
+                height += level * (ESIGN_TAG_FONT_SIZE + 1)
             self._esign_field(x, rule_y, tag, blank_w, height)
 
     UNSIGNED_RULE = "____________________________________"
@@ -4339,6 +4392,30 @@ def main() -> None:
         print(f"Wrote {form_display_id(CONSUMER_NOTICE_FORM)} consumer notice {path}")
 
     print(f"Wrote {output_path}")
+
+    # E-sign field sidecar (<pdf>.fields.json): geometry for `sc
+    # docuseal send`, kept OUT of the PDF so nothing invisible rides
+    # the clipboard. Page numbers account for a prepended cover sheet.
+    fields_path = output_path.with_name(output_path.name + ".fields.json")
+    esign_fields = list(getattr(pleading, "esign_fields", []) or [])
+    if esign_fields:
+        offset = 0
+        if cover_sheet and cover_path:
+            offset = len(PdfReader(str(cover_path)).pages)
+        if offset:
+            esign_fields = [{**f, "page": f["page"] + offset} for f in esign_fields]
+        fields_path.write_text(json.dumps({
+            "page_width": PAGE_WIDTH,
+            "page_height": PAGE_HEIGHT,
+            "origin": "top-left",
+            "units": "pt",
+            "fields": esign_fields,
+        }, indent=2) + "\n")
+        print(f"Wrote {fields_path}")
+    elif fields_path.exists():
+        fields_path.unlink()
+        print(f"Removed stale {fields_path}")
+
     # The sidecar quotes the verbatim sealed text, so it accompanies only
     # the sealed variant: a public/unscoped output directory may be shipped
     # as "the public packet" and must stay free of sealed bytes.

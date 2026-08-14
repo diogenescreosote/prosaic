@@ -66,7 +66,7 @@ document:
   - no_caption               # form attachments: suppress the whole caption
   - plain                    # deprecated spelling of no_caption; warns
   - notreal                  # unfiled/unsent marker; prints as a red banner
-  - esign                    # false = emit no DocuSeal field tags (wet-ink instrument, e.g. Article 3 note)
+  - esign                    # false = wet ink, no fields anywhere; 'tags' = embedded text tags (free web UI); absent = sidecar .fields.json, clean text layer
 
 # Letters (doctype: letter) address a recipient rather than a court.
 letter:

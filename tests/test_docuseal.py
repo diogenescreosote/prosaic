@@ -425,3 +425,111 @@ def test_signing_base_hosted_vs_self_hosted(monkeypatch: pytest.MonkeyPatch) -> 
     assert mod.signing_base() == "https://docuseal.com"
     monkeypatch.setenv("DOCUSEAL_URL", "https://sign.example.com/api")
     assert mod.signing_base() == "https://sign.example.com"
+
+
+def test_send_attaches_fields_from_the_sidecar(mock_api: str, tmp_path: Path) -> None:
+    """A build's <pdf>.fields.json becomes API field placements —
+    page-fraction areas, roles intact — and satisfies the roster
+    cross-check without any text in the PDF."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(PDF_BYTES)
+    (tmp_path / "doc.pdf.fields.json").write_text(
+        json.dumps(
+            {
+                "page_width": 612.0,
+                "page_height": 792.0,
+                "origin": "top-left",
+                "units": "pt",
+                "fields": [
+                    {
+                        "name": "Signature 1",
+                        "role": "Signer 1",
+                        "type": "signature",
+                        "page": 2,
+                        "x": 76.0,
+                        "y_top": 700.0,
+                        "w": 212.0,
+                        "h": 28.0,
+                    },
+                    {
+                        "name": "Date 1",
+                        "role": "Signer 1",
+                        "type": "date",
+                        "page": 2,
+                        "x": 76.0,
+                        "y_top": 660.0,
+                        "w": 150.0,
+                        "h": 15.0,
+                    },
+                ],
+            }
+        )
+    )
+    proc = run_docuseal(
+        "send",
+        "doc.pdf",
+        "--to",
+        "Jane Roe <jane@example.com>",
+        url=mock_api,
+        cwd=tmp_path,
+    )
+    assert proc.returncode == 0, proc.stderr
+    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
+    fields = req["payload"]["documents"][0]["fields"]
+    sig = next(f for f in fields if f["name"] == "Signature 1")
+    assert sig["role"] == "Signer 1" and sig["type"] == "signature"
+    area = sig["areas"][0]
+    assert area["page"] == 2
+    assert abs(area["x"] - 76.0 / 612.0) < 1e-3
+    assert abs(area["y"] - 700.0 / 792.0) < 1e-3
+    assert abs(area["w"] - 212.0 / 612.0) < 1e-3
+    assert "no field sidecar" not in proc.stderr
+
+
+def test_sidecar_role_count_gates_the_roster(mock_api: str, tmp_path: Path) -> None:
+    """Two tagged roles + one roster signer = refusal, judged from the
+    sidecar (no pdftotext needed)."""
+    pdf = tmp_path / "doc.pdf"
+    pdf.write_bytes(PDF_BYTES)
+    (tmp_path / "doc.pdf.fields.json").write_text(
+        json.dumps(
+            {
+                "page_width": 612.0,
+                "page_height": 792.0,
+                "origin": "top-left",
+                "units": "pt",
+                "fields": [
+                    {
+                        "name": "Signature 1",
+                        "role": "Signer 1",
+                        "type": "signature",
+                        "page": 1,
+                        "x": 76.0,
+                        "y_top": 700.0,
+                        "w": 212.0,
+                        "h": 28.0,
+                    },
+                    {
+                        "name": "Signature 2",
+                        "role": "Signer 2",
+                        "type": "signature",
+                        "page": 1,
+                        "x": 76.0,
+                        "y_top": 600.0,
+                        "w": 212.0,
+                        "h": 28.0,
+                    },
+                ],
+            }
+        )
+    )
+    proc = run_docuseal(
+        "send",
+        "doc.pdf",
+        "--to",
+        "solo@example.com",
+        url=mock_api,
+        cwd=tmp_path,
+    )
+    assert proc.returncode != 0
+    assert "signer mismatch" in proc.stderr

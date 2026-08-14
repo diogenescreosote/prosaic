@@ -21,12 +21,15 @@ handle it.
    `notreal:` sources must never be sent; the user clears the marker
    first (their call, never yours).
 
-Signature placement is automatic: prosaic signature blocks and
-witness grids embed invisible DocuSeal field tags at render time
-(ADR-0027), roles numbered in document order. Give `--to` in the same
+Signature placement is automatic: prosaic builds write the field
+geometry to `<pdf>.fields.json` (sent as API field areas; the PDF's
+text layer stays clean), or embed classic `{{...}}` text tags when
+the source says `esign: tags` — the mode the free web UI needs
+(ADR-0027). Roles number in document order; give `--to` in the same
 order the signature areas appear and every field lands placed. A
-PDF built elsewhere, without tags, sends with a warning and the
-signer places fields by hand.
+PDF with neither sends with a warning and the signer places fields
+by hand. `esign: false` sources (wills, negotiable notes) are
+wet-ink instruments — never send them at all.
 
 For flows beyond send/status/fetch (templates, bulk sends, webhooks,
 embedded signing), DocuSeal publishes official agent skills at
@@ -57,8 +60,8 @@ envelopes:
 ```
 
 `--to "Name <email>"` (repeatable) covers ad-hoc sends. Either way
-the send validates the roster size against the document's embedded
-field tags and refuses a mismatch. Judicial signature lines
+the send validates the roster size against the document's declared
+fields (sidecar or tags) and refuses a mismatch. Judicial signature lines
 (\signblock{judge}) are wet-ink spaces: never tagged, never part of
 a roster, never e-signed.
 

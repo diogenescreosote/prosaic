@@ -50,10 +50,13 @@ does prosaic's side.
   `--no-email`), and writes `<pdf>.docuseal.json` beside the document:
   submission id, signers, signing URLs. The receipt is the durable
   record the other subcommands and the matter's history work from.
-  A document with no `{{...}}` text tags sends with a warning —
-  which prosaic-built instruments never trigger: signature blocks
-  embed their field tags at render time (ADR-0027), with roles in
-  document order matching `--to` order. *(tested:
+  Field placement comes from the build's `<pdf>.fields.json`
+  sidecar when present — the renderer's exact geometry, sent as API
+  field areas, keeping the PDF's text layer clean (nothing invisible
+  rides a copy-paste) — else from embedded `{{...}}` text tags
+  (`esign: tags` builds, the mode the free web UI's parser needs).
+  Roles number in document order matching `--to` order (ADR-0027).
+  A document with neither sends with a warning. *(tested:
   tests/test_docuseal.py; pleading/tests/test_signblocks.py)*
 - **`sc docuseal status <id>`** prints per-signer state; exit 0 only
   when the submission is completed, 2 while anything is pending —
