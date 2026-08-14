@@ -734,11 +734,11 @@ def spans_to_styled_words(spans: List[TextSpan],
             continue
         parts = span.text.split()
         for i, w in enumerate(parts):
-            glue = (words
-                    and i == 0
-                    and not span.text[0].isspace()
-                    and (words[-1].text[-1] in _OPENING_PUNCT
-                         or w[0] in _CLOSING_PUNCT_CHARS))
+            glue = bool(words
+                        and i == 0
+                        and not span.text[0].isspace()
+                        and (words[-1].text[-1] in _OPENING_PUNCT
+                             or w[0] in _CLOSING_PUNCT_CHARS))
             words.append(StyledWord(w, bold=span.bold, italic=span.italic,
                                     underline=span.underline,
                                     highlight=span.highlight,
@@ -765,24 +765,39 @@ def tag_exhibit_links(words: List[StyledWord], exhibit_letters: set) -> None:
                             break
 
 
+def glue_clusters(words: List[StyledWord]) -> List[List[StyledWord]]:
+    """Group words into break-atomic clusters: a word plus any glued
+    (no_space_before) followers. "Kollmer" + "," is one unit — a line
+    may never start with the comma that belongs to the word above
+    (the comma-orphan bug), nor strand a footnote marker."""
+    clusters: List[List[StyledWord]] = []
+    for w in words:
+        if clusters and w.no_space_before:
+            clusters[-1].append(w)
+        else:
+            clusters.append([w])
+    return clusters
+
+
 def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: int = FONT_SIZE) -> List[List[StyledWord]]:
     if not words:
         return []
     lines: List[List[StyledWord]] = []
-    current: List[StyledWord] = [words[0]]
+    current: List[StyledWord] = []
     space_w = pdfmetrics.stringWidth(" ", FONT_NAME, font_size)
-    cur_width = words[0].width(font_size)
-    for word in words[1:]:
-        gap = 0 if word.no_space_before else space_w
-        trial = cur_width + gap + word.width(font_size)
-        if trial <= max_width:
-            current.append(word)
-            cur_width = trial
-        else:
+    cur_width = 0.0
+    for cluster in glue_clusters(words):
+        cw = sum(w.width(font_size) for w in cluster)
+        gap = space_w if current else 0.0
+        if current and cur_width + gap + cw > max_width:
             lines.append(current)
-            current = [word]
-            cur_width = word.width(font_size)
-    lines.append(current)
+            current = list(cluster)
+            cur_width = cw
+        else:
+            current.extend(cluster)
+            cur_width += gap + cw
+    if current:
+        lines.append(current)
     return lines
 
 
@@ -969,6 +984,19 @@ def expand_blank_macros(body: str) -> str:
     return BLANK_MACRO.sub(sub, body)
 
 
+def enforce_em_dash_spacing(body: str) -> str:
+    """House rule, enforced rather than suggested: em dashes are never
+    spaced (`text---text`). A single-spaced ` --- ` (or a spaced
+    literal em dash) between non-dash characters is glued; longer dash
+    runs (PGP armor, horizontal rules) and en-dash ranges are
+    untouched. The stderr warning still fires so the SOURCE gets
+    fixed — but the output no longer depends on it."""
+    ws = r"(?:[ \t]+|[ \t]*\n[ \t]*)"  # spaces, or ONE line break + indent
+    body = re.sub(rf"(?<=[^-\s]){ws}---{ws}(?=[^-\s])", "---", body)
+    body = re.sub(rf"(?<=[^\u2014\s]){ws}\u2014{ws}(?=[^\u2014\s])", "\u2014", body)
+    return body
+
+
 def parse_front_matter(text: str) -> Tuple[Dict, str]:
     if not text.startswith("---\n"):
         raise ValueError("Input must begin with YAML front matter delimited by ---")
@@ -980,7 +1008,7 @@ def parse_front_matter(text: str) -> Tuple[Dict, str]:
     data = yaml.safe_load(raw_yaml) or {}
     if not isinstance(data, dict):
         raise ValueError("YAML front matter must parse to a mapping/object")
-    return data, expand_blank_macros(body)
+    return data, enforce_em_dash_spacing(expand_blank_macros(body))
 
 
 def _parse_braced_argument(text: str, open_brace_idx: int) -> Tuple[str, int]:
@@ -2124,22 +2152,23 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
         rest = words[1:] if words else []
         all_words = [prefix_word] + rest
         lines_out: List[Tuple[List[StyledWord], float]] = []
-        current: List[StyledWord] = [all_words[0]]
-        cur_w = all_words[0].width()
         space_w = pdfmetrics.stringWidth(" ", FONT_NAME, FONT_SIZE)
         first_line = True
         max_w = text_width - indent
 
-        for word in all_words[1:]:
-            gap = 0 if word.no_space_before else space_w
-            trial = cur_w + gap + word.width()
+        clusters = glue_clusters(all_words)
+        current = list(clusters[0])
+        cur_w = sum(w.width() for w in current)
+        for cluster in clusters[1:]:
+            cw = sum(w.width() for w in cluster)
+            trial = cur_w + space_w + cw
             if trial <= max_w:
-                current.append(word)
+                current.extend(cluster)
                 cur_w = trial
             else:
                 lines_out.append((current, indent if first_line else indent + hanging))
-                current = [word]
-                cur_w = word.width()
+                current = list(cluster)
+                cur_w = cw
                 first_line = False
                 max_w = text_width - indent - hanging
         lines_out.append((current, indent if first_line else indent + hanging))
