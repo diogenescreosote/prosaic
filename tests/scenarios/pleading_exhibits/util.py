@@ -40,37 +40,164 @@ ORDER_PDF = "Proposed Order.pdf"
 ORDER_DOCX = "Proposed Order.docx"
 
 
-def make_text_pdf(path: Path, pages: list[str]) -> None:
-    """Write a tiny PDF with one text line per page (Helvetica, extractable)."""
+def make_text_pdf(path: Path, pages: list[str], *, title: str = "",
+                  body: list[str] | None = None) -> None:
+    """Write a document-shaped PDF: heading, body paragraph lines, and
+    each page's sentinel as an extractable footer reference line.
+
+    Realistic-looking props matter: the scenario's AI judge evaluates
+    the built packet as a filing, and a one-line top-left page reads
+    as a rendering defect rather than an exhibit (it once cost the
+    judgment two points). The sentinel stays extractable — now as a
+    footer "Ref:" line — so the deterministic checks are unchanged."""
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
     path.parent.mkdir(parents=True, exist_ok=True)
     c = canvas.Canvas(str(path), pagesize=letter)
-    for text in pages:
-        c.setFont("Helvetica", 12)
-        c.drawString(72, 720, text)
+    for i, sentinel in enumerate(pages):
+        y = 708
+        if title:
+            c.setFont("Helvetica-Bold", 13)
+            c.drawString(72, y, title)
+            y -= 26
+        c.setFont("Helvetica", 11)
+        for line in (body or []):
+            c.drawString(72, y, line)
+            y -= 15
+        c.setFont("Helvetica", 8)
+        c.drawString(72, 40, f"Page {i + 1} of {len(pages)} — Ref: {sentinel}")
         c.showPage()
     c.save()
 
 
 def make_image(path: Path) -> None:
-    from PIL import Image
+    """A text-message screenshot the way a phone actually shows one:
+    header bar, alternating left/right chat bubbles, timestamps in the
+    range the declaration recites (January 23 – March 3, 2026)."""
+    from PIL import Image, ImageDraw, ImageFont
+
     path.parent.mkdir(parents=True, exist_ok=True)
-    img = Image.new("RGB", (320, 240), (200, 220, 240))
+    W, H = 700, 1000
+    img = Image.new("RGB", (W, H), (255, 255, 255))
+    d = ImageDraw.Draw(img)
+
+    def font(size: int, bold: bool = False):
+        candidates = [
+            "/System/Library/Fonts/Helvetica.ttc",
+            "/usr/share/fonts/truetype/dejavu/DejaVuSans.ttf",
+            "/usr/share/fonts/dejavu/DejaVuSans.ttf",
+        ]
+        for c in candidates:
+            try:
+                return ImageFont.truetype(c, size)
+            except OSError:
+                continue
+        try:
+            return ImageFont.load_default(size)
+        except TypeError:  # older Pillow: fixed-size bitmap default
+            return ImageFont.load_default()
+
+    d.rectangle([0, 0, W, 64], fill=(245, 245, 247))
+    d.text((W // 2, 32), "John Smith", font=font(24), fill=(20, 20, 20),
+           anchor="mm")
+
+    messages = [
+        ("Jan 23, 2026", "Can we talk about the schedule this week?", False),
+        ("Jan 23, 2026", "Yes. Thursday after 5 works for me.", True),
+        ("Feb 2, 2026", "Following up on the email I sent Jan 15.", False),
+        ("Feb 2, 2026", "I saw it. I'll reply with the documents.", True),
+        ("Feb 18, 2026", "The counselor's office confirmed Tuesday.", False),
+        ("Mar 3, 2026", "Received the intake form, signing today.", True),
+    ]
+    y = 84
+    for stamp, text, mine in messages:
+        d.text((W // 2, y), stamp, font=font(14), fill=(150, 150, 150),
+               anchor="mm")
+        y += 24
+        f = font(18)
+        tw = d.textlength(text, font=f)
+        pad, bh = 14, 40
+        if mine:
+            box = [W - 24 - tw - 2 * pad, y, W - 24, y + bh]
+            fill, tcol = (0, 122, 255), (255, 255, 255)
+        else:
+            box = [24, y, 24 + tw + 2 * pad, y + bh]
+            fill, tcol = (233, 233, 235), (20, 20, 20)
+        d.rounded_rectangle(box, radius=18, fill=fill)
+        d.text((box[0] + pad, y + bh // 2), text, font=f, fill=tcol,
+               anchor="lm")
+        y += bh + 18
     img.save(path)
 
 
 def generate_binaries(matter: Path) -> None:
     """Create the exhibit/asset binaries the fixture sources reference."""
     ex = matter / "exhibits"
-    make_text_pdf(ex / "smith_email.pdf", SMITHMAIL)
+    make_text_pdf(
+        ex / "smith_email.pdf", SMITHMAIL,
+        title="Message",
+        body=[
+            "From:    John Smith <j.smith@example.com>",
+            "To:      Jane Roe <jane.roe@example.com>",
+            "Date:    January 15, 2026, 9:41 AM",
+            "Subject: Schedule and counseling paperwork",
+            "",
+            "Jane,",
+            "",
+            "Confirming what we discussed: I can do Thursdays after",
+            "5:00 p.m. going forward. I have asked the counselor's",
+            "office to send both of us the intake paperwork, and I",
+            "will bring the signed copy to the next session.",
+            "",
+            "Please let me know if the Thursday time stops working.",
+            "",
+            "John",
+        ])
     make_image(ex / "roe_texts.png")
-    make_text_pdf(ex / "medical_summary.pdf", [MEDSUM_TOKEN])
-    make_text_pdf(ex / "intake_form.pdf",
-                  [f"Intake paperwork {INTAKE_UNREDACTED} signed by parties"])
-    make_text_pdf(ex / "intake_form_redacted.pdf",
-                  [f"Intake paperwork {INTAKE_REDACTED} signed by parties"])
-    make_text_pdf(matter / "assets" / "static_notice.pdf", [STATIC_NOTICE])
+    make_text_pdf(
+        ex / "medical_summary.pdf", [MEDSUM_TOKEN],
+        title="Springfield Medical Group — Clinical Summary",
+        body=[
+            "Patient: Jane Roe          Date of report: March 10, 2026",
+            "Prepared by the treating physician at counsel's request.",
+            "",
+            "Summary of treatment course and clinical findings for the",
+            "period January through March 2026, provided for filing",
+            "under seal pursuant to the protective order.",
+        ])
+    make_text_pdf(
+        ex / "intake_form.pdf",
+        [f"Intake paperwork {INTAKE_UNREDACTED} signed by parties"],
+        title="Counseling Intake Form",
+        body=[
+            "Provider: Springfield Family Counseling",
+            "Clients:  Jane Roe; John Smith",
+            "Date of intake: February 24, 2026",
+            "",
+            "The undersigned acknowledge the practice policies and",
+            "consent to joint sessions as scheduled.",
+        ])
+    make_text_pdf(
+        ex / "intake_form_redacted.pdf",
+        [f"Intake paperwork {INTAKE_REDACTED} signed by parties"],
+        title="Counseling Intake Form",
+        body=[
+            "Provider: Springfield Family Counseling",
+            "Clients:  Jane Roe; John Smith",
+            "Date of intake: February 24, 2026",
+            "",
+            "The undersigned acknowledge the practice policies and",
+            "consent to joint sessions as scheduled.",
+            "",
+            "[Portions redacted pursuant to protective order.]",
+        ])
+    make_text_pdf(
+        matter / "assets" / "static_notice.pdf", [STATIC_NOTICE],
+        title="Notice of Related Case",
+        body=[
+            "Pursuant to local rule, notice is given of a related",
+            "matter pending in this court between the same parties.",
+        ])
 
 
 def load_matter(tmp_path: Path) -> Path:
