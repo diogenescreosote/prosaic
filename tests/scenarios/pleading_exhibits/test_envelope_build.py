@@ -156,6 +156,33 @@ def test_check_stale_covers_redacted_pdf_outputs(matter):
     assert proc.returncode == 0, proc.stderr[-2000:]
 
 
+def test_check_stale_covers_the_toolchain_itself(matter):
+    """The renderer is a dependency of every build: a source untouched
+    for a week is still stale when md_pleading.py changed underneath
+    it (the e-sign geometry release shipped while `make` kept saying
+    "up to date" about PDFs carrying the old field tags)."""
+    import os
+    import time
+    proc = util.run_build(matter, "motion_packet", "--variant", "sealed",
+                          "--check-stale")
+    assert proc.returncode == 0, proc.stderr[-2000:]
+    renderer = util.PLEADING / "md_pleading.py"
+    stat = renderer.stat()
+    future = time.time() + 5
+    os.utime(renderer, (future, future))
+    try:
+        proc = util.run_build(matter, "motion_packet", "--variant",
+                              "sealed", "--check-stale")
+        assert proc.returncode != 0
+        assert "STALE" in proc.stderr
+        assert "md_pleading.py" in proc.stderr
+    finally:
+        os.utime(renderer, (stat.st_atime, stat.st_mtime))
+    proc = util.run_build(matter, "motion_packet", "--variant", "sealed",
+                          "--check-stale")
+    assert proc.returncode == 0, proc.stderr[-2000:]
+
+
 # ---------------------------------------------------------------------------
 # Legacy unscoped (no --variant) path
 # ---------------------------------------------------------------------------

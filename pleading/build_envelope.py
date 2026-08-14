@@ -186,7 +186,24 @@ def _source_build_info(input_path: Path, variant: Optional[str]) -> tuple[List[P
     metadata = md_pleading.dependency_info(input_path, variant)
     deps = [Path(p) for p in metadata.get("deps", [])]
     deps.extend(_resolve_exhibit_source_dependency(input_path, metadata))
+    deps.extend(_toolchain_deps())
     return deps, list(metadata.get("consumer_notice_names") or [])
+
+
+def _toolchain_deps() -> List[Path]:
+    """The renderer itself is a dependency of every build.
+
+    A source untouched since yesterday is still stale when the
+    toolchain changed underneath it — the day the e-sign field
+    geometry shipped, `make note` said "up to date" about a PDF
+    carrying the old tags. Module mtimes make the DAG honest."""
+    gen = PLEADING_GEN.parent
+    return [
+        Path(__file__),
+        gen / "md_pleading.py",
+        gen / "md_to_docx.py",
+        gen / "md_to_txt.py",
+    ]
 
 
 def _staleness_reason(outputs: List[Path], deps: List[Path]) -> Optional[str]:
@@ -265,7 +282,7 @@ def check_staleness(
             # only on the markdown source (exhibits are referenced, not
             # attached, so no binary dependencies).
             txt_output = Path("out") / name / f"{stem}.txt"
-            reason = _staleness_reason([txt_output], [input_path])
+            reason = _staleness_reason([txt_output], [input_path, *_toolchain_deps()])
             if reason:
                 print(f"  STALE: {reason}", file=sys.stderr, flush=True)
                 ok = False
@@ -397,7 +414,7 @@ def _build_txt_source(
     output_txt = out_dir / f"{stem}.txt"
 
     if not force_rebuild and not copy_attachments:
-        reason = _staleness_reason([output_txt], [input_path.resolve()])
+        reason = _staleness_reason([output_txt], [input_path.resolve(), *_toolchain_deps()])
         if reason is None:
             print(f"  {input_path.name} is up to date", flush=True)
             return True
