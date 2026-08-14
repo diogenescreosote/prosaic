@@ -3,6 +3,7 @@ doctype: document
 heading_numbers: false
 paper_title: "Last Will and Testament of Jane Roe"
 notreal: "TEMPLATE---not executed"
+esign: false   # wills are wet-ink only: Prob. Code 6110 witnesses; UETA excludes wills
 # Replace every name, date, and the anchor key with your own; delete
 # the notreal: line ONLY when this is the version being executed.
 # Execution requirements are in EXECUTION.md — a will is the one
