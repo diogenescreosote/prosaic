@@ -538,15 +538,16 @@ def test_block_quote_merges_consecutive_source_lines(decl_pdf, built):
 # Negative control: the alarms above can actually fire
 # ---------------------------------------------------------------------------
 
-def test_negative_control_spaced_dashes_render_wrong_but_warn(built, tmp_path):
-    """A source that writes ' --- ' / ' -- ' still builds — the substitution
-    layer preserves whitespace and never refuses (spec: generator.md
-    non-obvious constraints) — and the artifact carries the spaced glyphs,
-    proving the clean-output assertions in this module are falsifiable. The
-    build, however, warns on stderr so the authoring error is caught at
-    build time rather than in the filed artifact."""
+def test_spaced_em_dashes_are_normalized_and_warned(built, tmp_path):
+    """The em-dash rule is enforced, not suggested: a source that
+    writes ' --- ' still builds, but the ARTIFACT carries the glued
+    glyph — the house style no longer depends on the author. The
+    stderr warning still fires so the source itself gets fixed.
+    Spaced EN dashes stay literal (ranges are the author's problem),
+    keeping this module's clean-output assertions falsifiable."""
     proc_text = scenario.pdf_text(built / "out" / "negative_control" / CONTROL)
-    assert " — " in proc_text, "spaced em dash control did not fire"
+    assert " — " not in proc_text, "spaced em dash escaped enforcement"
+    assert "—" in proc_text, "em dash lost entirely"
     assert " – " in proc_text, "spaced en dash control did not fire"
     assert "TKNEG1" in proc_text
     src = built / "src" / "Spaced Dash Control.md"
