@@ -2236,8 +2236,9 @@ def suppresses_caption(meta: Dict) -> bool:
 #: Cover sheets whose accompanying prose is always a continuation of a
 #: numbered item on the form, never a document of its own. SUBP-010
 #: item 3 literally reads "described in Attachment 3", so whatever
-#: follows it *is* Attachment 3.
-ATTACHMENT_COVER_SHEETS = {"subp010", "subp025"}
+#: follows it *is* Attachment 3; on SUBP-002 the records demand is
+#: declaration item 2 and continues on Attachment 2.
+ATTACHMENT_COVER_SHEETS = {"subp002", "subp010", "subp025"}
 
 
 def form_display_id(form_id: str) -> str:

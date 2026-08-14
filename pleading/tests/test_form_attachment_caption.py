@@ -101,6 +101,12 @@ def test_subpoena_cover_sheet_implies_attachment(tmp_path):
     assert "no_caption" in proc.stderr
 
 
+def test_subp002_cover_sheet_implies_attachment():
+    """SUBP-002's records demand is declaration item 2, continued on
+    Attachment 2 — a source behind that cover sheet continues the form."""
+    assert mp.is_form_attachment({"cover_sheet": "subp002"})
+
+
 def test_a_declaration_behind_a_cover_form_is_not_an_attachment(tmp_path):
     """The rule is about form continuations, not everything behind a form.
 

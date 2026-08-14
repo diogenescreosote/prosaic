@@ -58,6 +58,20 @@ def test_strip_county_prefix():
     assert jc_common.strip_county_prefix("Example") == "Example"
 
 
+def test_court_name_full():
+    """Forms with a bare "NAME OF COURT:" label (SUBP-002) want the
+    whole designation, composed from court_name + court_county with the
+    county's own prefix tolerated either way."""
+    assert jc_common.court_name_full(
+        {"court_county": "COUNTY OF EXAMPLE"}
+    ) == "SUPERIOR COURT OF CALIFORNIA, COUNTY OF EXAMPLE"
+    assert jc_common.court_name_full(
+        {"court_name": "SUPERIOR COURT OF THE STATE OF CALIFORNIA",
+         "court_county": "EXAMPLE"}
+    ) == "SUPERIOR COURT OF THE STATE OF CALIFORNIA, COUNTY OF EXAMPLE"
+    assert jc_common.court_name_full({}) == "SUPERIOR COURT OF CALIFORNIA"
+
+
 def test_declarant_from_title():
     assert jc_common.declarant_name(
         {"paper_title": "DECLARATION OF JANE ROE IN SUPPORT OF MOTION"}) == "JANE ROE"

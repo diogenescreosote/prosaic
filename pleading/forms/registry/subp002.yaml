@@ -92,14 +92,16 @@ fields:
     fit: shrink
 
   # ---- Page 1: court block --------------------------------------------
-  court_county:
+  court_name:
     map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCounty[0]"
     page: 1
     doc: >-
-      County name only — the form prints "SUPERIOR COURT OF CALIFORNIA,
-      COUNTY OF" (the widget tooltip says "NAME OF COURT", which is
-      wrong; verified visually).
-    auto: court_county
+      Unlike most JC captions, this form prints a bare "NAME OF COURT:"
+      label (verified visually) — so the value is the FULL court
+      designation ("SUPERIOR COURT OF CALIFORNIA, COUNTY OF EXAMPLE"),
+      composed by the court_name_full binding from court_name +
+      court_county, not the county alone.
+    auto: court_name_full
     fit: shrink
   court_street_address:
     map: "SUBP-002[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"

@@ -1,0 +1,449 @@
+# SUBP-001 — Civil Subpoena for Personal Appearance at Trial or Hearing
+#
+# The appearance-only member of the trial/hearing pair: it commands a
+# witness to APPEAR AND TESTIFY at a trial or hearing, and nothing
+# else. A subpoena that also requires documents or things is SUBP-002
+# (which carries the CCP § 1985(b) declaration this form has no need
+# of); deposition-stage forms are SUBP-010/015/020.
+#
+# Every mapping below was verified empirically on the shipped blank
+# (fill each field with its own logical name, rasterize, look). This
+# is an older (2007) revision than its siblings, and three of its
+# names lie:
+#
+# 1. THE "Email" WIDGET IS THE ATTORNEY-FOR LINE. The 2007 caption has
+#    no e-mail line at all — TELEPHONE and FAX, then ATTORNEY FOR
+#    (Name), whose widget is named Email[0]. There is nowhere to put
+#    an e-mail address on this form.
+# 2. ITEM 1b'S ADDRESS BOX IS NAMED HearingDept_ft (under Lib) — the
+#    same recycled name as the item-1a DEPARTMENT box (under Lia).
+#    Only the parent distinguishes them.
+# 3. THE DEPARTMENT/DIVISION NAMES DIFFER FROM SUBP-002's: here the
+#    department box IS HearingDept_ft and the division box is
+#    HearingDiv. Do not copy mappings between the two forms.
+
+form: subp001
+title: Civil Subpoena for Personal Appearance at Trial or Hearing
+domain: ca/civil              # any CA civil action
+revision: "2007-01"           # form face: "SUBP-001 [Rev. January 1, 2007]"
+source_url: https://courts.ca.gov/documents/subp001.pdf
+blank: subp001.pdf
+
+# XFA: LiveCycle hybrid; the engine strips /XFA after filling.
+technology: xfa
+
+# UI chrome under SUBP-001[0].#pageSet[0].LastPage[0].PXFooter[0].
+# FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,
+# drawn on page 2. Stripped from service copies.
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+fields:
+  # ---- Page 1: attorney/party block ----------------------------------
+  attorney_block:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].AttyPartyInfo[0].TextField1[0]"
+    page: 1
+    doc: >-
+      ATTORNEY OR PARTY WITHOUT ATTORNEY (Name, State Bar number, and
+      address) — one multiline box; filled from filer_name (+ SBN) and
+      filer_address_lines.
+    auto: attorney_block
+    fit: shrink_wrap
+  phone:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+    fit: shrink
+  fax:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO. (optional)"
+    auto: fax
+    fit: shrink
+  attorney_for:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: >-
+      ATTORNEY FOR (Name) — MISLEADING FIELD NAME (Email[0]): this 2007
+      revision has no e-mail line; the widget named Email is the
+      ATTORNEY FOR line (verified visually). The form prints the label,
+      so the value is the client only; self-represented filers put
+      their own role here.
+    auto: attorney_for
+    fit: shrink
+
+  # ---- Page 1: court block --------------------------------------------
+  court_name:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].CourtInfo[0].nameofcrt[0]"
+    page: 1
+    doc: >-
+      The form prints a bare "NAME OF COURT:" label, so the value is
+      the FULL court designation ("SUPERIOR COURT OF CALIFORNIA, COUNTY
+      OF EXAMPLE"), composed by the court_name_full binding.
+    auto: court_name_full
+    fit: shrink
+  court_street_address:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "STREET ADDRESS of the court"
+    auto: court_street_address
+    fit: shrink
+  court_mailing_address:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "MAILING ADDRESS of the court"
+    auto: court_mailing_address
+    fit: shrink
+  court_city_zip:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "CITY AND ZIP CODE of the court"
+    auto: court_city_zip
+    fit: shrink
+  court_branch:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME of the court"
+    auto: court_branch
+    fit: shrink
+
+  # ---- Page 1: caption party names + case number -----------------------
+  plaintiff:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name (bound to the petitioner meta key)"
+    auto: petitioner
+    fit: shrink
+  defendant:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name (bound to the respondent meta key)"
+    auto: respondent
+    fit: shrink
+  case_number:
+    map: "SUBP-001[0].Page1[0].P1Caption[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 1: the witness ---------------------------------------------
+  witness:
+    map: "SUBP-001[0].Page1[0].People[0].FillText1[0]"
+    page: 1
+    doc: >-
+      "THE PEOPLE OF THE STATE OF CALIFORNIA, TO (name, address, and
+      telephone number of witness, if known)" — the person commanded to
+      appear. One single-line box: keep it to one line (it shrinks to
+      6 pt) and abbreviate rather than newline it.
+    default: ""
+    fit: shrink
+    min_font_size: 6
+
+  # ---- Page 1, Item 1: the appearance ----------------------------------
+  hearing_date:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].HearingDate_dt[0]"
+    page: 1
+    doc: 'Item 1a "Date:" — the trial or hearing date'
+    default: ""
+    fit: shrink
+  hearing_time:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].HearingTime_dt[0]"
+    page: 1
+    doc: 'Item 1a "Time:" (e.g. "9:00 a.m.")'
+    default: ""
+    fit: shrink
+  hearing_dept:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].HearingDept_ft[0]"
+    page: 1
+    doc: >-
+      Item 1a department number — pair with dept_checkbox. On THIS form
+      the department box is the un-suffixed HearingDept_ft (the
+      opposite of SUBP-002); item 1b's address box recycles the same
+      name under a different parent.
+    default: ""
+    fit: shrink
+  hearing_division:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].HearingDiv[0]"
+    page: 1
+    doc: "Item 1a division — pair with division_checkbox"
+    default: ""
+    fit: shrink
+  hearing_room:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].HearingRoom_ft[0]"
+    page: 1
+    doc: "Item 1a room — pair with room_checkbox"
+    default: ""
+    fit: shrink
+  hearing_address:
+    map: "SUBP-001[0].Page1[0].List1[0].Lib[0].HearingDept_ft[0]"
+    page: 1
+    doc: >-
+      Item 1b "Address:" — the courthouse address. MISLEADING FIELD
+      NAME (HearingDept_ft under Lib): this is the address line, not a
+      department (verified visually).
+    default: ""
+    fit: shrink
+
+  # ---- Page 1, Item 2: witness-fee contact ------------------------------
+  contact_name:
+    map: "SUBP-001[0].Page1[0].List2[0].Lia[0].FillText108[0]"
+    page: 1
+    doc: >-
+      Item 2 "(name of subpoenaing party or attorney)" — whom the
+      witness contacts about witness fees or to be excused; pre-filled
+      from filer_name (SBN stripped).
+    auto: filer_name_bare
+    fit: shrink
+  contact_phone:
+    map: "SUBP-001[0].Page1[0].List2[0].Lib[0].FillText109[0]"
+    page: 1
+    doc: 'Item 2 "(telephone number)" — pre-filled from filer_phone'
+    auto: phone
+    fit: shrink
+
+  # ---- Page 1: issuing-person block -----------------------------------
+  date_issued:
+    map: "SUBP-001[0].Page1[0].Sign[0].SigDate[0]"
+    page: 1
+    doc: >-
+      "Date issued:" — LEAVE BLANK. The issuer dates it by hand when
+      signing.
+    default: ""
+  issuer_print_name:
+    map: "SUBP-001[0].Page1[0].Sign[0].SigName[0]"
+    page: 1
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the issuing signature — the filer,
+      pre-filled from filer_name (SBN suffix stripped) so only the
+      signature and date remain for the human. The signature line
+      itself has no widget.
+    auto: filer_name_bare
+    fit: shrink
+  issuer_title:
+    map: "SUBP-001[0].Page1[0].Sign[0].FillText108[0]"
+    page: 1
+    doc: >-
+      "(TITLE)" under the signature line — the issuer's capacity, bound
+      to filer_role verbatim. (Note the widget name FillText108 repeats
+      item 2's contact-name widget under a different parent.)
+    auto: filer_role
+    fit: shrink
+
+  # ---- Page 2: proof-of-service caption echo ---------------------------
+  plaintiff_p2:
+    map: "SUBP-001[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "PLAINTIFF/PETITIONER caption name (page 2 copy)"
+    auto: petitioner
+    fit: shrink
+  defendant_p2:
+    map: "SUBP-001[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "DEFENDANT/RESPONDENT caption name (page 2 copy)"
+    auto: respondent
+    fit: shrink
+  case_number_p2:
+    map: "SUBP-001[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "CASE NUMBER (page 2 copy)"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 2: PROOF OF SERVICE ----------------------------------------
+  # Mapped so a post-service workflow can fill them from known facts,
+  # but never auto-filled: the server attests to these under penalty of
+  # perjury after service, and the copy served travels with page 2
+  # blank.
+  pos_person_served:
+    map: "SUBP-001[0].Page2[0].List1[0].Lia[0].FillText12[0]"
+    page: 2
+    doc: 'POS item 1a "Person served (name)" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_address_served:
+    map: "SUBP-001[0].Page2[0].List1[0].Lib[0].FillText13[0]"
+    page: 2
+    doc: 'POS item 1b "Address where served" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink_wrap
+  pos_delivery_date:
+    map: "SUBP-001[0].Page2[0].List1[0].Lic[0].FillText14[0]"
+    page: 2
+    doc: 'POS item 1c "Date of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_delivery_time:
+    map: "SUBP-001[0].Page2[0].List1[0].Lid[0].TextField15[0]"
+    page: 2
+    doc: 'POS item 1d "Time of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_witness_fees_amount:
+    map: "SUBP-001[0].Page2[0].List1[0].Lie[0].SubListe[0].Li1[0].DecimalField2[0]"
+    page: 2
+    doc: >-
+      POS item 1e(1) witness-fee amount (dollars) — LEAVE BLANK at
+      issuance; pair with pos_witness_fees_paid when fees were demanded
+      and paid.
+    default: ""
+  pos_service_fee:
+    map: "SUBP-001[0].Page2[0].List1[0].Lif[0].DecimalField1[0]"
+    page: 2
+    doc: 'POS item 1f "Fee for service" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+  pos_received_date:
+    map: "SUBP-001[0].Page2[0].List2[0].item2[0].FillText17[0]"
+    page: 2
+    doc: >-
+      POS item 2 "I received this subpoena for service on (date)" —
+      LEAVE BLANK at issuance (server fills).
+    default: ""
+    fit: shrink
+  pos_server_info:
+    map: "SUBP-001[0].Page2[0].List3[0].Lih[0].TextField6[0]"
+    page: 2
+    doc: >-
+      POS item 3h — server's name, address, telephone number, and (if a
+      registered process server) county of registration and number.
+      LEAVE BLANK at issuance; multiline box, filled by the server.
+    default: ""
+    fit: shrink_wrap
+  pos_sig_date:
+    map: "SUBP-001[0].Page2[0].Sign1[0].SigDate[0]"
+    page: 2
+    doc: >-
+      Date next to the server's perjury signature — LEAVE BLANK for the
+      server to hand-date when signing.
+    default: ""
+  pos_sheriff_sig_date:
+    map: "SUBP-001[0].Page2[0].Sign2[0].SigDate[0]"
+    page: 2
+    doc: >-
+      Date in the "(For California sheriff or marshal use only)"
+      certification block — LEAVE BLANK; the sheriff/marshal dates it.
+    default: ""
+
+checkboxes:
+  # ---- Page 1, Item 1a: where in the courthouse ------------------------
+  # Each selector precedes its fill-in; on-state "/Yes".
+  dept_checkbox:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].Checkbox1[0]"
+    on_value: "/Yes"
+    doc: 'Item 1a "Dept.:" selector — pair with hearing_dept'
+  division_checkbox:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].Checkbox3[0]"
+    on_value: "/Yes"
+    doc: 'Item 1a "Div.:" selector — pair with hearing_division'
+  room_checkbox:
+    map: "SUBP-001[0].Page1[0].List1[0].Lia[0].Checkbox2[0]"
+    on_value: "/Yes"
+    doc: 'Item 1a "Room:" selector — pair with hearing_room'
+
+  # ---- Page 2: PROOF OF SERVICE (server's attestations) ---------------
+  # All off by default. The server chooses; the machine never guesses.
+  pos_witness_fees_paid:
+    map: "SUBP-001[0].Page2[0].List1[0].Lie[0].SubListe[0].Li1[0].ch[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 1e(1) "Witness fees ... were offered or demanded and
+      paid." — server only; pair with pos_witness_fees_amount.
+  pos_witness_fees_not_demanded:
+    map: "SUBP-001[0].Page2[0].List1[0].Lie[0].SubListe[0].Li2[0].ch[0]"
+    on_value: "/2"
+    doc: 'POS item 1e(2) "Witness fees ... were not demanded or paid." — server only'
+  pos_not_registered:
+    map: "SUBP-001[0].Page2[0].List3[0].Lia[0].CheckBox5[0]"
+    on_value: "/1"
+    doc: "POS item 3a — server is NOT a registered California process server"
+  pos_sheriff_or_marshal:
+    map: "SUBP-001[0].Page2[0].List3[0].Lib[0].CheckBox6[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3b — server is a California sheriff or marshal. Such a
+      server signs the "(For California sheriff or marshal use only)"
+      certification instead of the perjury declaration.
+  pos_registered_process_server:
+    map: "SUBP-001[0].Page2[0].List3[0].Lic[0].CheckBox7[0]"
+    on_value: "/1"
+    doc: "POS item 3c — server IS a registered California process server"
+  pos_process_server_employee:
+    map: "SUBP-001[0].Page2[0].List3[0].Lid[0].CheckBox8[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3d — server is an employee or independent contractor of
+      a registered California process server
+  pos_exempt_22350b:
+    map: "SUBP-001[0].Page2[0].List3[0].Lie[0].CheckBox9[0]"
+    on_value: "/1"
+    doc: "POS item 3e — exempt from registration under Bus. & Prof. Code § 22350(b)"
+  pos_registered_photocopier:
+    map: "SUBP-001[0].Page2[0].List3[0].Lif[0].CheckBox10[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 3f — server is a registered professional photocopier.
+      ON-STATE IS "/3", not "/1" like the boxes above it (same quirk as
+      SUBP-010 and SUBP-002); same for item 3g.
+  pos_exempt_22451:
+    map: "SUBP-001[0].Page2[0].List3[0].Lig[0].CheckBox11[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 3g — exempt from registration under Bus. & Prof. Code
+      § 22451. On-state "/3" (see item 3f).
+
+# Static gray under-rectangle at the bottom-left of page 2, where the
+# stripped privacy-banner widget used to sit. Rect derived from the
+# Warning widget's own rect with a small margin, confirmed by
+# rendering.
+whiteouts:
+  - page: 2
+    rect: [35, 14, 249, 40]
+
+agent_guide: |
+  SUBP-001 is the Judicial Council form for a CIVIL SUBPOENA FOR
+  PERSONAL APPEARANCE AT TRIAL OR HEARING — it commands a witness to
+  show up and testify, nothing more. There is no records demand
+  anywhere on it.
+
+  PICK THE RIGHT FORM FIRST:
+    - SUBP-001 — appearance at trial/hearing only (this form)
+    - SUBP-002 — appearance at trial/hearing AND production of
+      documents/ESI/things, with the built-in CCP § 1985(b) declaration
+    - SUBP-010 — records only, to a deposition officer (discovery)
+    - SUBP-020 — deposition appearance AND production
+  If any documents are wanted at the hearing, use SUBP-002; do not
+  serve this form with an informal request to "bring the file."
+
+  WHO ISSUES AND SERVES IT. An attorney of record issues (signs) it; a
+  self-represented party has the clerk issue it. Service is personal
+  on the witness (CCP § 1987(a)), with witness fees payable on demand
+  (Gov. Code § 68093). Page 2 is the proof of service, completed by
+  whoever served it, AFTER service.
+
+  USUAL INVOCATION — standalone fill:
+
+      sc form fill subp001 out.pdf --meta case.yaml --data - <<'YAML'
+      witness: >-
+        Mavis Example, 500 Market Street, Example City, CA 90000,
+        (555) 555-0199
+      hearing_date: "October 15, 2026"
+      hearing_time: "9:00 a.m."
+      dept_checkbox: true
+      hearing_dept: "20"
+      hearing_address: "600 Civic Center Drive, Example City, CA 90000"
+      YAML
+
+  The caption fills from the standard front matter. NOTE: this 2007
+  revision has NO E-MAIL LINE in its caption (the widget named "Email"
+  is the ATTORNEY FOR line), so filer_email goes nowhere on this form.
+
+  ITEM 1a: pair each of dept/division/room fill-ins with its selector
+  checkbox; fill only what the court actually uses.
+
+  ALWAYS LEFT BLANK — do not fill:
+    - date_issued and the issuing signature (issuer_print_name and
+      issuer_title ARE pre-filled; the pen strokes and the date remain
+      for the human);
+    - every page-2 proof-of-service field and checkbox (pos_*) — the
+      server completes them after service, and the copy served on the
+      witness carries page 2 blank.

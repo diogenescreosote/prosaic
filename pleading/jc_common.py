@@ -30,6 +30,20 @@ def strip_county_prefix(county: str) -> str:
     return county
 
 
+def court_name_full(meta: dict) -> str:
+    """The full court designation, for forms whose caption prints a bare
+    "NAME OF COURT:" label (e.g. SUBP-002) rather than the usual static
+    "SUPERIOR COURT OF CALIFORNIA, COUNTY OF" prefix.
+
+    Built from ``court_name`` (defaulting to the standard superior-court
+    designation) and ``court_county``, which is accepted with or without
+    its own "COUNTY OF" prefix.
+    """
+    name = str(meta.get("court_name") or "").strip() or "SUPERIOR COURT OF CALIFORNIA"
+    county = strip_county_prefix(str(meta.get("court_county") or ""))
+    return f"{name}, COUNTY OF {county}" if county else name
+
+
 def split_name_and_bar_number(filer_name: str, explicit_bar: str = "") -> tuple[str, str]:
     """Split ``"Sally Sattler, Esq. SBN 123456"`` into (name, bar number).
 
@@ -209,6 +223,9 @@ AUTO_BINDINGS = {
     "hearing_time": lambda m: str(m.get("hearing_time") or "").strip(),
     "hearing_dept": lambda m: str(m.get("hearing_dept") or "").strip(),
     "court_county": lambda m: strip_county_prefix(str(m.get("court_county") or "")),
+    # For forms whose caption prints "NAME OF COURT:" and wants the whole
+    # designation (e.g. SUBP-002), not just the county.
+    "court_name_full": court_name_full,
     "court_street_address": lambda m: str(m.get("court_street_address") or "").strip(),
     "court_mailing_address": lambda m: str(m.get("court_mailing_address") or "").strip(),
     "court_city_zip": lambda m: str(m.get("court_city_zip") or "").strip(),
