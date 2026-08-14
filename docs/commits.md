@@ -72,7 +72,7 @@ what this case says?"
 
 | Footer | When | Why |
 |---|---|---|
-| `Filed:` `Served:` `Lodged:` `Received:` | required on `docket` | date + court or method |
+| `Filed:` `Served:` `Lodged:` `Received:` `Executed:` `Recorded:` | required on `docket` (one of them) | date + court, method, or ceremony |
 | `Source:` | expected on `intake`, `triage`, `docket` | connector pull, counsel email, ECF, hand delivery |
 | `Verified:` | required when the commit adds machine output | `machine — unverified`, or `human, <initials> <date>` |
 | `Exhibits:` | when exhibit letters shift | the change cascades into every pleading citing them |

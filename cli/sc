@@ -419,7 +419,10 @@ COMMIT_TYPES = {
 #: Types that assert something happened outside this folder, and the
 #: footer that has to say what. An agent may never supply these from
 #: inference — only from the document itself or the user's statement.
-DOCKET_FOOTERS = ("Filed", "Served", "Lodged", "Received")
+#: Filed/Served/Lodged/Received are litigation's verbs; Executed and
+#: Recorded are estate practice's (an instrument is signed, a deed
+#: hits the county recorder) — matter types share one docket grammar.
+DOCKET_FOOTERS = ("Filed", "Served", "Lodged", "Received", "Executed", "Recorded")
 
 #: Types where provenance is the question a reader will actually have.
 SOURCE_REQUIRED = ("intake", "triage", "docket")
