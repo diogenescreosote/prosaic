@@ -39,9 +39,13 @@ The signature areas follow.
 """
 
 
-def build(tmp_path: Path, body: str) -> subprocess.CompletedProcess[str]:
+def build(tmp_path: Path, body: str,
+          extra_meta: str = "") -> subprocess.CompletedProcess[str]:
     src = tmp_path / "doc.md"
-    src.write_text(FRONT.format(body=body))
+    front = FRONT.format(body=body)
+    if extra_meta:
+        front = front.replace("---\n", f"---\n{extra_meta}\n", 1)
+    src.write_text(front)
     return subprocess.run(
         [sys.executable, str(PLEADING_DIR / "md_pleading.py"),
          str(src), str(tmp_path / "doc.pdf")],
@@ -180,3 +184,16 @@ def test_dated_blank_is_a_date_field_with_no_preprinted_year(tmp_path):
     dated = next(ln for ln in raw.splitlines() if ln.strip().startswith("Dated:"))
     assert ", 20" not in dated
 
+
+
+def test_esign_false_suppresses_every_field_tag(tmp_path):
+    """A wet-ink instrument (esign: false) carries no DocuSeal tags:
+    UETA excludes Article 3, so a negotiable note is never e-signed."""
+    proc = build(tmp_path, "\\sigrow{Jane Roe, Borrower}{Date}",
+                 extra_meta="esign: false")
+    assert proc.returncode == 0, proc.stderr
+    raw = subprocess.run(
+        ["pdftotext", str(tmp_path / "doc.pdf"), "-"],
+        check=True, capture_output=True, text=True,
+    ).stdout
+    assert "{{" not in raw

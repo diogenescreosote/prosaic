@@ -3002,7 +3002,13 @@ class PleadingPDF:
     def _esign_tag(self, x: float, y: float, text: str) -> None:
         """A DocuSeal text tag, white and small: invisible on paper,
         present in the text layer, removed from the executed document
-        by DocuSeal's default remove_tags."""
+        by DocuSeal's default remove_tags.
+
+        `esign: false` in front matter suppresses every tag: a wet-ink
+        instrument (California UETA excludes UCC Article 3, so a
+        negotiable note cannot be e-signed) must not carry them."""
+        if self.meta.get("esign") is False:
+            return
         self.c.setFillColor(white)
         self.c.setFont(NOTARIAL_FONT, ESIGN_TAG_FONT_SIZE)
         self.c.drawString(x, y, text)
