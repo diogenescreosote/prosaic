@@ -9,6 +9,21 @@ Two kinds of rule live here. **Enforced** means the renderer does it;
 never fight it, and report it if it fails. **Judgment** means you
 apply it when composing sources.
 
+## Inline markup (enforced — and one standing trap)
+
+The pleading dialect is not full Markdown. Inline constructs:
+`***bold italic***`, `**bold**`, `*italic*`, `<u>underline</u>`,
+`\highlight{...}`, `\fixedwidth{...}`, `[^footnote]`. Full inventory:
+`pleading/pleading_markdown_spec.md` ("Inline body markup").
+
+**Fixed-width text is `\fixedwidth{...}`, never backticks.** There
+are no code spans in this dialect; backticks render as literal
+backtick glyphs in the output PDF. `\fixedwidth{...}` renders its
+contents verbatim in Courier, exempt from the em-dash/en-dash/smart-
+quote substitutions — the construct for file paths, hashes, Bates
+tokens, and code. A block form (`\fixedwidth{` on its own line,
+verbatim lines, `}` on its own line) handles multi-line material.
+
 ## Atomicity classes (enforced by the renderer)
 
 | Object | Rule |

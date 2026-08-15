@@ -93,7 +93,13 @@ def test_en_dash_in_date_and_number_ranges(decl_text):
     assert "January 23–March 3, 2026" in decl_text
     assert "2024–2025" in decl_text
     assert "12–14" in decl_text  # pages 12--14
-    assert " -- " not in decl_text and "--" not in decl_text
+    # The \fixedwidth{} tokens (TKFWD1, TKFWB1) legitimately carry verbatim
+    # double hyphens — the substitution exemption is the feature under
+    # test elsewhere. Everything outside them must still convert.
+    outside_fixedwidth = (decl_text
+                          .replace("TKFWD1_log--file", "TKFWD1_log~~file")
+                          .replace("TKFWB1_lead--x.pdf", "TKFWB1_lead~~x.pdf"))
+    assert " -- " not in outside_fixedwidth and "--" not in outside_fixedwidth
 
 
 def test_dashes_adjacent_to_quotes(decl_text):
@@ -117,7 +123,10 @@ def test_no_spaced_dashes_in_clean_source_output(decl_text):
 def test_nested_quotes_and_quote_after_comma(decl_text):
     # Single quotes nested inside doubles; closing single after a comma.
     assert "‘final,’ period.”" in decl_text
-    assert '"' not in decl_text, "straight double quote survived"
+    # The \fixedwidth{} token (TKFWD1) legitimately keeps its verbatim
+    # straight quotes and apostrophe; everything else must be smart.
+    outside_fixedwidth = decl_text.replace('TKFWD1_log--file\'s_"raw".pdf', "TKFWD1")
+    assert '"' not in outside_fixedwidth, "straight double quote survived"
 
 
 def test_possessives_and_plural_possessives(decl_text):
@@ -632,3 +641,57 @@ def test_ai_signed_signature_block(built, tmp_path):
         threshold=7,
     )
     assert_judgment(j, "signed declaration signature block")
+
+
+# ---------------------------------------------------------------------------
+# Inline \fixedwidth{...}: verbatim monospace, exempt from substitutions
+# ---------------------------------------------------------------------------
+
+
+def test_inline_fixedwidth_content_is_verbatim(decl_text):
+    """The token inside \\fixedwidth{} keeps its double hyphen and straight
+    quotes and apostrophe -- no em/en dash or smart-quote substitution --
+    while the em dash outside the macro on the same line still converts."""
+    body = _flat_body(decl_text)
+    assert 'TKFWD1_log--file\'s_"raw".pdf' in body
+    assert "plain—TKFWD2—in" in body
+
+
+def test_inline_fixedwidth_macro_not_rendered_literally(decl_text):
+    """Neither the macro name nor its braces reach the output."""
+    assert "fixedwidth" not in decl_text
+    assert "TKFWD1" in decl_text  # the content does
+
+
+def test_inline_fixedwidth_renders_in_courier(decl_pdf):
+    """The fixedwidth token is set in Courier; the surrounding prose is not."""
+    from pypdf import PdfReader
+    fonts_by_text: list[tuple[str, str]] = []
+
+    def visit(text, cm, tm, font_dict, font_size):
+        if text.strip() and font_dict is not None:
+            fonts_by_text.append((text, str(font_dict.get("/BaseFont", ""))))
+
+    for page in PdfReader(decl_pdf).pages:
+        page.extract_text(visitor_text=visit)
+    hits = [f for t, f in fonts_by_text if "TKFWD1" in t]
+    assert hits, "fixedwidth token not found in text runs"
+    assert all("Courier" in f for f in hits), hits
+    prose = [f for t, f in fonts_by_text if "alteration" in t]
+    assert prose and all("Courier" not in f for f in prose), prose
+
+
+def test_bullet_lead_word_keeps_fixedwidth(decl_text, decl_pdf):
+    """The first word of a bullet keeps its \\fixedwidth styling: verbatim
+    double hyphen in the text, Courier in the font runs (the bullet-prefix
+    merge used to drop every flag but bold/italic)."""
+    assert "TKFWB1_lead--x.pdf" in decl_text
+    from pypdf import PdfReader
+    fonts = []
+    def visit(text, cm, tm, font_dict, font_size):
+        if text.strip() and font_dict is not None:
+            fonts.append((text, str(font_dict.get("/BaseFont", ""))))
+    for page in PdfReader(decl_pdf).pages:
+        page.extract_text(visitor_text=visit)
+    hits = [f for t, f in fonts if "TKFWB1" in t]
+    assert hits and all("Courier" in f for f in hits), hits

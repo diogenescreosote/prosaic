@@ -33,6 +33,13 @@ missed exchanges across the 2024--2025 school year (TKEND1).
 'final,' period." She called the plan "unworkable"---her word, not
 mine (TKQUO1).
 
+4. The audit trail names the source file
+\fixedwidth{TKFWD1_log--file's_"raw".pdf} and the alteration is
+plain---TKFWD2---in the rendered copy.
+
+- \fixedwidth{TKFWB1_lead--x.pdf} begins this bullet item, and the
+lead word must keep its monospace face and verbatim hyphens.
+
 # FACTUAL BACKGROUND
 
 ## The Records Requests

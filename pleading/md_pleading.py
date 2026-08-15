@@ -287,6 +287,7 @@ BARCODE_FORMATS = ("qr", "code128", "pdf417")
 # rather than style. The size fits the block's longest line to the
 # text column (Courier advance = 0.6 em).
 FIXEDWIDTH_FONT = "Courier"
+FIXEDWIDTH_FONT_BOLD = "Courier-Bold"
 FIXEDWIDTH_MAX_SIZE = 12
 FIXEDWIDTH_MIN_SIZE = 6
 FIXEDWIDTH_ADVANCE_EM = 0.6
@@ -430,6 +431,9 @@ class TextSpan:
     italic: bool = False
     underline: bool = False
     highlight: bool = False
+    # Inline \fixedwidth{...}: verbatim monospace (Courier), exempt from
+    # typographic substitutions -- file paths, hashes, code tokens.
+    mono: bool = False
     # When set, this span is a footnote *reference* marker (text is ignored;
     # the superscript number is assigned later from document order).
     footnote_id: Optional[str] = None
@@ -442,6 +446,7 @@ class StyledWord:
     italic: bool = False
     underline: bool = False
     highlight: bool = False
+    mono: bool = False
     superscript: bool = False
     no_space_before: bool = False
     link_target: Optional[str] = None
@@ -449,6 +454,8 @@ class StyledWord:
     footnote_num: Optional[int] = None
 
     def font_name(self) -> str:
+        if self.mono:
+            return FIXEDWIDTH_FONT_BOLD if self.bold else FIXEDWIDTH_FONT
         if self.bold and self.italic:
             return FONT_NAME_BOLD_ITALIC
         if self.bold:
@@ -627,6 +634,14 @@ def _format_letter_date(raw: str) -> str:
 # ---------------------------------------------------------------------------
 
 def typographic_subs(text: str) -> str:
+    # Inline \fixedwidth{...} contents are verbatim: a substituted character
+    # in a file path or hash is corruption, not style. Mask them, substitute
+    # the rest, reassemble.
+    if "\\fixedwidth{" in text:
+        parts = re.split(r"(\\fixedwidth\{[^{}\n]*\})", text)
+        if len(parts) > 1:  # guard: an unclosed macro would recurse forever
+            return "".join(part if i % 2 else typographic_subs(part)
+                           for i, part in enumerate(parts))
     text = text.replace("---", "\u2014")  # em dash
     text = text.replace("--", "\u2013")   # en dash
     text = re.sub(r'"([^"]*)"', "\u201c\\1\u201d", text)  # smart double quotes
@@ -667,7 +682,8 @@ _INLINE_RE = re.compile(
     r"|\*(.+?)\*"             # 4: *italic*
     r"|<u>(.+?)</u>"          # 5: <u>underline</u>
     r"|\\highlight\{((?:[^{}]|\{[^{}]*\})*)\}"  # 6: \highlight{...} (yellow bg)
-    r"|\[\^([^\]]+?)\]"       # 7: [^footnote-id]  (reference marker)
+    r"|\\fixedwidth\{([^{}\n]*)\}"  # 7: inline \fixedwidth{...} (verbatim monospace)
+    r"|\[\^([^\]]+?)\]"       # 8: [^footnote-id]  (reference marker)
     r")"
 )
 
@@ -680,8 +696,10 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
     so ``**<u>x</u>**`` yields a bold+underline span. ``<u>..</u>`` toggles
     underline; ``\\highlight{...}`` renders its contents with a yellow
     background (composes with bold/italic/underline, e.g.
-    ``\\highlight{**bold**}``); ``[^id]`` becomes a footnote reference marker
-    span.
+    ``\\highlight{**bold**}``); ``\\fixedwidth{...}`` renders its contents
+    verbatim in monospace (no nested emphasis parsing -- the braces hold a
+    literal token such as a file path); ``[^id]`` becomes a footnote
+    reference marker span.
     """
     spans: List[TextSpan] = []
     last = 0
@@ -701,7 +719,11 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
         elif m.group(6) is not None:
             spans.extend(parse_inline_styles(m.group(6), bold, italic, underline, True))
         elif m.group(7) is not None:
-            spans.append(TextSpan("", footnote_id=m.group(7).strip()))
+            spans.append(TextSpan(m.group(7), bold=bold, italic=italic,
+                                  underline=underline, highlight=highlight,
+                                  mono=True))
+        elif m.group(8) is not None:
+            spans.append(TextSpan("", footnote_id=m.group(8).strip()))
         last = m.end()
     if last < len(text):
         spans.append(TextSpan(text[last:], bold=bold, italic=italic,
@@ -742,6 +764,7 @@ def spans_to_styled_words(spans: List[TextSpan],
             words.append(StyledWord(w, bold=span.bold, italic=span.italic,
                                     underline=span.underline,
                                     highlight=span.highlight,
+                                    mono=span.mono,
                                     no_space_before=glue))
     return words
 
@@ -2146,11 +2169,15 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
         words = spans_to_styled_words(block.spans, footnote_numbers)
         if exhibit_letters:
             tag_exhibit_links(words, exhibit_letters)
-        prefix_word = StyledWord(prefix + (words[0].text if words else ""),
-                                  bold=words[0].bold if words else False,
-                                  italic=words[0].italic if words else False)
-        rest = words[1:] if words else []
-        all_words = [prefix_word] + rest
+        # The prefix stays its own word (regular font) so the first content
+        # word keeps ALL of its style flags -- merging them into one
+        # StyledWord used to drop mono/underline/highlight on the lead word.
+        # no_space_before glues the pair, so the prefix's own trailing
+        # spaces set the gap and the hanging indent still lines up.
+        prefix_word = StyledWord(prefix)
+        if words:
+            words[0].no_space_before = True
+        all_words = [prefix_word] + words
         lines_out: List[Tuple[List[StyledWord], float]] = []
         space_w = pdfmetrics.stringWidth(" ", FONT_NAME, FONT_SIZE)
         first_line = True

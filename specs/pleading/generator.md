@@ -34,7 +34,12 @@ sent to a court.
    literally — which is precisely why sources must never space
    them; straight quotes become smart quotes; heading numbering
    (I., II., …) is automatic and unconditional, so hand-typed
-   numerals stack rather than replace. The rendered artifact, not
+   numerals stack rather than replace. Fixed-width text is
+   `\fixedwidth{...}` — inline for tokens (file paths, hashes, code)
+   and the existing own-line block form for verbatim blocks — rendered
+   in monospace with its contents exempt from every typographic
+   substitution; backticks are NOT markup in this dialect and render
+   literally. The rendered artifact, not
    the source, is the compliance surface. *(tested: em/en dash and
    no-spaced-dash assertions in both scenarios; dash edges adjacent to
    quotes/numbers, nested smart quotes, possessives (including after an
@@ -43,7 +48,9 @@ sent to a court.
    in the pleading_typography scenario — which also pins that a
    spaced-dash source renders wrong (with a stderr warning) rather
    than failing the build, and that a clean source builds without the
-   warning)*
+   warning; inline-fixedwidth verbatim content, substitution
+   exemption, and Courier rendering in the pleading_typography
+   scenario)*
 4. **Block quotes are blocks, not lines.** Consecutive `>` lines merge
    into one block and are rewrapped to the indented measure, so source
    line breaks never survive into the artifact. The block renders 36 pt

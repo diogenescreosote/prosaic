@@ -102,6 +102,33 @@ This brief cites \exhibit{whitfield_email} and also refers to \exhibit{jones_tex
 More text. See *Doe v. Roe* (2024) 100 Cal.App.5th 123, 130---a case directly on point.
 ```
 
+## Inline body markup
+
+Body text supports exactly these inline constructs — this dialect is
+NOT full Markdown:
+
+| Markup | Renders as |
+|---|---|
+| `***text***` | bold italic |
+| `**text**` | bold |
+| `*text*` | italic |
+| `<u>text</u>` | underline |
+| `\highlight{text}` | yellow background (nests emphasis) |
+| `\fixedwidth{text}` | verbatim monospace (Courier) |
+| `[^id]` | footnote reference marker |
+
+`\fixedwidth{...}` is the construct for file paths, hashes, Bates
+tokens, and code: its contents render in Courier, are taken verbatim
+(no nested emphasis parsing), and are exempt from every typographic
+substitution (`---`/`--`/smart quotes), so a hyphenated filename comes
+through uncorrupted. A block form also exists for multi-line verbatim
+material: `\fixedwidth{` alone on a line, verbatim lines, then `}`
+alone on a line.
+
+**Backticks are not markup.** This dialect has no code spans;
+`` `text` `` renders literal backtick characters into the pleading.
+Use `\fixedwidth{...}`.
+
 Separately, `envelopes.yaml` may include envelope-level `copies:` entries for
 static files that should be copied into `out/<envelope>/` (or
 `out/<envelope>/<variant>/`) alongside generated pleadings:

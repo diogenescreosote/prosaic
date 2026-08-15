@@ -257,7 +257,7 @@ def _add_spans(p, text: str, base_bold: bool = False,
         if span.text == "":
             continue
         run = p.add_run(span.text)
-        run.font.name = BODY_FONT_NAME
+        run.font.name = "Courier New" if span.mono else BODY_FONT_NAME
         run.font.size = Pt(font_size)
         run.bold = span.bold or base_bold
         run.italic = span.italic or force_italic
