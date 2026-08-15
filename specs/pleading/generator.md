@@ -41,8 +41,8 @@ sent to a court.
    substitution (including the whole-body em-dash respacing and
    \blank{} expansion passes); backticks are a synonym for inline
    `\fixedwidth`, and `\filelink{path}{text}` renders the same
-   monospace with an underline and a relative /GoToR link annotation
-   targeting `path`. The rendered artifact, not
+   monospace in a pale low-saturation blue with a thin underline and a
+   relative /GoToR link annotation targeting `path`. The rendered artifact, not
    the source, is the compliance surface. *(tested: em/en dash and
    no-spaced-dash assertions in both scenarios; dash edges adjacent to
    quotes/numbers, nested smart quotes, possessives (including after an

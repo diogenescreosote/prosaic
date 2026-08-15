@@ -288,6 +288,9 @@ BARCODE_FORMATS = ("qr", "code128", "pdf417")
 # text column (Courier advance = 0.6 em).
 FIXEDWIDTH_FONT = "Courier"
 FIXEDWIDTH_FONT_BOLD = "Courier-Bold"
+# \filelink text: gentle, low-saturation blue with a thin underline, the
+# conventional affordance that a span is clickable, print-safe in gray.
+FILELINK_COLOR_RGB = (110 / 255, 140 / 255, 175 / 255)
 FIXEDWIDTH_MAX_SIZE = 12
 FIXEDWIDTH_MIN_SIZE = 6
 FIXEDWIDTH_ADVANCE_EM = 0.6
@@ -903,6 +906,7 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
     active_link: Optional[str] = None
     link_start_x = 0.0
     ul_active = False
+    ul_is_filelink = False
     ul_start_x = 0.0
     ul_y = y - UNDERLINE_OFFSET_PT
     prev_end_x = x
@@ -911,7 +915,10 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
         nonlocal ul_active
         if ul_active:
             c.setLineWidth(UNDERLINE_WIDTH_PT)
+            if ul_is_filelink:
+                c.setStrokeColorRGB(*FILELINK_COLOR_RGB)
             c.line(ul_start_x, ul_y, end_x, ul_y)
+            c.setStrokeColorRGB(0, 0, 0)
             ul_active = False
 
     for i, word in enumerate(words):
@@ -936,6 +943,8 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
 
         if word.underline and not ul_active:
             ul_active = True
+            ul_is_filelink = bool(word.link_target
+                                  and word.link_target.startswith("file:"))
             ul_start_x = word_start_x
         elif not word.underline and ul_active:
             flush_underline(prev_end_x)
@@ -943,7 +952,10 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
         size = word.effective_size(font_size)
         wy = y + font_size * SUPERSCRIPT_RISE_FRAC if word.superscript else y
         c.setFont(word.font_name(), size)
-        c.setFillColorRGB(0, 0, 0)
+        if word.link_target and word.link_target.startswith("file:"):
+            c.setFillColorRGB(*FILELINK_COLOR_RGB)
+        else:
+            c.setFillColorRGB(0, 0, 0)
         c.drawString(word_start_x, wy, word.text)
         cx = word_start_x + word.width(font_size)
         prev_end_x = cx
