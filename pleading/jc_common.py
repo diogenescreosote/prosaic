@@ -243,3 +243,23 @@ AUTO_BINDINGS = {
     ),
     "blank": lambda m: "",
 }
+
+
+def _load_local_auto_bindings(path=None):
+    """Local modules (ADR-0032): local/pleading/auto_bindings.py may define
+    an AUTO_BINDINGS dict of extra (or overriding) auto: bindings. Loaded
+    lazily so a broken local module fails loudly at import of THIS module,
+    not silently at fill time."""
+    import importlib.util
+    from pathlib import Path as _P
+    if path is None:
+        path = _P(__file__).resolve().parent.parent / "local" / "pleading" / "auto_bindings.py"
+    if not _P(path).exists():
+        return {}
+    spec = importlib.util.spec_from_file_location("prosaic_local_auto_bindings", path)
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    return dict(getattr(mod, "AUTO_BINDINGS", {}))
+
+
+AUTO_BINDINGS.update(_load_local_auto_bindings())

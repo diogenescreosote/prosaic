@@ -91,3 +91,7 @@ advice for portal (browser-automation) connectors:
 Then add a `manifest.json`, document the config keys in it and here,
 and it's live: `sc sync` discovers connectors purely from
 `matter.yaml` config keys + the connectors directory.
+
+Local deployments can carry additional connectors under
+`local/connectors/` (see ADR-0032); they dispatch identically and are
+documented in the local module's repository.

@@ -2273,19 +2273,25 @@ def draw_grid_line_numbers(c: canvas.Canvas, line_y, lines_per_page: int) -> Non
 
 
 FRONT_MATTER_KEYS_FILE = Path(__file__).resolve().parent / "front_matter_keys.yaml"
+# Local modules (ADR-0032): a deployment's extra keys live in the
+# gitignored local/ overlay and merge into the recognized set.
+LOCAL_FRONT_MATTER_KEYS_FILE = (Path(__file__).resolve().parent.parent
+                                / "local" / "pleading" / "front_matter_keys.yaml")
 
 _warned_unknown_keys: set = set()
 
 
 def recognized_front_matter_keys() -> set:
-    """Every top-level key the generator understands, from the schema file."""
-    try:
-        groups = yaml.safe_load(FRONT_MATTER_KEYS_FILE.read_text()) or {}
-    except OSError:
-        return set()
+    """Every top-level key the generator understands, from the schema file
+    plus the local/ overlay's additions when present."""
     keys = set()
-    for names in groups.values():
-        keys.update(names or [])
+    for schema in (FRONT_MATTER_KEYS_FILE, LOCAL_FRONT_MATTER_KEYS_FILE):
+        try:
+            groups = yaml.safe_load(schema.read_text()) or {}
+        except OSError:
+            continue
+        for names in groups.values():
+            keys.update(names or [])
     return keys
 
 

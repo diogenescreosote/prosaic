@@ -27,3 +27,7 @@ out/
 
 # Node connectors
 node_modules/
+
+# Local modules overlay (ADR-0032): deployment-specific forms,
+# connectors, and config; never tracked here.
+/local/

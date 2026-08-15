@@ -70,3 +70,11 @@ Every connector, present or future, keeps all of these:
 
 - [gmail.md](gmail.md) — email threads as court-usable PDFs
 - [mycase.md](mycase.md) — law-firm client portal documents
+
+## Local connectors (ADR-0032)
+
+A deployment may add connectors without touching this repo: a
+gitignored `local/connectors/<name>/pull.js` participates in dispatch
+exactly like an in-repo connector, wins on a name collision, and its
+name joins the legacy `envelopes.yaml` key scan automatically. Specs
+for local connectors live in the local module's own repository.

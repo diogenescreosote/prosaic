@@ -77,6 +77,17 @@ from reportlab.pdfgen import canvas as rl_canvas
 import jc_common
 
 PLEADING_DIR = Path(__file__).resolve().parent
+REPO_ROOT = PLEADING_DIR.parent
+# Local modules (ADR-0032): a gitignored local/ tree mirrors the repo
+# layout and overlays it. Descriptors and blanks are discovered across
+# both; on an id collision the LOCAL descriptor wins, so a deployment
+# can patch a stock form without editing the repo.
+LOCAL_PLEADING_DIR = REPO_ROOT / "local" / "pleading"
+REGISTRY_DIRS = [d for d in (LOCAL_PLEADING_DIR / "forms" / "registry",
+                             PLEADING_DIR / "forms" / "registry") if d.is_dir()]
+BLANKS_DIRS = [d for d in (LOCAL_PLEADING_DIR / "forms",
+                           PLEADING_DIR / "forms") if d.is_dir()]
+# Back-compat names (first entry is the local overlay when present).
 REGISTRY_DIR = PLEADING_DIR / "forms" / "registry"
 BLANKS_DIR = PLEADING_DIR / "forms"
 
@@ -91,14 +102,24 @@ LEADING_RATIO = 1.15
 # ---------------------------------------------------------------------------
 
 def list_forms() -> list[str]:
-    return sorted(p.stem for p in REGISTRY_DIR.glob("*.yaml"))
+    return sorted({p.stem for d in REGISTRY_DIRS for p in d.glob("*.yaml")})
+
+
+def _registry_path(form_id: str):
+    for d in REGISTRY_DIRS:
+        candidate = d / f"{form_id}.yaml"
+        if candidate.exists():
+            return candidate
+    return None
 
 
 def load_descriptor(form_id: str) -> dict:
-    path = REGISTRY_DIR / f"{form_id}.yaml"
-    if not path.exists():
+    path = _registry_path(form_id)
+    if path is None:
+        path = REGISTRY_DIR / f"{form_id}.yaml"
         raise FileNotFoundError(
-            f"No descriptor for form '{form_id}' (expected {path}). "
+            f"No descriptor for form '{form_id}' (expected {path}"
+            f" or a local/ overlay). "
             f"Known forms: {', '.join(list_forms()) or '(none)'}"
         )
     desc = yaml.safe_load(path.read_text())
@@ -109,6 +130,10 @@ def load_descriptor(form_id: str) -> dict:
 
 
 def blank_path(desc: dict) -> Path:
+    for d in BLANKS_DIRS:
+        candidate = d / desc["blank"]
+        if candidate.exists():
+            return candidate
     return BLANKS_DIR / desc["blank"]
 
 
@@ -670,7 +695,7 @@ def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
     case_dir = find_case_dir(input_md)
     cache = case_dir / "assets" / "decl_cover_sheets" / f"{input_md.stem}.{form_id}.pdf"
     blank = blank_path(desc)
-    descriptor_file = REGISTRY_DIR / f"{form_id}.yaml"
+    descriptor_file = _registry_path(form_id) or (REGISTRY_DIR / f"{form_id}.yaml")
     fresh = (
         cache.exists()
         and cache.stat().st_mtime >= input_md.stat().st_mtime

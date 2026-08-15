@@ -48,6 +48,28 @@ SOURCE="${BASH_SOURCE[0]}"
 while [ -L "$SOURCE" ]; do SOURCE="$(readlink "$SOURCE")"; done
 PROSAIC_ROOT="${PROSAIC_ROOT:-$(cd "$(dirname "$SOURCE")/.." && pwd)}"
 CONNECTORS_DIR="$PROSAIC_ROOT/connectors"
+# Local modules (ADR-0032): a gitignored local/ overlay may carry extra
+# connectors; the local copy wins when a name exists in both.
+LOCAL_CONNECTORS_DIR="$PROSAIC_ROOT/local/connectors"
+
+# Resolve a connector name to its pull.js, local overlay first.
+connector_entry() {
+  if [ -f "$LOCAL_CONNECTORS_DIR/$1/pull.js" ]; then
+    echo "$LOCAL_CONNECTORS_DIR/$1/pull.js"
+  elif [ -f "$CONNECTORS_DIR/$1/pull.js" ]; then
+    echo "$CONNECTORS_DIR/$1/pull.js"
+  fi
+}
+
+# Every installed connector name, both trees, for the legacy-key scan.
+installed_connectors() {
+  for d in "$CONNECTORS_DIR" "$LOCAL_CONNECTORS_DIR"; do
+    [ -d "$d" ] || continue
+    for e in "$d"/*/pull.js; do
+      [ -f "$e" ] && basename "$(dirname "$e")"
+    done
+  done | sort -u
+}
 
 . "$PROSAIC_ROOT/sync/lib.sh"
 
@@ -96,9 +118,10 @@ trap 'rmdir "$LOCK_DIR" 2>/dev/null' EXIT
 
 # --- which connectors are configured? ------------------------------------------
 configured_connectors() {
-  "$SC_PY" - "$MATTER_DIR" <<'PY'
+  "$SC_PY" - "$MATTER_DIR" $(installed_connectors) <<'PY'
 import sys, os, yaml
 matter = sys.argv[1]
+installed = sys.argv[2:]  # every connector shipped in-repo or in local/
 names = []
 def load(p):
     try:
@@ -108,7 +131,7 @@ m = load(os.path.join(matter, 'matter.yaml'))
 names += list((m.get('connectors') or {}).keys())
 legacy = load(os.path.join(matter, 'envelopes.yaml'))
 if 'gmail' not in names and legacy.get('gmail_addresses'): names.append('gmail')
-for k in ('mycase',):
+for k in installed:
     if k not in names and legacy.get(k): names.append(k)
 print('\n'.join(names))
 PY
@@ -126,7 +149,8 @@ SC_PY="$(sc_python)" || {
 CONNECTORS="$(configured_connectors)"
 # A matter that declares connectors but resolves none means the config
 # could not be parsed — never let that look like a clean, empty sync.
-if [ -z "$CONNECTORS" ] && grep -qE '^(connectors|gmail_addresses|mycase):' \
+LEGACY_KEYS="$(installed_connectors | tr '\n' '|' | sed 's/|$//')"
+if [ -z "$CONNECTORS" ] && grep -qE "^(connectors|gmail_addresses${LEGACY_KEYS:+|$LEGACY_KEYS}):" \
      "$MATTER_DIR/matter.yaml" "$MATTER_DIR/envelopes.yaml" 2>/dev/null; then
   log "ERROR: matter declares connectors but none resolved (config parse failure?)."
   log "       NOT advancing the success guard."
@@ -134,9 +158,9 @@ if [ -z "$CONNECTORS" ] && grep -qE '^(connectors|gmail_addresses|mycase):' \
 fi
 
 for name in $CONNECTORS; do
-  entry="$CONNECTORS_DIR/$name/pull.js"
-  if [ ! -f "$entry" ]; then
-    log "WARN: connector '$name' configured but $entry not found"
+  entry="$(connector_entry "$name")"
+  if [ -z "$entry" ]; then
+    log "WARN: connector '$name' configured but no pull.js found in $CONNECTORS_DIR or $LOCAL_CONNECTORS_DIR"
     continue
   fi
   log "CONNECTOR $name start"

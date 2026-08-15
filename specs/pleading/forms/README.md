@@ -75,3 +75,13 @@ stating what the form is for in the legal process, who files it and
 when, and the form-specific constraints a filler and its tests must
 honor. The descriptor's `agent_guide` is the operational summary; the
 spec is the authority it summarizes.
+
+## Local forms (ADR-0032)
+
+A deployment may register forms without touching this repo:
+descriptors in `local/pleading/forms/registry/` and blanks in
+`local/pleading/forms/` join the search path, and a local descriptor
+overrides an in-repo one with the same id. Extra front-matter keys
+those forms consume belong in `local/pleading/front_matter_keys.yaml`;
+extra `auto:` bindings in `local/pleading/auto_bindings.py`. Specs for
+local forms live in the local module's own repository.
