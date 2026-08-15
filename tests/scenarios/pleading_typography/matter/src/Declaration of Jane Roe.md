@@ -40,6 +40,10 @@ plain---TKFWD2---in the rendered copy.
 - \fixedwidth{TKFWB1_lead--x.pdf} begins this bullet item, and the
 lead word must keep its monospace face and verbatim hyphens.
 
+5. The ledger copy `TKBT1_tick--y.pdf` and the linked exhibit
+\filelink{records/TKFL1_target.pdf}{TKFL1 linked copy} are both
+cited here---TKFL2---for completeness.
+
 # FACTUAL BACKGROUND
 
 ## The Records Requests

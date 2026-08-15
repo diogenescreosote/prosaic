@@ -98,7 +98,8 @@ def test_en_dash_in_date_and_number_ranges(decl_text):
     # test elsewhere. Everything outside them must still convert.
     outside_fixedwidth = (decl_text
                           .replace("TKFWD1_log--file", "TKFWD1_log~~file")
-                          .replace("TKFWB1_lead--x.pdf", "TKFWB1_lead~~x.pdf"))
+                          .replace("TKFWB1_lead--x.pdf", "TKFWB1_lead~~x.pdf")
+                          .replace("TKBT1_tick--y.pdf", "TKBT1_tick~~y.pdf"))
     assert " -- " not in outside_fixedwidth and "--" not in outside_fixedwidth
 
 
@@ -695,3 +696,39 @@ def test_bullet_lead_word_keeps_fixedwidth(decl_text, decl_pdf):
         page.extract_text(visitor_text=visit)
     hits = [f for t, f in fonts if "TKFWB1" in t]
     assert hits and all("Courier" in f for f in hits), hits
+
+
+def test_backtick_is_fixedwidth_synonym(decl_text, decl_pdf):
+    """Backticked spans render as verbatim monospace, identically to
+    \\fixedwidth: content verbatim (double hyphen survives), no backtick
+    glyphs in the artifact, Courier in the font runs."""
+    assert "TKBT1_tick--y.pdf" in decl_text
+    assert "`" not in decl_text, "backtick glyph leaked into the artifact"
+    from pypdf import PdfReader
+    fonts = []
+    def visit(text, cm, tm, font_dict, font_size):
+        if text.strip() and font_dict is not None:
+            fonts.append((text, str(font_dict.get("/BaseFont", ""))))
+    for page in PdfReader(decl_pdf).pages:
+        page.extract_text(visitor_text=visit)
+    hits = [f for t, f in fonts if "TKBT1" in t]
+    assert hits and all("Courier" in f for f in hits), hits
+
+
+def test_filelink_renders_display_text_and_gotor_annotation(decl_text, decl_pdf):
+    """\\filelink{path}{text} shows the display text (mono) and carries a
+    /GoToR link annotation whose file spec is the RELATIVE path, so the
+    link resolves against the PDF's own location."""
+    body = _flat_body(decl_text)
+    assert "TKFL1 linked copy" in body
+    assert "records/TKFL1_target.pdf" not in body  # path not rendered
+    assert "here—TKFL2—for" in body  # em dash still enforced outside
+    from pypdf import PdfReader
+    targets = []
+    for page in PdfReader(decl_pdf).pages:
+        for a in (page.get("/Annots") or []):
+            o = a.get_object()
+            act = o.get("/A")
+            if act and act.get("/S") == "/GoToR":
+                targets.append(str(act.get("/F")))
+    assert "records/TKFL1_target.pdf" in targets, targets

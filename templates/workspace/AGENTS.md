@@ -35,14 +35,15 @@ Verify before finishing any `src/` edit:
 rg -n ' --- ' path/to/file.md
 ```
 
-## STOP. Fixed-width is `\fixedwidth{...}`, never backticks
+## Fixed-width and file links
 
-The pleading dialect has no code spans: backticks in a `src/` file
-render as literal backtick glyphs in the PDF. File paths, hashes,
-Bates tokens, code → `\fixedwidth{...}` (contents verbatim, Courier,
-exempt from dash/quote substitutions). Multi-line: `\fixedwidth{` on
-its own line, verbatim lines, `}` on its own line. Full markup
-inventory: `<slopcannon>/pleading/pleading_markdown_spec.md`.
+File paths, hashes, Bates tokens, code, email addresses →
+`\fixedwidth{...}` or backticks (synonyms: contents verbatim,
+Courier, exempt from dash/quote substitutions). Multi-line:
+`\fixedwidth{` on its own line, verbatim lines, `}` on its own line.
+`\filelink{path}{text}` adds a clickable relative-file link (works in
+desktop viewers when the target travels beside the PDF). Full markup
+inventory: `<prosaic>/pleading/pleading_markdown_spec.md`.
 
 ## STOP. A form attachment is not a standalone pleading
 

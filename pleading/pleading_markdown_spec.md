@@ -115,6 +115,8 @@ NOT full Markdown:
 | `<u>text</u>` | underline |
 | `\highlight{text}` | yellow background (nests emphasis) |
 | `\fixedwidth{text}` | verbatim monospace (Courier) |
+| `` `text` `` | verbatim monospace — a synonym for `\fixedwidth{text}` |
+| `\filelink{path}` or `\filelink{path}{text}` | monospace, underlined, carrying a relative-file link annotation (/GoToR) that opens `path` when the PDF is viewed beside its companions |
 | `[^id]` | footnote reference marker |
 
 `\fixedwidth{...}` is the construct for file paths, hashes, Bates
@@ -125,9 +127,13 @@ through uncorrupted. A block form also exists for multi-line verbatim
 material: `\fixedwidth{` alone on a line, verbatim lines, then `}`
 alone on a line.
 
-**Backticks are not markup.** This dialect has no code spans;
-`` `text` `` renders literal backtick characters into the pleading.
-Use `\fixedwidth{...}`.
+**Backticks are a synonym for `\fixedwidth`.** Where standard
+Markdown can be adopted verbatim it is: `` `text` `` and
+`\fixedwidth{text}` render identically. `\filelink{path}{text}` adds
+a relative /GoToR link annotation on top of the same monospace
+styling; the link resolves only when the PDF is opened from a
+location where `path` exists beside it (desktop viewers, not web
+previews), so documents using it should say so.
 
 Separately, `envelopes.yaml` may include envelope-level `copies:` entries for
 static files that should be copied into `out/<envelope>/` (or

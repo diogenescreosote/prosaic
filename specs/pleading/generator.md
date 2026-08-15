@@ -38,8 +38,11 @@ sent to a court.
    `\fixedwidth{...}` — inline for tokens (file paths, hashes, code)
    and the existing own-line block form for verbatim blocks — rendered
    in monospace with its contents exempt from every typographic
-   substitution; backticks are NOT markup in this dialect and render
-   literally. The rendered artifact, not
+   substitution (including the whole-body em-dash respacing and
+   \blank{} expansion passes); backticks are a synonym for inline
+   `\fixedwidth`, and `\filelink{path}{text}` renders the same
+   monospace with an underline and a relative /GoToR link annotation
+   targeting `path`. The rendered artifact, not
    the source, is the compliance surface. *(tested: em/en dash and
    no-spaced-dash assertions in both scenarios; dash edges adjacent to
    quotes/numbers, nested smart quotes, possessives (including after an
@@ -49,7 +52,8 @@ sent to a court.
    spaced-dash source renders wrong (with a stderr warning) rather
    than failing the build, and that a clean source builds without the
    warning; inline-fixedwidth verbatim content, substitution
-   exemption, and Courier rendering in the pleading_typography
+   exemption, Courier rendering, the backtick synonym, and the
+   \filelink display-text/annotation pair in the pleading_typography
    scenario)*
 4. **Block quotes are blocks, not lines.** Consecutive `>` lines merge
    into one block and are rewrapped to the indented measure, so source

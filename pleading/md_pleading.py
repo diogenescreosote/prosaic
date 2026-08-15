@@ -431,9 +431,11 @@ class TextSpan:
     italic: bool = False
     underline: bool = False
     highlight: bool = False
-    # Inline \fixedwidth{...}: verbatim monospace (Courier), exempt from
-    # typographic substitutions -- file paths, hashes, code tokens.
+    # Inline \fixedwidth{...} (or backticks): verbatim monospace (Courier),
+    # exempt from typographic substitutions -- file paths, hashes, code.
     mono: bool = False
+    # \filelink{path}{text?}: relative file target for a link annotation.
+    file_link: Optional[str] = None
     # When set, this span is a footnote *reference* marker (text is ignored;
     # the superscript number is assigned later from document order).
     footnote_id: Optional[str] = None
@@ -633,15 +635,32 @@ def _format_letter_date(raw: str) -> str:
 # Typographic substitutions
 # ---------------------------------------------------------------------------
 
+# Verbatim spans -- inline \fixedwidth{...}, its backtick synonym `...`,
+# \filelink{...}{...}, and the block form of \fixedwidth -- carry file
+# paths, hashes, and code where a substituted or re-spaced character is
+# corruption, not style. Every whole-body or whole-line text transform
+# must skip them; _map_outside_verbatim is the one way to do that.
+_VERBATIM_SPAN_RE = re.compile(
+    r"(\\fixedwidth\{[^{}\n]*\}"
+    r"|`[^`\n]+`"
+    r"|\\filelink\{[^{}\n]*\}(?:\{[^{}\n]*\})?"
+    r"|^\\fixedwidth\{$.*?^\}$)",
+    re.M | re.S,
+)
+
+
+def _map_outside_verbatim(text, transform):
+    """Apply transform(segment) to everything outside verbatim spans."""
+    parts = _VERBATIM_SPAN_RE.split(text)
+    if len(parts) == 1:
+        return transform(text)
+    return "".join(part if i % 2 else transform(part)
+                   for i, part in enumerate(parts))
+
+
 def typographic_subs(text: str) -> str:
-    # Inline \fixedwidth{...} contents are verbatim: a substituted character
-    # in a file path or hash is corruption, not style. Mask them, substitute
-    # the rest, reassemble.
-    if "\\fixedwidth{" in text:
-        parts = re.split(r"(\\fixedwidth\{[^{}\n]*\})", text)
-        if len(parts) > 1:  # guard: an unclosed macro would recurse forever
-            return "".join(part if i % 2 else typographic_subs(part)
-                           for i, part in enumerate(parts))
+    if _VERBATIM_SPAN_RE.search(text):
+        return _map_outside_verbatim(text, typographic_subs)
     text = text.replace("---", "\u2014")  # em dash
     text = text.replace("--", "\u2013")   # en dash
     text = re.sub(r'"([^"]*)"', "\u201c\\1\u201d", text)  # smart double quotes
@@ -683,7 +702,9 @@ _INLINE_RE = re.compile(
     r"|<u>(.+?)</u>"          # 5: <u>underline</u>
     r"|\\highlight\{((?:[^{}]|\{[^{}]*\})*)\}"  # 6: \highlight{...} (yellow bg)
     r"|\\fixedwidth\{([^{}\n]*)\}"  # 7: inline \fixedwidth{...} (verbatim monospace)
-    r"|\[\^([^\]]+?)\]"       # 8: [^footnote-id]  (reference marker)
+    r"|`([^`\n]+)`"              # 8: `...` backtick synonym for \fixedwidth
+    r"|\\filelink\{([^{}\n]*)\}(?:\{([^{}\n]*)\})?"  # 9/10: \filelink{path}{text?}
+    r"|\[\^([^\]]+?)\]"       # 11: [^footnote-id]  (reference marker)
     r")"
 )
 
@@ -723,7 +744,16 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
                                   underline=underline, highlight=highlight,
                                   mono=True))
         elif m.group(8) is not None:
-            spans.append(TextSpan("", footnote_id=m.group(8).strip()))
+            spans.append(TextSpan(m.group(8), bold=bold, italic=italic,
+                                  underline=underline, highlight=highlight,
+                                  mono=True))
+        elif m.group(9) is not None:
+            display = m.group(10) if m.group(10) is not None else m.group(9)
+            spans.append(TextSpan(display, bold=bold, italic=italic,
+                                  underline=True, highlight=highlight,
+                                  mono=True, file_link=m.group(9)))
+        elif m.group(11) is not None:
+            spans.append(TextSpan("", footnote_id=m.group(11).strip()))
         last = m.end()
     if last < len(text):
         spans.append(TextSpan(text[last:], bold=bold, italic=italic,
@@ -765,6 +795,8 @@ def spans_to_styled_words(spans: List[TextSpan],
                                     underline=span.underline,
                                     highlight=span.highlight,
                                     mono=span.mono,
+                                    link_target=(f"file:{span.file_link}"
+                                                 if span.file_link else None),
                                     no_space_before=glue))
     return words
 
@@ -1031,7 +1063,8 @@ def parse_front_matter(text: str) -> Tuple[Dict, str]:
     data = yaml.safe_load(raw_yaml) or {}
     if not isinstance(data, dict):
         raise ValueError("YAML front matter must parse to a mapping/object")
-    return data, enforce_em_dash_spacing(expand_blank_macros(body))
+    return data, _map_outside_verbatim(
+        body, lambda seg: enforce_em_dash_spacing(expand_blank_macros(seg)))
 
 
 def _parse_braced_argument(text: str, open_brace_idx: int) -> Tuple[str, int]:
@@ -4187,6 +4220,40 @@ def append_pdf_direct(writer: PdfWriter, pdf_path: Path) -> None:
         writer.add_page(page)
 
 
+def _add_file_link_annotation(writer: PdfWriter, page_idx: int,
+                              rect: Tuple[float, float, float, float],
+                              rel_path: str) -> None:
+    """A \\filelink annotation: /GoToR with a RELATIVE file spec, so the
+    link resolves against wherever the PDF itself lives. Desktop viewers
+    (Acrobat and peers) follow it when the target travels beside the PDF;
+    web previews generally do not -- callers should say so in the text."""
+    from pypdf.generic import (
+        ArrayObject, DictionaryObject, FloatObject, NameObject,
+        NumberObject, TextStringObject,
+    )
+    annot = DictionaryObject({
+        NameObject("/Type"): NameObject("/Annot"),
+        NameObject("/Subtype"): NameObject("/Link"),
+        NameObject("/Rect"): ArrayObject([
+            FloatObject(rect[0]), FloatObject(rect[1]),
+            FloatObject(rect[2]), FloatObject(rect[3]),
+        ]),
+        NameObject("/A"): DictionaryObject({
+            NameObject("/S"): NameObject("/GoToR"),
+            NameObject("/F"): TextStringObject(rel_path),
+        }),
+        NameObject("/Border"): ArrayObject([
+            NumberObject(0), NumberObject(0), NumberObject(0),
+        ]),
+    })
+    page = writer.pages[page_idx]
+    if "/Annots" in page:
+        page["/Annots"].append(writer._add_object(annot))
+    else:
+        from pypdf.generic import ArrayObject as _AO
+        page[NameObject("/Annots")] = _AO([writer._add_object(annot)])
+
+
 def _add_link_annotation(writer: PdfWriter, page_idx: int, rect: Tuple[float, float, float, float],
                          target_page_idx: int) -> None:
     from pypdf.generic import (
@@ -4254,11 +4321,15 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
 
         if link_rects:
             for lr in link_rects:
+                rect = (lr.x, lr.y, lr.x + lr.width, lr.y + lr.height)
+                if lr.dest.startswith("file:"):
+                    _add_file_link_annotation(writer, lr.page_index, rect,
+                                              lr.dest[len("file:"):])
+                    continue
                 target_idx = tab_page_map.get(lr.dest)
                 if target_idx is not None:
                     _add_link_annotation(
-                        writer, lr.page_index,
-                        (lr.x, lr.y, lr.x + lr.width, lr.y + lr.height),
+                        writer, lr.page_index, rect,
                         target_idx,
                     )
 

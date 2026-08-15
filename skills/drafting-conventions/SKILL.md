@@ -16,13 +16,15 @@ The pleading dialect is not full Markdown. Inline constructs:
 `\highlight{...}`, `\fixedwidth{...}`, `[^footnote]`. Full inventory:
 `pleading/pleading_markdown_spec.md` ("Inline body markup").
 
-**Fixed-width text is `\fixedwidth{...}`, never backticks.** There
-are no code spans in this dialect; backticks render as literal
-backtick glyphs in the output PDF. `\fixedwidth{...}` renders its
-contents verbatim in Courier, exempt from the em-dash/en-dash/smart-
-quote substitutions — the construct for file paths, hashes, Bates
-tokens, and code. A block form (`\fixedwidth{` on its own line,
-verbatim lines, `}` on its own line) handles multi-line material.
+**Fixed-width text is `\fixedwidth{...}` or backticks (synonyms).**
+Both render contents verbatim in Courier, exempt from the
+em-dash/en-dash/smart-quote substitutions — the construct for file
+paths, hashes, Bates tokens, code, and email addresses. A block form
+(`\fixedwidth{` on its own line, verbatim lines, `}` on its own
+line) handles multi-line material. `\filelink{path}{text}` renders
+the display text the same way, underlined, with a relative-file link
+annotation; relative links resolve only in desktop viewers with the
+target beside the PDF, so say that in the document when it matters.
 
 ## Atomicity classes (enforced by the renderer)
 
