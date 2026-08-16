@@ -92,11 +92,23 @@ there is one obviously correct answer: `matter.yaml`, `envelopes.yaml`,
 regenerating a derived file from its source; keeping an index in sync
 with disk.
 
+**Also proceed, then report: `KNOWLEDGE.md`, `TODO.md`,
+`QUESTIONS.md`.** Record eagerly. When the user tells you a fact,
+when a document resolves an open question, or when something you
+relied on turns out to be wrong, write it down in the same session —
+do not ask permission and do not leave it for later. These files are
+what every future draft reads from, so an unrecorded correction
+silently re-enters the next document someone writes, and a fact that
+lives only in a chat transcript is lost. Recording is not the same as
+asserting: mark uncorroborated accounts as testimony, name the source,
+and flag what still needs verification. Never delete a fact you cannot
+replace, and never overwrite a quotation from a real document —
+correct it alongside, leaving the original readable.
+
 **Ask first** — anything a court, counsel or counterparty would read,
 and anything altering the evidentiary record: pleadings, declarations,
 exhibits, discovery, correspondence; files under `assets/`,
-`pleadings/`, `discovery/`, `processed_files/`; the factual content of
-`KNOWLEDGE.md`, `TODO.md`, `QUESTIONS.md`.
+`pleadings/`, `discovery/`, `processed_files/`.
 
 When unclear: could a reasonable person disagree about doing it, or
 does it change what the case says or what evidence exists? Either one
