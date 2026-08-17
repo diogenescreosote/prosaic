@@ -188,6 +188,7 @@ API data dict. Unknown keys in data are *reported*, not ignored.
 ## Coverage and roadmap
 
 Current registry: `mc030` (declaration), `mc025` (attachment),
+`mc050` (substitution of attorney—civil, without court order),
 `civ110` (request for dismissal), `efs020` (e-filing cover),
 `subp010` (deposition subpoena for production of business records),
 `subp025` (notice to consumer or employee and objection).

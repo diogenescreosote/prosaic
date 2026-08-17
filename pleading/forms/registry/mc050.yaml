@@ -1,0 +1,449 @@
+# MC-050 — Substitution of Attorney—Civil (Without Court Order)
+#
+# Field names verified empirically 2026-08-17: every text field filled
+# with its own logical name, every checkbox checked one at a time,
+# rasterized, and matched against the form's printed labels (MC-050's
+# "FillTextNN" AcroForm names carry no meaning, and several checkboxes
+# on the same row are named inconsistently — "CheckBox11"/"CheckBx11",
+# "CheckBox7"/"CheckBx7"/"ChckBx7"/"CheckB7"/"Check7" — position, not
+# spelling, is what was trusted).
+#
+# Flat AcroForm (no XFA). The CASE NAME and CASE NUMBER boxes are each
+# a SINGLE field with two widget "Kids" — one on page 1, one on the
+# page-2 caption echo — so one descriptor entry fills both pages; this
+# form does not need CIV-110-style "_p2" duplicates.
+
+form: mc050
+title: Substitution of Attorney—Civil (Without Court Order)
+domain: ca/civil
+revision: "2009-01"           # form face: "MC-050 [Rev. January 1, 2009]"
+source_url: https://courts.ca.gov/sites/default/files/courts/default/2024-11/mc050.pdf
+blank: mc050.pdf
+technology: acroform
+
+# Interactive-use chrome stripped from filing copies: privacy banners
+# and Save/Print/Clear buttons (identical set to mc025/mc030).
+chrome_fields: [WhiteOut, NoticeHeader1, NoticeFooter1, Save, Print, ResetForm]
+
+fields:
+  # -- Page 1: attorney/party block --------------------------------------
+  attorney_line1:
+    map: FillText45
+    page: 1
+    doc: "Attorney/party block line 1 — name (and SBN)"
+    auto: attorney_line1
+  attorney_line2:
+    map: FillText43
+    page: 1
+    doc: "Attorney/party block line 2 — firm or street address"
+    auto: attorney_line2
+  attorney_line3:
+    map: FillText42
+    page: 1
+    doc: "Attorney/party block line 3"
+    auto: attorney_line3
+  attorney_line4:
+    map: FillText41
+    page: 1
+    doc: "Attorney/party block line 4"
+    auto: attorney_line4
+  phone:
+    map: FillText40
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+  fax:
+    map: FillText39
+    page: 1
+    doc: "FAX NO. (Optional) — same row as phone"
+    auto: fax
+  email:
+    map: FillText38
+    page: 1
+    doc: "E-MAIL ADDRESS (Optional)"
+    auto: email
+  attorney_for:
+    map: FillText37
+    page: 1
+    doc: "ATTORNEY FOR (Name) — or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Page 1: court block ------------------------------------------------
+  court_county:
+    map: FillText36
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: FillText35
+    page: 1
+    doc: "STREET ADDRESS"
+    auto: court_street_address
+  court_mailing_address:
+    map: FillText34
+    page: 1
+    doc: "MAILING ADDRESS"
+    auto: court_mailing_address
+  court_city_zip:
+    map: FillText33
+    page: 1
+    doc: "CITY AND ZIP CODE"
+    auto: court_city_zip
+  court_branch:
+    map: FillText32
+    page: 1
+    doc: "BRANCH NAME"
+    auto: court_branch
+
+  # -- Caption: CASE NAME / CASE NUMBER (shared field, both pages) --------
+  short_title:
+    map: FillText31
+    page: 1
+    doc: >-
+      'CASE NAME:' — this form labels the short-caption box "CASE NAME"
+      rather than "SHORT TITLE," but it is the same composed value
+      (see jc_common.short_title). One AcroForm field with a widget on
+      each page; filling it once fills the page-2 echo too.
+    auto: short_title
+  case_number:
+    map: FillText30
+    page: 1
+    doc: "CASE NUMBER — shared field, also appears on the page-2 caption echo"
+    auto: case_number
+
+  # -- The substitution statement ------------------------------------------
+  substituting_party_name:
+    map: FillText29
+    page: 1
+    doc: >-
+      "THE COURT AND ALL PARTIES ARE NOTIFIED THAT (name): ___ makes
+      the following substitution" — the party who is changing
+      representation. No auto binding (it may be either party, or a
+      party the case's front matter never names, e.g. a
+      cross-defendant); supply via the forms block.
+    default: ""
+  former_attorney_name:
+    map: FillText28
+    page: 1
+    doc: >-
+      Item 1, "Attorney (name):" — the OUTGOING attorney's name. Only
+      meaningful when former_rep_attorney (below) is checked; leave
+      blank when item 1 is "Party represented self."
+    default: ""
+  new_rep_name:
+    map: FillText27
+    page: 1
+    doc: >-
+      Item 2a, "Name:" — the INCOMING attorney's name, or the
+      substituting party's own name when they are taking over pro per
+      (new_rep_party_self checked instead of new_rep_attorney).
+    default: ""
+  new_rep_bar_number:
+    map: FillText26
+    page: 1
+    doc: "Item 2b, 'State Bar No. (if applicable):' — blank when the new representative is a self-represented party"
+    default: ""
+  new_rep_address:
+    map: FillText25
+    page: 1
+    doc: >-
+      Item 2c, "Address (number, street, city, ZIP, and law firm name,
+      if applicable):" — one multiline box for the incoming attorney
+      or self-represented party's address.
+    fit: shrink_wrap
+    default: ""
+  new_rep_phone:
+    map: FillText2555
+    page: 1
+    doc: "Item 2d, 'Telephone No. (include area code):'"
+    default: ""
+  other_role_specify:
+    map: FillText2550
+    page: 1
+    doc: "Item 3, 'other (specify):' — free text next to the other-role checkbox"
+    default: ""
+
+  # -- Items 4-6: consent signature blocks — ALWAYS hand-completed --------
+  # No widget exists for any of the three signature lines themselves
+  # (SIGNATURE OF PARTY / FORMER ATTORNEY / NEW ATTORNEY are wet-ink
+  # only, like every other JC form in this registry); only the date and
+  # printed-name fields are fillable, and this descriptor leaves them
+  # blank by default on purpose. See agent_guide.
+  item4_date:
+    map: FillText48
+    page: 1
+    doc: "Item 4 (party's consent) date — LEAVE BLANK for hand-dating at signature"
+    default: ""
+  item4_print_name:
+    map: FillText24
+    page: 1
+    doc: "Item 4 'type or print name' of the consenting party — LEAVE BLANK by default"
+    default: ""
+  item5_date:
+    map: FillText23
+    page: 1
+    doc: "Item 5 (former attorney's consent) date — LEAVE BLANK for hand-dating"
+    default: ""
+  item5_print_name:
+    map: FillText47
+    page: 1
+    doc: "Item 5 'type or print name' of the former attorney — LEAVE BLANK by default"
+    default: ""
+  item6_date:
+    map: FillText22
+    page: 1
+    doc: "Item 6 (new attorney's consent) date — LEAVE BLANK for hand-dating"
+    default: ""
+  item6_print_name:
+    map: FillText46
+    page: 1
+    doc: "Item 6 'type or print name' of the new attorney — LEAVE BLANK by default"
+    default: ""
+
+  # -- Page 2: Proof of Service by Mail ------------------------------------
+  # A factual attestation about an event (the mailing) that has not
+  # happened yet when this form is drafted, made under penalty of
+  # perjury by someone who is NOT the substituting party (the form's
+  # own instructions bar a self-represented party from serving and
+  # signing their own proof of service). Every field here defaults
+  # blank; see agent_guide for why none of it should be fabricated.
+  pos_declarant_address:
+    map: FillText55
+    page: 2
+    doc: "Item 1, 'My residence or business address is (specify):' — the server's own address"
+    default: ""
+  pos_mailing_date:
+    map: FillText54
+    page: 2
+    doc: "Item 2(1), 'Date of mailing:' — LEAVE BLANK until the mailing actually happens"
+    default: ""
+  pos_mailing_place:
+    map: FillText53
+    page: 2
+    doc: "Item 2(2), 'Place of mailing (city and state):'"
+    default: ""
+  pos_declaration_date:
+    map: FillText52
+    page: 2
+    doc: "Item 3 perjury declaration date — LEAVE BLANK for hand-dating at signature"
+    default: ""
+  pos_declarant_name:
+    map: FillText58
+    page: 2
+    doc: >-
+      '(TYPE OR PRINT NAME)' under the perjury declaration — the
+      server's name. LEAVE BLANK by default: it is signature-adjacent
+      and the server is decided by a human, never the machine.
+    default: ""
+  pos_recipient_1_name:
+    map: FillText51
+    page: 2
+    doc: "Item 4a, 'Name of person served:' — first of five name/address slots"
+    default: ""
+  pos_recipient_1_address:
+    map: FillText50
+    page: 2
+    doc: "Item 4b, 'Address (number, street, city, and ZIP):' for recipient 1"
+    fit: shrink_wrap
+    default: ""
+  pos_recipient_2_name:
+    map: FillText49
+    page: 2
+    doc: "Item 4c, 'Name of person served:'"
+    default: ""
+  pos_recipient_2_address:
+    map: FillText18
+    page: 2
+    doc: "Item 4d, 'Address ...' for recipient 2"
+    fit: shrink_wrap
+    default: ""
+  pos_recipient_3_name:
+    map: FillText21
+    page: 2
+    doc: "Item 4e, 'Name of person served:'"
+    default: ""
+  pos_recipient_3_address:
+    map: FillText17
+    page: 2
+    doc: "Item 4f, 'Address ...' for recipient 3"
+    fit: shrink_wrap
+    default: ""
+  pos_recipient_4_name:
+    map: FillText20
+    page: 2
+    doc: "Item 4g, 'Name of person served:'"
+    default: ""
+  pos_recipient_4_address:
+    map: FillText16
+    page: 2
+    doc: "Item 4h, 'Address ...' for recipient 4"
+    fit: shrink_wrap
+    default: ""
+  pos_recipient_5_name:
+    map: FillText19
+    page: 2
+    doc: "Item 4i, 'Name of person served:'"
+    default: ""
+  pos_recipient_5_address:
+    map: FillText1602
+    page: 2
+    doc: "Item 4j, 'Address ...' for recipient 5 — the last of the five slots on the form face"
+    fit: shrink_wrap
+    default: ""
+
+checkboxes:
+  # -- Item 1: the OUTGOING (former) representation -----------------------
+  # Mutually exclusive; the human picks the one that is actually true.
+  former_rep_party_self:
+    map: CheckBox11
+    on_value: "/1"
+    doc: "Item 1, 'Party represented self' — the outgoing representation was the party appearing without an attorney"
+  former_rep_attorney:
+    map: CheckBx11
+    on_value: "/1"
+    doc: "Item 1, 'Attorney (name):' — the outgoing representation was an attorney, named in former_attorney_name"
+
+  # -- Item 2: the INCOMING (new) representation ---------------------------
+  new_rep_party_self:
+    map: CheckBox9
+    on_value: "/1"
+    doc: >-
+      Item 2, 'Party is representing self*' — the party is taking over
+      pro per. The asterisk points to the form's own notice: guardians,
+      conservators, trustees, personal representatives, probate
+      fiduciaries, corporations, and unincorporated associations
+      generally may NOT represent themselves — flag for human review
+      if the substituting party is one of those, per agent_guide.
+  new_rep_attorney:
+    map: CheckBx9
+    on_value: "/1"
+    doc: "Item 2, 'Attorney' — a new attorney is taking over, named in new_rep_name"
+
+  # -- Item 3: the substituting party's role in the case -------------------
+  party_role_plaintiff:
+    map: CheckBox7
+    on_value: "/1"
+    doc: "Item 3 — the substituting party is a plaintiff"
+  party_role_defendant:
+    map: CheckBx7
+    on_value: "/1"
+    doc: "Item 3 — the substituting party is a defendant"
+  party_role_petitioner:
+    map: ChckBx7
+    on_value: "/1"
+    doc: "Item 3 — the substituting party is a petitioner"
+  party_role_respondent:
+    map: CheckB7
+    on_value: "/1"
+    doc: "Item 3 — the substituting party is a respondent"
+  party_role_other:
+    map: Check7
+    on_value: "/1"
+    doc: "Item 3 — the substituting party is some other role, named in other_role_specify"
+
+  # -- Items 5-6: whether that consent paragraph applies at all ------------
+  # Unlike items 4's plain signature block, items 5 and 6 are each
+  # preceded by their own checkbox — because item 5 only applies when
+  # there IS a former attorney to consent (not when item 1 was "Party
+  # represented self"), and item 6 only applies when there IS a new
+  # attorney (not when item 2 was "Party is representing self"). Never
+  # set by the machine: the consenting attorney checks this personally,
+  # alongside their signature.
+  item5_consent_applies:
+    map: CheckBox2
+    on_value: "/1"
+    doc: "Item 5 checkbox — the former attorney checks this themselves when they sign; never set here"
+  item6_consent_applies:
+    map: CheckBox1
+    on_value: "/1"
+    doc: "Item 6 checkbox — the new attorney checks this themselves when they sign; never set here"
+
+  # -- Page 2: Proof of Service by Mail -------------------------------------
+  pos_continued_in_attachment:
+    map: CheckBox12
+    on_value: "/1"
+    doc: >-
+      Page 2, 'List of names and addresses continued in attachment.'
+      Check only when more than five people were served (items a-j
+      hold five name/address slots); this descriptor has no MC-025
+      overflow wiring for the recipient list, so a human prepares and
+      attaches the continuation page by hand.
+
+agent_guide: |
+  MC-050 substitutes one attorney (or a self-represented party) for
+  another IN A PENDING CASE, WITHOUT asking the court for an order
+  (Code Civ. Proc. §§ 284(1), 285; Cal. Rules of Court, rule 3.1362).
+  It only works when everyone whose signature it needs is willing to
+  sign it: the outgoing attorney (or the party, if the party
+  represented themselves before), the party themselves, and the
+  incoming attorney (or the party, if now going pro per). If the
+  outgoing attorney will NOT consent, this form cannot be used at
+  all — the remedy is a NOTICED MOTION to be relieved as counsel (CCP
+  § 284(2), CRC 3.1362; typically forms MC-051/MC-052/MC-053), a
+  different filing this descriptor does not cover. Flag that
+  possibility for human review whenever a fill is requested and the
+  former attorney's consent is in doubt; do not attempt to route
+  around it.
+
+  Structure (page 1): item 1 says who the FORMER legal representative
+  was (former_rep_party_self / former_rep_attorney, with
+  former_attorney_name); item 2 says who the NEW one is
+  (new_rep_party_self / new_rep_attorney, with new_rep_name,
+  new_rep_bar_number, new_rep_address, new_rep_phone); item 3 says
+  what the substituting party's role in the case is (plaintiff /
+  defendant / petitioner / respondent / other). Items 4-6 are three
+  independent consent paragraphs — the PARTY (4), the FORMER attorney
+  (5), and the NEW attorney (6) — each with its own date, printed
+  name, and wet-ink signature line. Page 2 is a Proof of Service by
+  Mail for the completed substitution.
+
+  Standard caption front matter (filer_*, court_*, petitioner,
+  respondent, case_number) resolves the attorney/court block and the
+  CASE NAME / CASE NUMBER boxes automatically (one shared field fills
+  both the page-1 and page-2 copies). Everything else about WHO is
+  substituting for WHOM is case-specific and has no auto binding —
+  supply it explicitly:
+
+      forms:
+        mc050:
+          substituting_party_name: "Jane Roe"
+          former_rep_party_self: true          # or former_rep_attorney + former_attorney_name
+          new_rep_attorney: true                # or new_rep_party_self
+          new_rep_name: "Sam Sattler, Esq."
+          new_rep_bar_number: "123456"
+          new_rep_address: "500 Market Street, Suite 100, Springfield, CA 90000, Sattler Law Group"
+          new_rep_phone: "(555) 555-0199"
+          party_role_plaintiff: true
+
+  NEVER fill or fabricate, under any circumstance:
+    - Any of items 4/5/6's date, printed-name, or consent-checkbox
+      fields (item4_date, item4_print_name, item5_date,
+      item5_print_name, item5_consent_applies, item6_date,
+      item6_print_name, item6_consent_applies). These represent three
+      separate people's personal, wet-ink consent to the substitution;
+      a machine-filled consent is not consent. Leave them for the
+      humans who are actually agreeing to this change of counsel.
+    - Anything on the Proof of Service by Mail (page 2): the mailing
+      described there has not happened yet when the form is drafted,
+      and the form's own instructions require someone OTHER than a
+      self-represented party to do the mailing and sign it. Dates,
+      the server's name and address, and the perjury declaration date
+      are always for a human to complete once the mailing actually
+      occurs — never populate pos_mailing_date, pos_declaration_date,
+      or pos_declarant_name ahead of that event. The recipient
+      name/address slots (pos_recipient_1..5_*) may be filled once the
+      service list is actually known, same as any other proof of
+      service, but still only on explicit instruction — never guessed
+      from the caption.
+
+  Caveats worth flagging to a human, not coded as behavior:
+    - The item 2 "Party is representing self*" notice lists categories
+      (guardian, conservator, trustee, personal representative,
+      probate fiduciary, corporation, unincorporated association) that
+      generally may NOT go pro per — if the substituting party is one
+      of those, say so rather than checking new_rep_party_self.
+    - Item 1 and item 2 are each mutually exclusive pairs
+      (party-self vs. attorney); never set both boxes in a pair.
+    - Item 3's five role checkboxes are mutually exclusive in
+      practice; set only the one that is actually true, with
+      other_role_specify used only alongside party_role_other.

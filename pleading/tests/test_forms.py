@@ -198,6 +198,68 @@ def test_unknown_data_key_is_reported(tmp_path):
     assert any("unknown field" in w for w in res.warnings)
 
 
+@pytest.mark.skipif("mc050" not in FORMS, reason="mc050 descriptor not present")
+def test_mc050_consent_and_service_fields_stay_blank(tmp_path):
+    """A rich fill of every substantive MC-050 field (who's substituting,
+    the former/new representative's details, the party's role, and even
+    a known proof-of-service recipient) must never leak into the three
+    consent signature blocks (items 4-6) or the proof-of-service page's
+    date/declarant fields — those record a person's own consent, or an
+    event (the mailing) that has not happened yet (specs/pleading/forms/mc050.md,
+    promises 2-4)."""
+    out = tmp_path / "mc050.pdf"
+    rich_data = {
+        "substituting_party_name": "JOHN SMITH",
+        "former_rep_party_self": True,
+        "new_rep_attorney": True,
+        "new_rep_name": "Sam Sattler, Esq.",
+        "new_rep_bar_number": "123456",
+        "new_rep_address": "500 Market Street, Suite 100, Springfield, CA 90000",
+        "new_rep_phone": "(555) 555-0199",
+        "party_role_plaintiff": True,
+        "other_role_specify": "Cross-defendant",
+        "pos_recipient_1_name": "Jane Roe",
+        "pos_recipient_1_address": "123 Main Street, Springfield, CA 90000",
+    }
+    form_fill.fill("mc050", out, meta=dict(FIXTURE_META), data=dict(rich_data))
+
+    reader = PdfReader(str(out))
+    fields = reader.get_fields() or {}
+
+    def value_of(map_name):
+        f = fields.get(map_name)
+        return str((f or {}).get("/V") or "")
+
+    desc = form_fill.load_descriptor("mc050")
+    blank_fields = [
+        "item4_date", "item4_print_name",
+        "item5_date", "item5_print_name",
+        "item6_date", "item6_print_name",
+        "pos_mailing_date", "pos_mailing_place",
+        "pos_declaration_date", "pos_declarant_name",
+        "pos_declarant_address",
+    ]
+    leaks = []
+    for name in blank_fields:
+        mapped = desc["fields"][name]["map"]
+        v = value_of(mapped)
+        if v.strip():
+            leaks.append(f"{name} -> {mapped} = {v!r}")
+    assert not leaks, f"machine filled human/event-owned fields: {leaks}"
+
+    blank_checkboxes = ["item5_consent_applies", "item6_consent_applies"]
+    for name in blank_checkboxes:
+        mapped = desc["checkboxes"][name]["map"]
+        f = fields.get(mapped) or {}
+        assert not f.get("/V"), f"{name} -> {mapped} was checked by a rich fill"
+
+    # And confirm the rich data DID land where it belongs, so this test
+    # cannot pass by accident (e.g. a broken fill that fills nothing).
+    assert value_of("FillText29") == "JOHN SMITH"          # substituting_party_name
+    assert value_of("FillText27") == "Sam Sattler, Esq."   # new_rep_name
+    assert value_of("FillText51") == "Jane Roe"            # pos_recipient_1_name
+
+
 @pytest.mark.skipif("subp010" not in FORMS or "mc025" not in FORMS,
                     reason="subp010/mc025 descriptor not present")
 class TestSubp010RecordsAttachment:
