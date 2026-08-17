@@ -33,6 +33,20 @@ CONFIG FILE FORMAT (JSON)
       "replacement_text": "EXHIBIT A ...\nSEALED UNDER COURT ORDER DATED _________, 2026"
     },
 
+    // --- TYPE 1b: seal_page_range ---
+    // Replace an explicit, 1-based INCLUSIVE page range.  Prefer this over
+    // seal_pages whenever the pages are already known -- especially for
+    // scanned exhibits, where seal_pages' anchor search runs against OCR
+    // output and is case-insensitive, so "EXHIBIT 2" can match a body-text
+    // "Exhibit 2" many pages earlier and seal the wrong pages silently.
+    {
+      "type": "seal_page_range",
+      "description": "...",
+      "first_page": 22,
+      "last_page": 34,
+      "replacement_text": "EXHIBIT 2 ...\nSTRICKEN AND SEALED"
+    },
+
     // --- TYPE 2: redact_block ---
     // Redact a contiguous block of text spanning from `start_text`
     // through `end_text` (both inclusive) on the same PDF page.
@@ -244,6 +258,53 @@ def _page_column_x_range(page: fitz.Page) -> tuple[float, float]:
 # ---------------------------------------------------------------------------
 # Operation handlers
 # ---------------------------------------------------------------------------
+
+def _op_seal_page_range(doc: fitz.Document, op: dict, cfg: dict) -> int:
+    """Replace an explicit, 1-based inclusive page range with a placeholder.
+
+    seal_pages locates its first page by searching for anchor text, which is
+    the wrong tool for a scanned exhibit: the text layer is OCR output, so the
+    anchor may be garbled, and the search is case-insensitive, so an anchor
+    like "EXHIBIT 2" matches a body-text "Exhibit 2" many pages earlier and
+    seals the wrong pages silently. When the pages are already known -- an
+    exhibit running pp. 22-34, say -- name them.
+
+      {"type": "seal_page_range", "first_page": 22, "last_page": 34,
+       "replacement_text": "..."}
+
+    Returns the number of pages sealed, or 0 if the range is out of bounds.
+    """
+    first = int(op["first_page"])
+    last = int(op.get("last_page", first))
+    if first < 1 or last < first or last > len(doc):
+        print(f"  WARNING [seal_page_range] range {first}-{last} is out of bounds "
+              f"for a {len(doc)}-page document", file=sys.stderr)
+        return 0
+
+    replacement_text: str = op.get("replacement_text", "[SEALED UNDER COURT ORDER]")
+    border_width = float(cfg.get("border_width", 0.5))
+    for pg_idx in range(first - 1, last):
+        _blank_page(doc[pg_idx], replacement_text, border_width)
+    print(f"  seal_page_range: sealed PDF pages {first}–{last}")
+    return last - first + 1
+
+
+def _blank_page(page, replacement_text: str, border_width: float) -> None:
+    """White out a whole page and centre replacement text on it."""
+    margin = 36  # 0.5 inch margin so the page doesn't look blank
+    rect = fitz.Rect(
+        page.rect.x0 + margin, page.rect.y0 + margin,
+        page.rect.x1 - margin, page.rect.y1 - margin,
+    )
+    page.add_redact_annot(rect, fill=(1.0, 1.0, 1.0))
+    page.apply_redactions(graphics=1)
+    if border_width > 0:
+        page.draw_rect(rect, color=(0.0, 0.0, 0.0), width=border_width)
+    page.insert_textbox(
+        rect, replacement_text, fontname="helv", fontsize=10,
+        color=(0.0, 0.0, 0.0), align=1,
+    )
+
 
 def _op_seal_pages(doc: fitz.Document, op: dict, cfg: dict) -> int:
     """Replace one or more entire pages with a placeholder.
@@ -482,6 +543,7 @@ def _op_redact_sentences(doc: fitz.Document, op: dict, cfg: dict) -> int:
 
 HANDLERS = {
     "seal_pages":       _op_seal_pages,
+    "seal_page_range":  _op_seal_page_range,
     "redact_block":     _op_redact_block,
     "redact_clause":    _op_redact_clause,
     "redact_sentences": _op_redact_sentences,
