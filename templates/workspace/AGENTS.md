@@ -72,6 +72,43 @@ declaration behind a motion's own cover form — that is captioned normally.
 
 ---
 
+## STOP. `pleadings/` is the court's copy, and provenance is never inferred
+
+`pleadings/` holds the **court-filed version** of each document and
+nothing else. Working copies, marked-up drafts and proposed redactions
+live elsewhere — `assets/redaction_markups/` or similar — never here.
+
+Every document is declared in `pleadings/MANIFEST.md` with a status:
+`conformed`, `efiled`, or one of the substitutes (`as-served`, `portal`,
+`counsel-copy`, `unverified`) and `not-in-hand`. Check it:
+
+```bash
+python3 <slopcannon>/pleading/pleadings_manifest.py <matter>
+```
+
+A PDF carries no sign of its own provenance. A marked-up working copy, a
+draft never filed, and the conformed filing look identical in a listing
+and sort together by date. So a human records provenance at intake, and
+**you never infer it.** In particular: **two files being byte-identical
+proves only that they are the same file.** It is not evidence that
+either came from the court. Reasoning from a working copy about what the
+court has, or about what opposing counsel did, produces conclusions that
+are wrong in a way nothing downstream can detect.
+
+If you need a filed version and the manifest says `not-in-hand` or shows
+a substitute, say so and stop. Do not substitute the nearest file.
+
+## Redaction: declare, build, prove, show
+
+Never hand-place redaction boxes, and never report a redaction as done
+because you looked at it. Load the `redact` skill and follow it: a
+declarative JSON schedule under `src/redactions/`, built with
+`redact_pdf.py`, then **proved** with `verify_redactions.py` against a
+written term list, then a render handed to a human.
+
+Redact from the court-filed version. Match the unit to the structure —
+a table row, not a phrase; in prose, the minimum phrase, not the line.
+
 ## Conduct
 
 You are a clerk, not a lawyer. Catalog, route, summarize, draft.
