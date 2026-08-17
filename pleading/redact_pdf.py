@@ -128,6 +128,14 @@ search text, unknown type, or an error while applying), the script prints
 the offending entry to stderr, writes NO output, and exits nonzero. A
 "successful" build therefore means every listed redaction was applied.
 
+The one exception is `"optional": true`, for a document-wide BACKSTOP sweep
+("redact this name wherever it appears") placed after the specific ops.
+Operations apply in order and each removes its text immediately, so such a
+sweep legitimately finds nothing left when the specific ops above it caught
+every occurrence. Without the flag the build fails on a pipeline that worked,
+and the tempting repair -- pruning ops until it passes -- deletes the specific
+ops as well whenever their text merely starts with the sweep's.
+
 USAGE
 ─────
   python3 redact_pdf.py <config.json> [--force] [--check-stale]
@@ -920,7 +928,21 @@ def run(config_path: Path, force: bool = False) -> int:
             continue
         if not applied:
             needle = op.get("search_text") or op.get("start_text") or op.get("find_text", "")
-            failures.append(f"[{op_type}] {desc}: no matches for '{needle[:60]}'")
+            if op.get("optional"):
+                # A declared BACKSTOP sweep. Ops apply in order and each removes
+                # its text immediately, so a document-wide "redact this name
+                # wherever it appears" legitimately finds nothing left once the
+                # specific, page-by-page ops above it have caught every
+                # occurrence. That is the pipeline working, not a defect, and
+                # failing the build on it invites exactly the wrong repair:
+                # deleting ops until the build passes, which silently deletes
+                # the SPECIFIC ops too when their text merely starts with the
+                # sweep's.
+                print(f"  (optional, nothing left to match: '{needle[:60]}')",
+                      flush=True)
+            else:
+                failures.append(
+                    f"[{op_type}] {desc}: no matches for '{needle[:60]}'")
 
     if failures:
         doc.close()
