@@ -19,7 +19,9 @@ the strength of having looked at it.
 
 1. **Declare.** Write a JSON schedule under `src/redactions/<name>.json`.
    One entry per item, each with a `description` naming the item and its
-   basis. The schedule is the work product; the PDF is its output.
+   basis, and an `item` naming the identifier in the human-facing
+   schedule that authorises it. The schedule is the work product; the
+   PDF is its output.
 2. **Build.** `python3 <prosaic>/pleading/redact_pdf.py <cfg>.json --force`
    Every entry must match. If any finds nothing the build writes no
    output and exits nonzero — a success means every listed entry applied.
@@ -28,11 +30,31 @@ the strength of having looked at it.
    --contact-sheet <dir>/`
    Exit 0 only when nothing in the term list survives in the text layer,
    the annotations, the metadata, or the raw bytes.
-4. **Show.** Give the human the contact sheet and the report, and say
+4. **Reconcile.** `python3 <prosaic>/pleading/check_redaction_schedule.py
+   <the letter or motion>.md src/redactions/*.json`
+   Every operation must cite an item the schedule enumerates.
+5. **Show.** Give the human the contact sheet and the report, and say
    plainly what is machine-verified and what is only your judgment.
 
-Steps 2 and 3 are not optional and not reorderable. Verification is
-part of producing the artifact.
+Steps 2, 3 and 4 are not optional and not reorderable. Verification and
+reconciliation are part of producing the artifact.
+
+### Identifiers must be stable per section
+
+Use `A1`, `B2`, `C12` --- never one running `1..N`. A schedule gets edited
+for argument, so rows get dropped and narrowed; with a single sequence,
+dropping one row renumbers every row after it and silently invalidates
+every config label downstream, while both files still look internally
+consistent. That happened: two rows were dropped from a 51-item
+schedule and every config label from that point on pointed at the wrong
+item, with nothing to reveal it.
+
+The drift is a legal problem, not bookkeeping. A redaction the schedule
+does not enumerate is relief nobody asked the court for, applied anyway.
+An enumerated item nothing implements is relief asked for and not
+delivered. Expect the configs to find material the schedule missed ---
+they are written while reading the documents --- and feed it back into
+the schedule rather than leaving it implemented but unauthorised.
 
 ## Pick the right unit
 
