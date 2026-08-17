@@ -3078,65 +3078,119 @@ class PleadingPDF:
         return current_line
 
     def _emit_table(self, block: Block, current_line: int) -> int:
-        """Render a markdown table as a two-column layout on the pleading grid.
+        """Render a markdown table on the pleading grid.
 
-        Column widths are determined by measuring the widest cell in each column,
-        with the last column getting any remaining space. Each cell wraps
-        independently, and multi-line rows advance together.
+        Column widths are fitted to the text block: each column's natural
+        width is measured, and if the total overflows, columns are shrunk
+        proportionally but never below the width of their longest single
+        word. That keeps every cell inside the right margin, which the
+        previous "last column gets whatever is left" rule did not -- it
+        could hand the final column a negative width, pushing its text off
+        the page and inflating the row's line count with invisible wraps.
+
+        Cell text is parsed for inline styles, so bold, italic, verbatim
+        and links render inside tables as they do everywhere else.
         """
         rows = block.rows or []
         if not rows:
             return current_line
         num_cols = max(len(r) for r in rows)
-        col_gap = 12  # pt between columns
+        col_gap = 12.0  # pt of gutter between columns
 
-        # Measure column widths: each column gets the width of its widest cell,
-        # except the last column which gets the remaining space.
-        col_widths: List[float] = [0.0] * num_cols
+        # Parse every cell once into styled words.
+        grid: List[List[List[StyledWord]]] = []
         for row in rows:
-            for ci in range(min(len(row), num_cols - 1)):
-                w = pdfmetrics.stringWidth(row[ci], FONT_NAME, FONT_SIZE)
-                col_widths[ci] = max(col_widths[ci], w)
-
-        # Add padding to measured columns
-        for ci in range(num_cols - 1):
-            col_widths[ci] += col_gap
-        # Last column gets remaining space
-        used = sum(col_widths[:-1])
-        col_widths[-1] = self.text_width - used
-
-        # Compute column x-offsets
-        col_x: List[float] = [0.0] * num_cols
-        for ci in range(1, num_cols):
-            col_x[ci] = col_x[ci - 1] + col_widths[ci - 1]
-
-        for ri, row in enumerate(rows):
-            # Wrap each cell to its column width
-            wrapped_cells: List[List[str]] = []
-            max_lines = 1
+            cells = []
             for ci in range(num_cols):
-                cell_text = row[ci] if ci < len(row) else ""
-                lines = wrap_text(cell_text, col_widths[ci] - (col_gap / 2),
-                                  FONT_NAME, FONT_SIZE)
-                if not lines:
-                    lines = [""]
-                wrapped_cells.append(lines)
-                max_lines = max(max_lines, len(lines))
+                raw = row[ci] if ci < len(row) else ""
+                cells.append(spans_to_styled_words(parse_inline_styles(raw)))
+            grid.append(cells)
 
-            # Draw each visual line of this row
+        def words_width(words: List[StyledWord]) -> float:
+            if not words:
+                return 0.0
+            space_w = pdfmetrics.stringWidth(" ", FONT_NAME, FONT_SIZE)
+            w = sum(x.width(FONT_SIZE) for x in words)
+            w += space_w * sum(1 for x in words[1:] if not x.no_space_before)
+            return w
+
+        # Natural width (longest unwrapped cell) and floor (longest single
+        # word) for each column.
+        natural = [0.0] * num_cols
+        floor = [0.0] * num_cols
+        for cells in grid:
+            for ci in range(num_cols):
+                natural[ci] = max(natural[ci], words_width(cells[ci]))
+                for w in cells[ci]:
+                    floor[ci] = max(floor[ci], w.width(FONT_SIZE))
+
+        gutters = col_gap * (num_cols - 1)
+        avail = self.text_width - gutters
+        if avail <= 0:
+            return current_line
+
+        if sum(natural) <= avail:
+            widths = list(natural)
+            widths[-1] += avail - sum(natural)
+        else:
+            # Shrink proportionally, holding each column at or above its
+            # longest word so nothing is forced to break mid-word.
+            widths = [max(f, n * avail / sum(natural))
+                      for n, f in zip(natural, floor)]
+            over = sum(widths) - avail
+            if over > 0:
+                # Reclaim the overshoot from columns that still have slack.
+                slack = [max(0.0, w - f) for w, f in zip(widths, floor)]
+                total_slack = sum(slack)
+                if total_slack > 0:
+                    widths = [w - over * (s / total_slack)
+                              for w, s in zip(widths, slack)]
+                else:
+                    widths = [w * avail / sum(widths) for w in widths]
+
+        col_x = [0.0] * num_cols
+        for ci in range(1, num_cols):
+            col_x[ci] = col_x[ci - 1] + widths[ci - 1] + col_gap
+
+        for ri, cells in enumerate(grid):
+            wrapped = []
+            row_lines = 1
+            for ci in range(num_cols):
+                lines = wrap_styled_words(cells[ci], widths[ci]) or [[]]
+                wrapped.append(lines)
+                row_lines = max(row_lines, len(lines))
+
             is_header = (ri == 0)
-            font = FONT_NAME_BOLD if is_header else FONT_NAME
-            for line_idx in range(max_lines):
+            if is_header:
+                for lines in wrapped:
+                    for ln in lines:
+                        for w in ln:
+                            w.bold = True
+
+            # Keep a short row whole rather than splitting it across pages.
+            if row_lines <= 4:
+                remaining = self.lines_per_page - self._fn_area_lines - current_line
+                if remaining < row_lines:
+                    self.start_page()
+                    current_line = 1
+
+            row_start = current_line
+            for line_idx in range(row_lines):
                 current_line = self._advance_line(current_line)
-                for ci, cell_lines in enumerate(wrapped_cells):
-                    if line_idx < len(cell_lines):
-                        self.c.setFont(font, FONT_SIZE)
-                        self.c.drawString(
-                            self.left_margin + col_x[ci],
-                            self.line_y(current_line),
-                            cell_lines[line_idx],
-                        )
+                if line_idx == 0:
+                    row_start = current_line
+                for ci in range(num_cols):
+                    if line_idx < len(wrapped[ci]):
+                        self.draw_styled_line(current_line, wrapped[ci][line_idx],
+                                              indent=col_x[ci])
                 current_line += 1
+
+            if is_header:
+                # Rule under the header, on the same page it ended on.
+                y = self.line_y(current_line - 1) - 3
+                self.c.setLineWidth(0.5)
+                self.c.line(self.left_margin, y,
+                            self.left_margin + self.text_width, y)
 
         # Trailing blank line after table
         current_line = self._advance_line(current_line)
