@@ -47,6 +47,36 @@ CONFIG FILE FORMAT (JSON)
       "replacement_text": "EXHIBIT 2 ...\nSTRICKEN AND SEALED"
     },
 
+    // --- TYPE 1c: redact_row ---
+    // Redact the whole ruled table ROW containing `anchor_text`.  Use this for
+    // any tabular data: redacting just the phrase you can name is how you
+    // redact nothing.  A witness-list row carries a name in one cell and the
+    // street address and telephone number in the next two, so covering the
+    // name leaves the person trivially identifiable.  Row height comes from
+    // the horizontal ruling lines, so cells that wrap to three lines are
+    // covered to their full height.  "scope": "cell" stays inside the
+    // vertical rules instead of spanning the table.
+    {
+      "type": "redact_row",
+      "description": "...",
+      "anchor_text": "Some Name",
+      "scope": "row",
+      "label": "[ITEM 21: SEALED]"
+    },
+
+    // --- TYPE 1d: redact_region ---
+    // Explicit rectangle on an explicit 1-based page, in 0-1 page fractions
+    // so it survives a re-render at another scale.  The escape hatch for
+    // material no text search reaches: signatures, handwriting, stamps,
+    // photographs, scan regions whose OCR came out as noise.
+    {
+      "type": "redact_region",
+      "description": "...",
+      "page": 7,
+      "rect": [0.10, 0.42, 0.95, 0.51],
+      "label": "[REDACTED]"
+    },
+
     // --- TYPE 2: redact_block ---
     // Redact a contiguous block of text spanning from `start_text`
     // through `end_text` (both inclusive) on the same PDF page.
@@ -161,6 +191,9 @@ def _add_redact(
     font_size: float,
 ) -> None:
     """Add a single redaction annotation with a text label (no border — draw after apply)."""
+    # Last line of defence for the base-14 encoding trap: whatever the caller
+    # passed, only draw glyphs the label font has. See sanitize_label.
+    label, _dropped = sanitize_label(label)
     page.add_redact_annot(
         rect,
         text=label,
@@ -208,6 +241,272 @@ def _deduplicate_rects(
             cur = fitz.Rect(r)
     groups.append(cur)
     return groups
+
+
+# ---------------------------------------------------------------------------
+# Label safety
+# ---------------------------------------------------------------------------
+
+# The base-14 fonts fitz uses for redaction labels ("helv" and friends) encode
+# Latin-1. Anything outside it draws as "?" -- so a label reading
+# "[ITEM 5 — SEALED]" silently becomes "[ITEM 5 ? SEALED]" in the output, which
+# looks like a defect in a document whose whole purpose is to be trusted.
+# Typographic punctuation is the common way in, because prose style guides call
+# for it and labels get copied out of prose.
+_LABEL_FOLD = {
+    "—": "--", "–": "-", "‒": "-", "‐": "-",
+    "‘": "'", "’": "'", "‚": ",",
+    "“": '"', "”": '"',
+    "…": "...", " ": " ", " ": " ", " ": " ",
+    "­": "", "•": "*", "·": "*", "′": "'", "″": '"',
+    "§": "sec. ",
+}
+
+
+def sanitize_label(label: str) -> tuple[str, list[str]]:
+    """Fold a label to characters the base-14 label fonts can actually draw.
+
+    Returns (safe_label, unrepresentable_characters_dropped).
+    """
+    out: list[str] = []
+    dropped: list[str] = []
+    for ch in label:
+        if ch in _LABEL_FOLD:
+            out.append(_LABEL_FOLD[ch])
+            continue
+        try:
+            ch.encode("latin-1")
+        except UnicodeEncodeError:
+            dropped.append(ch)
+            continue
+        out.append(ch)
+    return "".join(out), dropped
+
+
+# ---------------------------------------------------------------------------
+# Table geometry
+# ---------------------------------------------------------------------------
+
+def _rules(page: fitz.Page, horizontal: bool) -> list[float]:
+    """Positions of the page's ruling lines, from vector drawings.
+
+    Judicial Council forms and exhibit lists are ruled tables, so the rules
+    give exact cell boundaries -- far better than guessing from text extents.
+    A "rule" is any drawn line or thin filled rect whose other dimension is
+    long, which catches both stroked lines and hairline rectangles.
+    """
+    positions: list[float] = []
+    for d in page.get_drawings():
+        r = d.get("rect")
+        if r is None:
+            continue
+        w, h = r.width, r.height
+        if horizontal and h <= 2.5 and w >= 40:
+            positions.append((r.y0 + r.y1) / 2.0)
+        elif not horizontal and w <= 2.5 and h >= 20:
+            positions.append((r.x0 + r.x1) / 2.0)
+    if not positions:
+        # A scanned page has no vector drawings at all: its table rules are
+        # pixels. Without this fallback _band finds nothing, silently degrades
+        # to one line height, and a three-line table row gets a one-line box --
+        # which is worse than useless, because it looks redacted.
+        positions = _rules_from_image(page, horizontal)
+
+    # Collapse near-duplicates (a stroked line often yields two edges).
+    positions.sort()
+    merged: list[float] = []
+    for p in positions:
+        if not merged or p - merged[-1] > 2.0:
+            merged.append(p)
+    return merged
+
+
+def _rules_from_image(page: fitz.Page, horizontal: bool, dpi: int = 72,
+                      dark: int = 215, gap: int = 4,
+                      min_frac: float = 0.45) -> list[float]:
+    """Find a scanned table's ruling lines by their longest near-contiguous run.
+
+    Returns positions in PDF points.
+
+    Three things had to be right here, and each was wrong on the first try:
+
+    * The discriminator is run LENGTH, not dark-pixel count. A line of text has
+      many short runs that can total more ink than the rule beneath it.
+    * Scanned rules are DITHERED, so they are not continuous. At a strict ink
+      threshold a real rule measured 83 pixels on a 612-pixel page while the
+      one rule that happened to scan solid measured 427. Tolerating a few light
+      pixels inside a run (`gap`) is what makes the rest visible.
+    * The ink threshold has to be generous (215, not 128). Table rules are
+      hairlines and scan to mid grey, not black.
+
+    Too strict and rules go missing, which is the dangerous direction: a
+    missing rule silently merges two table rows, so a redaction aimed at one
+    row covers its neighbour as well. Too loose and lines of text register as
+    rules, which splits a row. The defaults recover the exact row grid of a
+    Judicial Council form scanned at 300 dpi.
+    """
+    try:
+        pix = page.get_pixmap(dpi=dpi, colorspace=fitz.csGRAY)
+    except Exception:
+        return []
+    w, h, s = pix.width, pix.height, pix.samples
+    if w == 0 or h == 0:
+        return []
+    n = pix.n or 1
+    scale = 72.0 / dpi
+    span = w if horizontal else h
+    need = int(span * min_frac)
+    outer = h if horizontal else w
+
+    def longest_run(fixed: int) -> int:
+        best = run = miss = 0
+        for i in range(span):
+            idx = (fixed * w + i) if horizontal else (i * w + fixed)
+            if s[idx * n] < dark:
+                run += 1
+                miss = 0
+                if run > best:
+                    best = run
+            else:
+                miss += 1
+                if miss > gap:
+                    run = 0
+                else:
+                    run += 1
+        return best
+
+    return [i * scale for i in range(outer) if longest_run(i) >= need]
+
+
+
+def _band(anchor: float, rules: list[float], lo: float, hi: float,
+          pad: float) -> tuple[float, float]:
+    """The gap between the rules bracketing `anchor`, or a padded fallback."""
+    before = [r for r in rules if r <= anchor + 0.5]
+    after = [r for r in rules if r >= anchor - 0.5]
+    a = max(before) if before else None
+    b = min(after) if after else None
+    if a is not None and b is not None and b - a > 4.0:
+        return a, b
+    return max(lo, anchor - pad), min(hi, anchor + pad)
+
+
+def _op_redact_row(doc: fitz.Document, op: dict, cfg: dict) -> int:
+    """Redact the whole table ROW that contains an anchor phrase.
+
+    Redacting only the phrase you can name is the classic way to redact
+    nothing. A witness-list row holds a clinician's name in one cell and their
+    street address and telephone number in the next two; covering the name
+    leaves the person trivially identifiable by the identifiers beside it. The
+    unit of redaction for tabular data is the row, not the phrase.
+
+    Vertical extent comes from the horizontal ruling lines bracketing the
+    anchor, so a row whose cells wrap to three lines is covered to its full
+    height. Horizontal extent is the whole ruled table by default; pass
+    "scope": "cell" to stay inside the vertical rules instead.
+
+      {"type": "redact_row", "anchor_text": "Some Name",
+       "scope": "row" | "cell", "label": "[... REDACTED]"}
+    """
+    anchor = op["anchor_text"]
+    scope = op.get("scope", "row")
+    label, dropped = sanitize_label(op.get("label", "[REDACTED]"))
+    if dropped:
+        print(f"  NOTE [redact_row] label characters not drawable, folded: "
+              f"{''.join(sorted(set(dropped)))}", file=sys.stderr)
+    fill = _color(cfg, "fill_color", [1.0, 1.0, 1.0])
+    text_color = _color(cfg, "text_color", [0.0, 0.0, 0.0])
+    font = cfg.get("label_font", "helv")
+    font_size = float(cfg.get("label_font_size", 7))
+    border_width = float(cfg.get("border_width", 0.5))
+
+    page_idx = _find_page_by_text(doc, anchor)
+    if page_idx is None:
+        print(f"  WARNING [redact_row] could not find anchor '{anchor[:60]}'",
+              file=sys.stderr)
+        return 0
+    page = doc[page_idx]
+    hits = _deduplicate_rects(page.search_for(anchor))
+    if not hits:
+        return 0
+
+    hrules = _rules(page, horizontal=True)
+    vrules = _rules(page, horizontal=False)
+    rects: list[fitz.Rect] = []
+    for hit in hits:
+        y0, y1 = _band((hit.y0 + hit.y1) / 2.0, hrules,
+                       0.0, page.rect.height, hit.height * 1.2)
+        col_x0, col_x1 = _page_column_x_range(page)
+        # Only trust the vertical rules if enough of them were found to bound a
+        # plausible table. A scan often yields ONE, and min()==max() then
+        # collapses the rect to zero width -- the op reports success and
+        # redacts nothing, which is the worst failure this tool can have.
+        table_ok = len(vrules) >= 2 and (max(vrules) - min(vrules)) > page.rect.width * 0.3
+        if scope == "cell" and table_ok:
+            x0, x1 = _band((hit.x0 + hit.x1) / 2.0, vrules,
+                           col_x0, col_x1, hit.width)
+        elif table_ok:
+            x0, x1 = min(vrules), max(vrules)
+        else:
+            x0, x1 = col_x0, col_x1
+        if x1 - x0 < 20:
+            x0, x1 = col_x0, col_x1
+        rect = fitz.Rect(x0 + 0.6, y0 + 0.6, x1 - 0.6, y1 - 0.6)
+        if rect.is_empty or rect.width < 10 or rect.height < 4:
+            print(f"  WARNING [redact_row] degenerate rect {tuple(round(v) for v in rect)} "
+                  f"for anchor '{anchor[:40]}'; refusing to draw a no-op box",
+                  file=sys.stderr)
+            continue
+        rects.append(rect)
+
+    if not rects:
+        return 0
+    for r in rects:
+        _add_redact(page, r, label, fill, text_color, font, font_size)
+    page.apply_redactions(graphics=1)
+    _draw_borders(page, rects, border_width)
+    print(f"  redact_row ({len(rects)} {scope}(s) on p.{page_idx+1}): "
+          f"'{anchor[:44]}'")
+    return len(rects)
+
+
+def _op_redact_region(doc: fitz.Document, op: dict, cfg: dict) -> int:
+    """Redact an explicit rectangle on an explicit 1-based page.
+
+    The escape hatch for material no text search can reach: a signature, a
+    handwritten annotation, a stamp, a photograph, a region of a scan whose
+    OCR came out as noise. Coordinates are fractions of the page (0-1) so they
+    survive a source re-render at a different scale.
+
+      {"type": "redact_region", "page": 7,
+       "rect": [0.10, 0.42, 0.95, 0.51], "label": "[REDACTED]"}
+    """
+    page_no = int(op["page"])
+    if page_no < 1 or page_no > len(doc):
+        print(f"  WARNING [redact_region] page {page_no} out of range "
+              f"(1-{len(doc)})", file=sys.stderr)
+        return 0
+    fx0, fy0, fx1, fy1 = (float(v) for v in op["rect"])
+    if not (0.0 <= fx0 < fx1 <= 1.0 and 0.0 <= fy0 < fy1 <= 1.0):
+        print(f"  WARNING [redact_region] rect {op['rect']} is not an ordered "
+              f"pair of 0-1 fractions", file=sys.stderr)
+        return 0
+    label, dropped = sanitize_label(op.get("label", "[REDACTED]"))
+    if dropped:
+        print(f"  NOTE [redact_region] label characters not drawable, folded: "
+              f"{''.join(sorted(set(dropped)))}", file=sys.stderr)
+    page = doc[page_no - 1]
+    W, H = page.rect.width, page.rect.height
+    rect = fitz.Rect(fx0 * W, fy0 * H, fx1 * W, fy1 * H)
+    _add_redact(page, rect, label,
+                _color(cfg, "fill_color", [1.0, 1.0, 1.0]),
+                _color(cfg, "text_color", [0.0, 0.0, 0.0]),
+                cfg.get("label_font", "helv"),
+                float(cfg.get("label_font_size", 7)))
+    page.apply_redactions(graphics=1)
+    _draw_borders(page, [rect], float(cfg.get("border_width", 0.5)))
+    print(f"  redact_region: p.{page_no} {op['rect']}")
+    return 1
 
 
 # ---------------------------------------------------------------------------
@@ -544,6 +843,8 @@ def _op_redact_sentences(doc: fitz.Document, op: dict, cfg: dict) -> int:
 HANDLERS = {
     "seal_pages":       _op_seal_pages,
     "seal_page_range":  _op_seal_page_range,
+    "redact_row":       _op_redact_row,
+    "redact_region":    _op_redact_region,
     "redact_block":     _op_redact_block,
     "redact_clause":    _op_redact_clause,
     "redact_sentences": _op_redact_sentences,
