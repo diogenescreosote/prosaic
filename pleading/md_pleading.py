@@ -3133,10 +3133,44 @@ class PleadingPDF:
             widths = list(natural)
             widths[-1] += avail - sum(natural)
         else:
-            # Shrink proportionally, holding each column at or above its
-            # longest word so nothing is forced to break mid-word.
-            widths = [max(f, n * avail / sum(natural))
-                      for n, f in zip(natural, floor)]
+            # Shrink to fit. Straight proportional allocation starves the
+            # narrow-but-not-tiny columns: give a 4-column schedule one
+            # column of long prose and the rest short labels, and the prose
+            # column stays comfortable while "Strike and seal" breaks over
+            # three lines. Damp the weights with a square root so a column
+            # 9x wider than another draws 3x the space rather than 9x,
+            # which evens out the wrapped line counts.
+            #
+            # Then water-fill: no column needs more than its natural width,
+            # so clamp any that overshoots and redistribute the freed space
+            # among the rest at the same weights. Iterate until stable.
+            weight = [math.sqrt(n) if n > 0 else 0.0 for n in natural]
+            widths = [0.0] * num_cols
+            fixed = [False] * num_cols
+            pool = avail
+            for _ in range(num_cols):
+                live = sum(weight[ci] for ci in range(num_cols)
+                           if not fixed[ci])
+                if live <= 0:
+                    break
+                spilled = False
+                for ci in range(num_cols):
+                    if fixed[ci]:
+                        continue
+                    share = pool * weight[ci] / live
+                    if share >= natural[ci]:
+                        widths[ci] = natural[ci]
+                        fixed[ci] = True
+                        pool -= natural[ci]
+                        spilled = True
+                    else:
+                        widths[ci] = share
+                if not spilled:
+                    break
+
+            # Hold each column at or above its longest word so nothing is
+            # forced to break mid-word.
+            widths = [max(w, f) for w, f in zip(widths, floor)]
             over = sum(widths) - avail
             if over > 0:
                 # Reclaim the overshoot from columns that still have slack.
