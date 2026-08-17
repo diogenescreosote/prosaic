@@ -22,6 +22,7 @@ import json
 import math
 import os
 import re
+import shutil
 import subprocess
 import sys
 import tempfile
@@ -1350,7 +1351,16 @@ def validate_meta(meta: Dict, input_path: Path, variant: str) -> List[Exhibit]:
             isinstance(x, str) for x in meta["to_address_lines"]
         ):
             raise ValueError("to_address_lines must be a YAML list of strings")
-    return _parse_exhibits(meta, input_path.parent.resolve(), variant)
+    exhibits = _parse_exhibits(meta, input_path.parent.resolve(), variant)
+    if meta.get("cover_sheet_only") and exhibits:
+        # cover_sheet_only skips building any body at all, and an
+        # exhibit appendix has nothing to attach behind -- there is no
+        # document for it to follow.
+        raise ValueError(
+            "cover_sheet_only: true has no body to attach exhibits to -- "
+            "remove `exhibits:` or drop `cover_sheet_only`"
+        )
+    return exhibits
 
 
 def load_external_exhibits(source_path: Path, variant: str) -> List[Exhibit]:
@@ -2351,7 +2361,15 @@ def suppresses_caption(meta: Dict) -> bool:
     agent that would not follow instructions rather than a config key
     that was never wired up. Honoring it retroactively makes those
     sources correct without a migration anyone has to remember.
+
+    `cover_sheet_only:` also counts, and does not need `no_caption:`
+    alongside it: a cover_sheet_only source never builds a body page at
+    all, so there is no caption-rendering code path for the key to
+    suppress in the first place. Requiring it would just be a second
+    flag saying the same thing the first one already guarantees.
     """
+    if meta.get("cover_sheet_only"):
+        return True
     if meta.get("no_caption"):
         return True
     if meta.get("plain"):
@@ -2435,6 +2453,24 @@ def require_attachment_has_no_caption(meta: Dict, source_name: str) -> None:
            f"say), give it "
         f"a paper_title that does not begin \"ATTACHMENT\"."
     )
+
+
+def require_cover_sheet_only_has_cover_sheet(meta: Dict, source_name: str) -> None:
+    """`cover_sheet_only: true` has nothing to output without a form.
+
+    The flag exists so a source that is solely a filled Judicial
+    Council form -- MC-050 Substitution of Attorney, say, with no
+    accompanying declaration or motion text -- can skip the otherwise
+    automatic, mostly-blank body page. That only makes sense when a
+    `cover_sheet:` names the form that becomes the entire output;
+    without one there is no document at all.
+    """
+    if meta.get("cover_sheet_only") and not meta.get("cover_sheet"):
+        raise SystemExit(
+            f"{source_name}: `cover_sheet_only: true` requires "
+            f"`cover_sheet: <form_id>` alongside it -- with no cover "
+            f"sheet, this source has nothing to output."
+        )
 
 
 # Every build is a draft until someone says otherwise (--final): the
@@ -4428,6 +4464,7 @@ def main() -> None:
         meta["_final"] = True
     warn_unknown_front_matter_keys(meta, input_path.name)
     require_attachment_has_no_caption(meta, input_path.name)
+    require_cover_sheet_only_has_cover_sheet(meta, input_path.name)
     exhibits = validate_meta(meta, input_path, variant)
     exhibit_map = {ex.shortname: ex for ex in exhibits}
 
@@ -4446,49 +4483,60 @@ def main() -> None:
 
     doctype = meta.get("doctype", "pleading")
     attachment_label = exhibit_label_for_doctype(doctype)
-    body = substitute_redaction_macros(body, meta, variant)
-    body = substitute_redaction_log_macro(body, meta, variant, input_path)
-    body = substitute_posblock_macro(body, meta)
-    body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype)
-    body = substitute_date_macro(body, meta)
-    body = flatten_lettersignblock(body)
-    body = autonumber_list_items(body)
-    body, footnote_defs = extract_footnote_defs(body)
-    blocks = parse_markdown_blocks(body, doctype=doctype)
-    # heading_numbers: false — for documents whose headings carry their
-    # own enumeration ("Article I. ..."), auto-numbering would double it.
-    if meta.get("heading_numbers", True):
-        blocks = number_headings(blocks)
-
-    os.makedirs(output_path.parent, exist_ok=True)
-
-    with tempfile.TemporaryDirectory(prefix="md_pleading_") as td:
-        temp_dir = Path(td)
-        main_pdf = temp_dir / "main.pdf"
-        exhibit_letters = {
-            ex.letter for ex in exhibits
-            if not ex.sealed or variant == "public"
-        }
-        pleading = PleadingPDF(meta, blocks, str(main_pdf),
-                               exhibit_letters=exhibit_letters,
-                               sign_name=sign_name, sign_date=sign_date,
-                               footnote_defs=footnote_defs)
-        pleading.build()
-
-        exhibit_list_pdf: Optional[Path] = None
-        if exhibits:
-            exhibit_list_pdf = temp_dir / "exhibit_list.pdf"
-            list_title = f"{attachment_label} List"
-            LineGridPDF(str(exhibit_list_pdf), footer_title=list_title,
-                        title=list_title,
-                        draft_banner=draft_banner_text(meta)).build_exhibit_list(
-                exhibits, label=attachment_label)
-
-        merge_outputs(main_pdf, exhibit_list_pdf, exhibits, output_path,
-                      link_rects=pleading.link_rects, variant=variant,
-                      label=attachment_label)
-
     cover_sheet = meta.get("cover_sheet")
+    cover_sheet_only = bool(meta.get("cover_sheet_only"))
+    pleading = None
+
+    if cover_sheet_only:
+        # No body at all: the filled cover sheet below becomes the
+        # entire output. Nothing here to macro-substitute, paginate,
+        # build a PleadingPDF for, or merge with an exhibit list --
+        # validate_meta already refused `exhibits:` alongside this flag.
+        os.makedirs(output_path.parent, exist_ok=True)
+    else:
+        body = substitute_redaction_macros(body, meta, variant)
+        body = substitute_redaction_log_macro(body, meta, variant, input_path)
+        body = substitute_posblock_macro(body, meta)
+        body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype)
+        body = substitute_date_macro(body, meta)
+        body = flatten_lettersignblock(body)
+        body = autonumber_list_items(body)
+        body, footnote_defs = extract_footnote_defs(body)
+        blocks = parse_markdown_blocks(body, doctype=doctype)
+        # heading_numbers: false — for documents whose headings carry their
+        # own enumeration ("Article I. ..."), auto-numbering would double it.
+        if meta.get("heading_numbers", True):
+            blocks = number_headings(blocks)
+
+        os.makedirs(output_path.parent, exist_ok=True)
+
+        with tempfile.TemporaryDirectory(prefix="md_pleading_") as td:
+            temp_dir = Path(td)
+            main_pdf = temp_dir / "main.pdf"
+            exhibit_letters = {
+                ex.letter for ex in exhibits
+                if not ex.sealed or variant == "public"
+            }
+            pleading = PleadingPDF(meta, blocks, str(main_pdf),
+                                   exhibit_letters=exhibit_letters,
+                                   sign_name=sign_name, sign_date=sign_date,
+                                   footnote_defs=footnote_defs)
+            pleading.build()
+
+            exhibit_list_pdf: Optional[Path] = None
+            if exhibits:
+                exhibit_list_pdf = temp_dir / "exhibit_list.pdf"
+                list_title = f"{attachment_label} List"
+                LineGridPDF(str(exhibit_list_pdf), footer_title=list_title,
+                            title=list_title,
+                            draft_banner=draft_banner_text(meta)).build_exhibit_list(
+                    exhibits, label=attachment_label)
+
+            merge_outputs(main_pdf, exhibit_list_pdf, exhibits, output_path,
+                          link_rects=pleading.link_rects, variant=variant,
+                          label=attachment_label)
+
+    cover_path: Optional[Path] = None
     if cover_sheet:
         # Anything registered in forms/registry/ is handled generically
         # by form_fill.py (descriptor-driven fill; see docs/forms.md).
@@ -4496,12 +4544,13 @@ def main() -> None:
         try:
             descriptor = form_fill.load_descriptor(cover_sheet)
             pages_attached_field = descriptor.get("pages_attached_field")
-            if pages_attached_field:
+            if pages_attached_field and not cover_sheet_only:
                 # Some cover forms state the attached document's page
                 # count (declared as `pages_attached_field` in the
                 # descriptor), known only after the body renders —
                 # inject it, then use the generic descriptor path like
-                # every other form.
+                # every other form. Moot for cover_sheet_only: there is
+                # no attached document, only the form itself.
                 pages_attached = len(PdfReader(str(output_path)).pages)
                 meta = dict(meta)
                 forms_block = dict(meta.get("forms") or {})
@@ -4514,8 +4563,16 @@ def main() -> None:
             raise SystemExit(
                 f"Unsupported cover_sheet value: {cover_sheet!r}. {exc}"
             )
-        form_fill.prepend(output_path, cover_path)
-        print(f"Prepended {form_display_id(cover_sheet)} cover sheet from {cover_path}")
+        if cover_sheet_only:
+            # The filled form IS the document: write it straight to
+            # output_path rather than prepending it onto a body that
+            # was never built.
+            shutil.copyfile(cover_path, output_path)
+            print(f"Wrote {form_display_id(cover_sheet)} as the entire "
+                  f"output ({output_path}) from {cover_path}")
+        else:
+            form_fill.prepend(output_path, cover_path)
+            print(f"Prepended {form_display_id(cover_sheet)} cover sheet from {cover_path}")
 
     # Consumer/employee notices ride alongside the document, not inside
     # it: each is served on a different person, with a copy of the

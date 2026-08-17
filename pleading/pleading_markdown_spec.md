@@ -593,6 +593,76 @@ The `court_county` field should hold just the county name (e.g.
 `"SAN FRANCISCO"`) rather than `"COUNTY OF EXAMPLE"`; the generator accepts
 either form and strips the redundant prefix.
 
+### `cover_sheet_only` — a form with no accompanying document
+
+Some sources exist solely to fill a standalone Judicial Council form —
+MC-050 Substitution of Attorney, say, which has no declaration or
+motion text riding behind it. Left to the ordinary `cover_sheet:`
+treatment above, such a source would still get an automatic body
+page: a numbered sheet of pleading paper, mostly blank because there
+is no body to put on it, appended after the filled form's own pages.
+That page is not part of the filing and should not exist.
+
+```yaml
+cover_sheet: mc050
+cover_sheet_only: true
+```
+
+opts out of the body page entirely. At build time the generator:
+
+1. Skips building or paginating a body PDF and skips any exhibit
+   appendix — there is nothing to build one of.
+2. Fills `cover_sheet` exactly as it would otherwise.
+3. Writes the filled form directly as the output PDF (rather than
+   prepending it onto a body, since there is no body).
+4. Stamps the draft banner across the filled form's own pages, exactly
+   as it would across a body plus cover sheet.
+
+**Requires `cover_sheet:`.** `cover_sheet_only: true` with no
+`cover_sheet` fails the build — there would be nothing to output.
+
+**Rejects `exhibits:`.** A cover_sheet_only source has no body for an
+exhibit appendix to attach behind; declaring both fails the build.
+
+**Does not also need `no_caption: true`.** `no_caption` suppresses a
+caption that a rendered body would otherwise carry, and cover_sheet_only
+never renders a body in the first place — there is no caption-producing
+code path for `no_caption` to switch off. Setting it anyway is harmless
+but redundant.
+
+Example — a fictional standalone substitution of attorney with no
+accompanying declaration:
+
+```yaml
+---
+cover_sheet: mc050
+cover_sheet_only: true
+forms:
+  mc050:
+    substituting_party_name: "JOHN SMITH"
+    former_rep_attorney: true
+    former_attorney_name: "Sally Sattler, Esq."
+    new_rep_party_self: true
+
+filer_name: "John Smith"
+filer_address_lines:
+  - "123 Main Street"
+  - "Springfield, CA 90000"
+filer_phone: "(555) 555-0100"
+filer_email: "john.smith@example.com"
+filer_role: "Plaintiff, In Pro Per"
+court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"
+court_county: "EXAMPLE"
+petitioner: "JOHN SMITH"
+respondent: "JANE ROE"
+case_number: "24CV00000"
+paper_title: "SUBSTITUTION OF ATTORNEY"
+---
+```
+
+builds `.../Substitution of Attorney.pdf` as MC-050's own pages and
+nothing else.
+
 ### Consumer/employee notices (`consumer_notices`)
 
 A records subpoena that reaches an identifiable individual's records

@@ -81,6 +81,7 @@ exhibits:
 # Judicial Council forms and companion documents.
 forms:
   - cover_sheet              # form id prepended ahead of the document
+  - cover_sheet_only         # the filled cover_sheet form IS the whole output; no body page
   - forms                    # per-form field block, keyed by form id
   - consumer_notices         # SUBP-025 recipients, one notice each
 

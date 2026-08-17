@@ -33,7 +33,9 @@ import pytest
 PLEADING_DIR = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLEADING_DIR))
 
+import form_fill  # noqa: E402
 import md_pleading as mp  # noqa: E402
+from pypdf import PdfReader  # noqa: E402
 
 BASE = """---
 filer_name: "Jane Roe"
@@ -165,3 +167,109 @@ def test_docx_suppresses_the_caption_too(tmp_path):
     body = "\n".join(p.text for p in doc.paragraphs)
     assert "SUPERIOR COURT OF THE STATE" not in body
     assert "Attachment 3 to Deposition Subpoena" in body
+
+
+# --- cover_sheet_only: a standalone JC form with no accompanying body ----
+#
+# MC-050 Substitution of Attorney is the motivating case: a source that
+# exists solely to fill a Judicial Council form has no declaration or
+# motion text riding behind it. Before cover_sheet_only existed, an empty
+# body still got a wasted, mostly-blank numbered pleading-paper page
+# appended after the filled form's own pages.
+
+MC050_ONLY = pytest.mark.skipif(
+    "mc050" not in form_fill.list_forms(), reason="mc050 descriptor not present")
+
+MC050_SOURCE = """---
+filer_name: "Jane Roe"
+filer_address_lines:
+  - "123 Main Street"
+  - "Springfield, CA 90000"
+filer_phone: "(555) 555-0100"
+filer_email: "jane.roe@example.com"
+filer_role: "Respondent, In Pro Per"
+court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"
+court_county: "COUNTY OF EXAMPLE"
+petitioner: "JOHN SMITH"
+respondent: "JANE ROE"
+case_number: "24CV00000"
+paper_title: "SUBSTITUTION OF ATTORNEY"
+notreal: "DRAFT---not filed"
+{extra}---
+"""
+
+
+def render_mc050(tmp_path: Path, extra: str = "", name: str = "sub"
+                  ) -> subprocess.CompletedProcess:
+    src = tmp_path / f"{name}.md"
+    src.write_text(MC050_SOURCE.format(extra=extra))
+    return subprocess.run(
+        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src),
+         str(tmp_path / f"{name}.pdf")],
+        capture_output=True, text=True,
+    )
+
+
+@MC050_ONLY
+def test_cover_sheet_only_requires_cover_sheet(tmp_path):
+    """The flag has nothing to output without a form to fill."""
+    proc = render_mc050(tmp_path, extra="cover_sheet_only: true\n")
+    assert proc.returncode != 0
+    assert "cover_sheet_only" in proc.stderr
+    assert "cover_sheet" in proc.stderr
+    assert not (tmp_path / "sub.pdf").exists()
+
+
+@MC050_ONLY
+def test_cover_sheet_only_rejects_exhibits(tmp_path):
+    """No body means no document for an exhibit appendix to attach behind."""
+    proc = render_mc050(
+        tmp_path,
+        extra=(
+            "cover_sheet: mc050\n"
+            "cover_sheet_only: true\n"
+            "exhibits:\n"
+            "  - shortname: \"stray\"\n"
+            "    title: \"Stray Exhibit\"\n"
+            "    sealed: true\n"
+        ),
+    )
+    assert proc.returncode != 0
+    assert "exhibits" in proc.stderr
+    assert "cover_sheet_only" in proc.stderr
+    assert not (tmp_path / "sub.pdf").exists()
+
+
+@MC050_ONLY
+def test_cover_sheet_only_produces_only_the_forms_own_pages(tmp_path):
+    """The fix: with the flag, the output is exactly the filled form."""
+    proc = render_mc050(tmp_path, extra="cover_sheet: mc050\ncover_sheet_only: true\n")
+    assert proc.returncode == 0, proc.stderr
+    out = tmp_path / "sub.pdf"
+    blank_pages = len(PdfReader(str(PLEADING_DIR / "forms" / "mc050.pdf")).pages)
+    built_pages = len(PdfReader(str(out)).pages)
+    assert built_pages == blank_pages, (
+        f"expected exactly the {blank_pages}-page MC-050 and nothing else, "
+        f"got {built_pages} pages"
+    )
+
+    pages = text_of(out).split("\f")
+    pages = [p for p in pages if p.strip()]
+    assert len(pages) == blank_pages
+    for i, page in enumerate(pages, 1):
+        assert "DRAFT" in page and "NOT FILED" in page, (
+            f"page {i} carries no draft banner"
+        )
+
+
+@MC050_ONLY
+def test_without_the_flag_a_body_page_is_still_appended(tmp_path):
+    """Pins the historic bug this flag fixes: `cover_sheet:` alone, with
+    an empty body, still produces a wasted extra page after the form."""
+    proc = render_mc050(tmp_path, extra="cover_sheet: mc050\n")
+    assert proc.returncode == 0, proc.stderr
+    blank_pages = len(PdfReader(str(PLEADING_DIR / "forms" / "mc050.pdf")).pages)
+    built_pages = len(PdfReader(str(tmp_path / "sub.pdf")).pages)
+    assert built_pages > blank_pages, (
+        "expected the wasted body page that cover_sheet_only exists to remove"
+    )
