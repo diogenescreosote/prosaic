@@ -294,6 +294,13 @@ def test_civ110_dismissal_checkboxes_default_unchecked_on_a_rich_fill(tmp_path):
         "pleading_type_petition", "pleading_type_cross_complaint_1",
         "pleading_type_cross_complaint_2", "pleading_type_entire_action",
         "pleading_type_other",
+        "fee_waiver_did", "fee_waiver_did_not",
+        "item2_signer_is_attorney", "item2_signer_is_party",
+        "item2_role_plaintiff_petitioner", "item2_role_defendant_respondent",
+        "item2_role_cross_complainant",
+        "item3_signer_is_attorney", "item3_signer_is_party",
+        "item3_role_plaintiff_petitioner", "item3_role_defendant_respondent",
+        "item3_role_cross_complainant",
     ]
     leaks = []
     for name in checkbox_names:
@@ -313,6 +320,81 @@ def test_civ110_dismissal_checkboxes_default_unchecked_on_a_rich_fill(tmp_path):
         if v.strip():
             leaks.append(f"{name} -> {mapped} = {v!r}")
     assert not leaks, f"machine filled a fill-in without human instruction: {leaks}"
+
+
+@pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
+def test_civ110_fee_waiver_checkboxes_render_checked(tmp_path):
+    """Item 2's fee-waiver fact ('The court did / did not waive court
+    fees and costs...') is fillable on explicit instruction, same as
+    item 1.a/1.b (specs/pleading/forms/civ110.md, promise 2a) — but
+    only ever on a human's explicit say-so, never inferred."""
+    out = tmp_path / "civ110_fee_waiver.pdf"
+    form_fill.fill("civ110", out, meta=dict(FIXTURE_META), data={
+        "fee_waiver_did_not": True,
+    })
+    reader = PdfReader(str(out))
+    fields = reader.get_fields() or {}
+    desc = form_fill.load_descriptor("civ110")
+
+    def value_of(name):
+        mapped = desc["checkboxes"][name]["map"]
+        return str((fields.get(mapped) or {}).get("/V") or "")
+
+    assert value_of("fee_waiver_did_not") == "/2"
+    assert value_of("fee_waiver_did") == "", "sibling fee-waiver box unexpectedly checked"
+
+
+@pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
+def test_civ110_item2_role_and_identification_checkboxes_do_not_leak_to_item3(tmp_path):
+    """Regression pin for the reported bug this descriptor work was
+    built to catch: a human, previewing a real fill, found that
+    checking item 2's Plaintiff/Petitioner role box also appeared to
+    check item 3's identical-looking box. Verified empirically (see
+    civ110.yaml's agent_guide, 'Verified: item2 vs. item3
+    independence') that the two signature blocks' identification and
+    role checkboxes are genuinely independent AcroForm fields despite
+    the role group reusing an identical leaf field name
+    ('RB2Choice2[0/1/2]') across both blocks. This test fills ONE
+    block's checkboxes (using values chosen to be distinguishable from
+    the other block's, in case a future edit garbles which map goes
+    with which logical name) and asserts the untouched block's fields
+    remain completely unset, in both directions."""
+    out = tmp_path / "civ110_no_leak.pdf"
+    form_fill.fill("civ110", out, meta=dict(FIXTURE_META), data={
+        "item2_signer_is_party": True,
+        "item2_role_defendant_respondent": True,
+        "item3_signer_is_attorney": True,
+        "item3_role_cross_complainant": True,
+    })
+    reader = PdfReader(str(out))
+    fields = reader.get_fields() or {}
+    desc = form_fill.load_descriptor("civ110")
+
+    def value_of(name):
+        mapped = desc["checkboxes"][name]["map"]
+        return str((fields.get(mapped) or {}).get("/V") or "")
+
+    # The two checkboxes actually asked for, on each side, must land.
+    assert value_of("item2_signer_is_party") == "/2"
+    assert value_of("item2_role_defendant_respondent") == "/Yes"
+    assert value_of("item3_signer_is_attorney") == "/1"
+    assert value_of("item3_role_cross_complainant") == "/Yes"
+
+    # Every OTHER checkbox in both blocks -- including each block's own
+    # sibling options and, critically, the other block's copy of the
+    # SAME logical checkbox -- must still read empty. This is the
+    # cross-contamination check: item2_role_defendant_respondent must
+    # not have also set item3_role_defendant_respondent, and
+    # item3_signer_is_attorney must not have also set
+    # item2_signer_is_attorney.
+    must_stay_unset = [
+        "item2_signer_is_attorney", "item2_role_plaintiff_petitioner",
+        "item2_role_cross_complainant",
+        "item3_signer_is_party", "item3_role_plaintiff_petitioner",
+        "item3_role_defendant_respondent",
+    ]
+    leaks = [name for name in must_stay_unset if value_of(name)]
+    assert not leaks, f"cross-block or sibling bleed detected: {leaks}"
 
 
 @pytest.mark.skipif("mc050" not in FORMS, reason="mc050 descriptor not present")
