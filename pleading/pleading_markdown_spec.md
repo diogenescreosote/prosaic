@@ -1348,6 +1348,12 @@ Exhibit B    Screenshots of Text Messages with Jones
 
 If the list runs longer than one page, it continues onto additional pleading-formatted pages.
 
+Set `no_exhibit_list: true` in front matter to skip this index page entirely
+-- useful when a single exhibit is already identified by name in the body
+text and a whole page listing "Exhibit A: ..." is redundant. The exhibit
+tab sheet(s) and the attached exhibit(s) themselves are unaffected; only
+the standalone index page is suppressed.
+
 ### Exhibit tab sheets
 
 Before each exhibit attachment, the script inserts a separate tab sheet page.

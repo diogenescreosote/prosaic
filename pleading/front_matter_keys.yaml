@@ -77,6 +77,8 @@ exhibits:
   - exhibits
   - exhibit_label            # "Exhibit" vs "Attachment"
   - exhibit_source           # resolve \exhibit{} against another file's list
+  - no_exhibit_list          # skip the standalone "EXHIBIT LIST" index page;
+                             # tab sheets and the exhibits themselves still attach
 
 # Judicial Council forms and companion documents.
 forms:
