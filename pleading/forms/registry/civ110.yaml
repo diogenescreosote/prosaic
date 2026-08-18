@@ -3,10 +3,12 @@
 # LiveCycle (XFA) form with dotted hierarchical field names; the map
 # below uses the full qualified names, verified empirically against the
 # blank (ported from civ110_fill.py, whose FIELD constants carry the
-# same verification). The descriptor fills the caption only; every
-# dismissal-type/pleading-type choice, date, and signature is left for
-# the parties to complete by hand at signing — a CIV-110 for a
-# stipulated dismissal is signed by both sides.
+# same verification). The descriptor fills the caption, plus item
+# 1.a/1.b (the dismissal-type and pleading-type choice) when a human
+# has explicitly said which applies — never guessed or defaulted. Every
+# date and signature is still left for the parties to complete by hand
+# at signing — a CIV-110 for a stipulated dismissal is signed by both
+# sides.
 
 form: civ110
 title: Request for Dismissal
@@ -133,6 +135,35 @@ fields:
     doc: "Case number"
     auto: case_number
 
+  # -- Page 1, item 1.b: fill-ins paired with the pleading_type_*
+  # checkboxes above. Each defaults blank and is only set on explicit
+  # human instruction, alongside the checkbox it belongs to.
+  cross_complaint_1_date:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b3[0].FillText109[1]"
+    page: 1
+    doc: "Item 1.b(3) 'on (date):' — the first cross-complaint's filing date"
+    default: ""
+  cross_complaint_1_name:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b3[0].FillText109[0]"
+    page: 1
+    doc: "Item 1.b(3) 'by (name):' — who filed the first cross-complaint"
+    default: ""
+  cross_complaint_2_date:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b4[0].FillText109[0]"
+    page: 1
+    doc: "Item 1.b(4) 'on (date):' — the second cross-complaint's filing date"
+    default: ""
+  cross_complaint_2_name:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b4[0].FillText109[1]"
+    page: 1
+    doc: "Item 1.b(4) 'by (name):' — who filed the second cross-complaint"
+    default: ""
+  pleading_type_other_specify:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b6[0].FillText109[0]"
+    page: 1
+    doc: "Item 1.b(6) '(specify)*:' — free text next to pleading_type_other"
+    default: ""
+
   # -- Page 1: signature blocks (items 2 and 3) — hand-completed ----------
   item2_date:
     map: "CIV-110[0].Page1[0].List2[0].DateTimeField1[0]"
@@ -178,24 +209,91 @@ fields:
     doc: "Page-2 caption echo of the case number"
     auto: case_number
 
-checkboxes: {}
-# All of CIV-110's checkboxes and radio groups are deliberately
-# unmapped: item 1.a (with prejudice / without prejudice / § 664.6),
-# item 1.b (complaint / petition / cross-complaint / entire action /
-# other), the attorney-vs-party and plaintiff/defendant/cross-complainant
-# role boxes under each signature, the item 2 'did / did not' fee-waiver
-# boxes, and everything the clerk completes (items 4–7) or that belongs
-# to the page-2 fee-recovery declaration. The parties check the correct
-# boxes by hand at signing, like the dates and signatures.
+checkboxes:
+  # -- Item 1.a: what kind of dismissal (mutually exclusive triple; one
+  # XFA field name, "RB1Choices[0]", repeated under each option with a
+  # different on_value — a true exclGroup radio). This is the fact
+  # the filing party is stating, not a personal consent-in-progress
+  # (see mc050.yaml's party_role_* for the same distinction), so it is
+  # fillable on explicit human instruction, never guessed or defaulted.
+  dismissal_with_prejudice:
+    map: "CIV-110[0].Page1[0].List1[0].li1a[0].List1[0].li1a1[0].RB1Choices[0]"
+    on_value: "/1"
+    doc: "Item 1.a(1) — 'With prejudice'"
+  dismissal_without_prejudice:
+    map: "CIV-110[0].Page1[0].List1[0].li1a[0].List1[0].li1a2[0].RB1Choices[0]"
+    on_value: "/2"
+    doc: "Item 1.a(2) — 'Without prejudice'"
+  dismissal_without_prejudice_664_6:
+    map: "CIV-110[0].Page1[0].List1[0].li1a[0].List1[0].li1a3[0].RB1Choices[0]"
+    on_value: "/3"
+    doc: >-
+      Item 1.a(3) — 'Without prejudice and with the court retaining
+      jurisdiction (Code of Civil Procedure Section 664.6)'
+
+  # -- Item 1.b: what is being dismissed. The printed form has SIX
+  # options, not the four a title alone would suggest, and they are NOT
+  # all one radio group at the widget level: (1) Complaint and (2)
+  # Petition are each their own field name (RB3Choices1 / RB3Choices2);
+  # (3) and (4) are two independent "Cross-complaint filed" checkboxes
+  # (on_value "/Yes", not "/1" — verified, not assumed, per
+  # docs/forms.md's field-names-lie warning), each with its own
+  # on (date)/by (name) pair, because a case can have more than one
+  # cross-complaint; (5) Entire action and (6) Other share one field
+  # name (RB2Choices) and so ARE a true radio pair. In practice one
+  # option is checked (the thing being dismissed), except that a
+  # cross-complaint checkbox may accompany another selection when both
+  # a pleading and its cross-complaint are dismissed together — see
+  # agent_guide.
+  pleading_type_complaint:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b1[0].RB3Choices1[0]"
+    on_value: "/1"
+    doc: "Item 1.b(1) — 'Complaint'"
+  pleading_type_petition:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b2[0].RB3Choices2[0]"
+    on_value: "/2"
+    doc: "Item 1.b(2) — 'Petition'"
+  pleading_type_cross_complaint_1:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b3[0].Cross-complaint[0]"
+    on_value: "/Yes"
+    doc: >-
+      Item 1.b(3) — 'Cross-complaint filed on (date): ___ by (name):
+      ___' — the first of two cross-complaint slots. Pair with
+      cross_complaint_1_date / cross_complaint_1_name.
+  pleading_type_cross_complaint_2:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b4[0].Cross-complaint[0]"
+    on_value: "/Yes"
+    doc: >-
+      Item 1.b(4) — 'Cross-complaint filed on (date): ___ by (name):
+      ___' — the second of two cross-complaint slots, for a case with
+      more than one cross-complaint. Pair with cross_complaint_2_date /
+      cross_complaint_2_name.
+  pleading_type_entire_action:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b5[0].RB2Choices[0]"
+    on_value: "/1"
+    doc: "Item 1.b(5) — 'Entire action of all parties and all causes of action'"
+  pleading_type_other:
+    map: "CIV-110[0].Page1[0].List1[0].LI1b[0].li1b[0].li1b6[0].RB2Choices[0]"
+    on_value: "/2"
+    doc: "Item 1.b(6) — 'Other (specify)*:' — pair with pleading_type_other_specify"
+
+# All remaining checkboxes and radio groups stay deliberately unmapped:
+# the attorney-vs-party and plaintiff/defendant/cross-complainant role
+# boxes under each signature, the item 2 'did / did not' fee-waiver
+# boxes, and everything the clerk completes (items 4-7) or that belongs
+# to the page-2 fee-recovery declaration. Those represent a personal
+# act (a signer's own consent or role) or the clerk's own action, never
+# a fact the filing party states, and the parties/clerk check them by
+# hand, like the dates and signatures.
 
 agent_guide: |
   CIV-110 is the Request for Dismissal used in California civil
   practice. prosaic's usual pattern: a stipulated dismissal — the
   CIV-110 is prepended as a cover to a Stipulation for Dismissal (and
-  any [Proposed] Order), with the dismissal-type/pleading-type boxes
-  checked and both sides' dates and signatures added BY HAND at
-  signing. Invoke via `cover_sheet: civ110` in a pleading source's
-  front matter, or fill directly.
+  any [Proposed] Order), with item 1.a/1.b checked, both sides' dates
+  and signatures added BY HAND at signing. Invoke via
+  `cover_sheet: civ110` in a pleading source's front matter, or fill
+  directly.
 
   The standard caption front matter (filer_*, court_*, petitioner,
   respondent, case_number) resolves the caption automatically on both
@@ -213,8 +311,40 @@ agent_guide: |
           filer_firm: "Firm LLP"
           attorney_name: "Sally Sattler"   # override the (SBN …) auto
 
-  ALWAYS left blank for hand completion: the item 1.a and 1.b choice
-  boxes, dates, signatures, printed names (item2_/item3_* fields
-  default to blank but accept a typed name via the forms block), the
-  role checkboxes, items 4–7 (clerk's use only), and all of page 2
-  (court-fee declaration). Do not fill them.
+  Item 1.a/1.b ARE fillable, but only on an explicit human instruction
+  about which option applies — never guessed, inferred, or defaulted
+  by the tool. This is the same line MC-050 draws around its item-3
+  role checkboxes: a fact/decision the filing party states belongs in
+  the descriptor; a personal act in progress (a signature, a consent)
+  does not. Set the one dismissal-type box (item 1.a) and the one (or,
+  for a case with more than one cross-complaint, more than one)
+  pleading-type box (item 1.b) the human named:
+
+      forms:
+        civ110:
+          dismissal_with_prejudice: true       # or _without_prejudice /
+                                                # _without_prejudice_664_6
+          pleading_type_entire_action: true    # or _complaint / _petition /
+                                                # _cross_complaint_1 (+ _2) /
+                                                # _other (+ pleading_type_other_specify)
+          # cross_complaint_1_date / cross_complaint_1_name (and the
+          # _2 pair) accompany a checked pleading_type_cross_complaint_N
+
+  Item 1.b has six printed options, not four: (1) Complaint,
+  (2) Petition, (3)/(4) two independent "Cross-complaint filed on
+  (date): ___ by (name): ___" slots (a case can have more than one
+  cross-complaint), (5) Entire action, (6) Other (specify). In the
+  ordinary one-thing-being-dismissed case, exactly one item 1.a box
+  and one item 1.b box are checked; a cross-complaint slot may
+  additionally be checked alongside another item 1.b box when both a
+  pleading and its cross-complaint are being dismissed together —
+  never set one without the human having said so.
+
+  ALWAYS left blank for hand completion, still: dates, signatures,
+  printed names (item2_/item3_* fields default to blank but accept a
+  typed name via the forms block), the attorney-vs-party and
+  plaintiff/defendant/cross-complainant role checkboxes under each
+  signature, the item 2 fee-waiver "did / did not" boxes, items 4–7
+  (clerk's use only), and all of page 2 (court-fee declaration). Do
+  not fill them — those represent a signer's own consent or the
+  clerk's own action, never a fact the filing party states.

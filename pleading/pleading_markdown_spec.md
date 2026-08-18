@@ -391,11 +391,14 @@ the YAML front matter. At build time, the generator:
 The cache is regenerated automatically whenever the source `.md` or
 the bundled blank form is newer than the cache.
 
-The filled CIV-110 leaves the body checkboxes (dismissal type at item
-1.a, pleading type at item 1.b, fee-waiver at item 2), the date fields,
-and all signature lines blank, so the parties can complete them by hand
-at signing. The caption section (attorney/filer block, court county,
-parties, case number) is pre-filled on both pages.
+The filled CIV-110 fills item 1.a (dismissal type) and item 1.b
+(pleading type) only when the front matter names one explicitly (see
+`sc form info civ110`'s `dismissal_with_prejudice` /
+`pleading_type_entire_action` / etc. checkboxes) — never guessed or
+defaulted. The fee-waiver checkboxes at item 2, the date fields, and
+all signature lines stay blank, so the parties can complete them by
+hand at signing. The caption section (attorney/filer block, court
+county, parties, case number) is pre-filled on both pages.
 
 Additional YAML keys supported by `cover_sheet: civ110`:
 

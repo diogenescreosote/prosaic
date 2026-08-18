@@ -198,6 +198,87 @@ def test_unknown_data_key_is_reported(tmp_path):
     assert any("unknown field" in w for w in res.warnings)
 
 
+@pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
+def test_civ110_dismissal_and_pleading_type_checkboxes_render_checked(tmp_path):
+    """Item 1.a/1.b are fillable when a human names the choice
+    explicitly (specs/pleading/forms/civ110.md, promise 2). Check one
+    dismissal-type box and one pleading-type box (plus its paired
+    cross-complaint date/name fields) and confirm each lands on its
+    OWN mapped widget, not a neighboring option in the same group."""
+    out = tmp_path / "civ110_checked.pdf"
+    form_fill.fill("civ110", out, meta=dict(FIXTURE_META), data={
+        "dismissal_with_prejudice": True,
+        "pleading_type_cross_complaint_1": True,
+        "cross_complaint_1_date": "1/1/2026",
+        "cross_complaint_1_name": "JOHN SMITH",
+    })
+
+    reader = PdfReader(str(out))
+    fields = reader.get_fields() or {}
+    desc = form_fill.load_descriptor("civ110")
+
+    def value_of(logical_name, section="checkboxes"):
+        mapped = desc[section][logical_name]["map"]
+        return str((fields.get(mapped) or {}).get("/V") or "")
+
+    assert value_of("dismissal_with_prejudice") == "/1"
+    assert value_of("pleading_type_cross_complaint_1") == "/Yes"
+    assert value_of("cross_complaint_1_date", "fields") == "1/1/2026"
+    assert value_of("cross_complaint_1_name", "fields") == "JOHN SMITH"
+
+    # Negative control: the sibling options in each group must stay
+    # unchecked, proving the fill landed on its own widget rather than
+    # the whole exclGroup/checkbox family.
+    for sibling in ("dismissal_without_prejudice",
+                    "dismissal_without_prejudice_664_6",
+                    "pleading_type_complaint", "pleading_type_petition",
+                    "pleading_type_cross_complaint_2",
+                    "pleading_type_entire_action", "pleading_type_other"):
+        assert value_of(sibling) == "", f"{sibling} unexpectedly checked"
+    assert value_of("cross_complaint_2_date", "fields") == ""
+    assert value_of("cross_complaint_2_name", "fields") == ""
+
+
+@pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
+def test_civ110_dismissal_checkboxes_default_unchecked_on_a_rich_fill(tmp_path):
+    """Mirrors the mandatory-blanks-survive-a-rich-fill pattern used for
+    civ110's items 2/3 and mc050's items 4-6: filling every caption
+    field, with NO item 1.a/1.b instruction, must leave every new
+    checkbox and its paired text field unchecked/blank by default."""
+    out = tmp_path / "civ110_no_checkboxes.pdf"
+    form_fill.fill("civ110", out, meta=dict(FIXTURE_META))
+
+    reader = PdfReader(str(out))
+    fields = reader.get_fields() or {}
+    desc = form_fill.load_descriptor("civ110")
+
+    checkbox_names = [
+        "dismissal_with_prejudice", "dismissal_without_prejudice",
+        "dismissal_without_prejudice_664_6", "pleading_type_complaint",
+        "pleading_type_petition", "pleading_type_cross_complaint_1",
+        "pleading_type_cross_complaint_2", "pleading_type_entire_action",
+        "pleading_type_other",
+    ]
+    leaks = []
+    for name in checkbox_names:
+        mapped = desc["checkboxes"][name]["map"]
+        v = (fields.get(mapped) or {}).get("/V")
+        if v:
+            leaks.append(f"{name} -> {mapped} = {v!r}")
+    assert not leaks, f"machine checked a box without human instruction: {leaks}"
+
+    text_names = ["cross_complaint_1_date", "cross_complaint_1_name",
+                  "cross_complaint_2_date", "cross_complaint_2_name",
+                  "pleading_type_other_specify"]
+    leaks = []
+    for name in text_names:
+        mapped = desc["fields"][name]["map"]
+        v = str((fields.get(mapped) or {}).get("/V") or "")
+        if v.strip():
+            leaks.append(f"{name} -> {mapped} = {v!r}")
+    assert not leaks, f"machine filled a fill-in without human instruction: {leaks}"
+
+
 @pytest.mark.skipif("mc050" not in FORMS, reason="mc050 descriptor not present")
 def test_mc050_consent_and_service_fields_stay_blank(tmp_path):
     """A rich fill of every substantive MC-050 field (who's substituting,
