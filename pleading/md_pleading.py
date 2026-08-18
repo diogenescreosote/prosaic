@@ -4524,7 +4524,7 @@ def main() -> None:
             pleading.build()
 
             exhibit_list_pdf: Optional[Path] = None
-            if exhibits:
+            if exhibits and not meta.get("no_exhibit_list"):
                 exhibit_list_pdf = temp_dir / "exhibit_list.pdf"
                 list_title = f"{attachment_label} List"
                 LineGridPDF(str(exhibit_list_pdf), footer_title=list_title,
