@@ -177,6 +177,42 @@ def test_smoke_fill(form_id, tmp_path):
         assert "24CV00000" in values, f"{form_id}: case number not present in field values"
 
 
+@pytest.mark.parametrize("form_id", FORMS)
+def test_blank_default_fields_are_never_set_as_empty_string(form_id, tmp_path, monkeypatch):
+    """A field left at its default "" must never reach pypdf as an
+    explicit empty-string value via ``update_page_form_field_values``.
+
+    Caught by hand, filling a real CIV-110: pypdf's generated appearance
+    stream for an explicitly-set empty text value computes a vertical
+    text position that lands a few ULPs off zero (e.g.
+    "7.105427357601002e-15") and writes it in Python's scientific
+    notation, which is not a valid PDF real number token -- the
+    resulting `Td` operator is unparseable garbage to a strict reader
+    (poppler included), even though the field is invisible either way.
+    Reproducing the exact float-precision coincidence needs specific
+    field geometry that fictional fixture data doesn't reliably hit, so
+    this asserts the actual invariant the fix establishes -- an empty
+    string is never handed to pypdf as a value to set -- rather than
+    chasing the byte pattern it happens to produce.
+    """
+    from pypdf import PdfWriter
+
+    calls = []
+    original = PdfWriter.update_page_form_field_values
+
+    def recording(self, page, values, *args, **kwargs):
+        calls.append(dict(values))
+        return original(self, page, values, *args, **kwargs)
+
+    monkeypatch.setattr(PdfWriter, "update_page_form_field_values", recording)
+
+    out = tmp_path / f"{form_id}.pdf"
+    form_fill.fill(form_id, out, meta=dict(FIXTURE_META))
+
+    empties = [name for call in calls for name, v in call.items() if v == ""]
+    assert not empties, f"{form_id}: empty-string value(s) set explicitly: {empties}"
+
+
 @pytest.mark.skipif("mc025" not in FORMS, reason="mc025 descriptor not present")
 def test_overflow_spills_to_mc025(tmp_path):
     out = tmp_path / "mc030_overflow.pdf"

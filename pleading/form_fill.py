@@ -505,7 +505,16 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
                 value, fitted = _handle_overflow(name, spec, value, rect, result)
             if wobj is not None:
                 _apply_font_size(wobj, fitted.font_size)
-        acro_values_by_page.setdefault(page_idx, {})[qualified] = value
+        if value:
+            # Never hand pypdf an empty string to set explicitly: its
+            # generated appearance stream for a zero-length value computes
+            # a vertical text position that lands a few ULPs off zero
+            # (e.g. "7.105427357601002e-15") and writes it in scientific
+            # notation, which is not a valid PDF real number token --
+            # strict readers choke on the resulting `Td` operator. A blank
+            # field left unset renders correctly anyway (NeedAppearances
+            # is set below), so there is nothing to gain by setting "".
+            acro_values_by_page.setdefault(page_idx, {})[qualified] = value
 
     # Overflow-linked checkboxes: a field spec may declare
     # ``overflow_checkbox`` (checked iff the value spilled to an
