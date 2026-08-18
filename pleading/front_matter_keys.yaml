@@ -84,6 +84,11 @@ forms:
   - cover_sheet_only         # the filled cover_sheet form IS the whole output; no body page
   - forms                    # per-form field block, keyed by form id
   - consumer_notices         # SUBP-025 recipients, one notice each
+  - efs020_party_name        # cover_sheet: efs020 -- overrides item 1 (default: filer_name)
+  - efs020_title             # cover_sheet: efs020 -- overrides item 2 (default: paper_title)
+  - efs020_proceeding_description  # cover_sheet: efs020 -- item 3.a
+  - efs020_proceeding_datetime      # cover_sheet: efs020 -- item 3.b
+  - efs020_proceeding_place         # cover_sheet: efs020 -- item 3.c
 
 service:
   - proof_of_service
