@@ -4,11 +4,23 @@
 # below uses the full qualified names, verified empirically against the
 # blank (ported from civ110_fill.py, whose FIELD constants carry the
 # same verification). The descriptor fills the caption, plus item
-# 1.a/1.b (the dismissal-type and pleading-type choice) when a human
-# has explicitly said which applies — never guessed or defaulted. Every
+# 1.a/1.b (the dismissal-type and pleading-type choice), item 2's
+# fee-waiver fact, and the identification/role checkboxes under each
+# of the two signature blocks — every one of these only when a human
+# has explicitly said which applies, never guessed or defaulted. Every
 # date and signature is still left for the parties to complete by hand
 # at signing — a CIV-110 for a stipulated dismissal is signed by both
 # sides.
+#
+# The two signature blocks (item 2 and item 3) repeat an identical-
+# looking identification pair and role group, and the role group even
+# reuses one leaf field name ("RB2Choice2[0/1/2]") across both blocks —
+# exactly the kind of thing that has turned out to be a shared/aliased
+# widget on other JC forms. Verified empirically 2026-08-18 that these
+# are NOT shared here (distinct AcroForm objects and distinct XFA data
+# nodes; a same-fill rasterized check showed zero cross-block bleed) —
+# see agent_guide's "Verified: item2 vs. item3 independence" for the
+# full account before changing how either block is mapped.
 
 form: civ110
 title: Request for Dismissal
@@ -277,14 +289,107 @@ checkboxes:
     on_value: "/2"
     doc: "Item 1.b(6) — 'Other (specify)*:' — pair with pleading_type_other_specify"
 
-# All remaining checkboxes and radio groups stay deliberately unmapped:
-# the attorney-vs-party and plaintiff/defendant/cross-complainant role
-# boxes under each signature, the item 2 'did / did not' fee-waiver
-# boxes, and everything the clerk completes (items 4-7) or that belongs
-# to the page-2 fee-recovery declaration. Those represent a personal
-# act (a signer's own consent or role) or the clerk's own action, never
-# a fact the filing party states, and the parties/clerk check them by
-# hand, like the dates and signatures.
+  # -- Item 2: the fee-waiver fact. The form's own parenthetical says
+  # "This information may be obtained from the clerk" — it is a fact
+  # about the case file, not something to infer from anything else in
+  # the pleading, so treat it exactly like item 1.a/1.b: fillable only
+  # on an explicit human instruction that the clerk was actually asked.
+  fee_waiver_did:
+    map: "CIV-110[0].Page1[0].List2[0].CheckBox2D[0]"
+    on_value: "/1"
+    doc: >-
+      Item 2 — 'The court [X] did ... waive court fees and costs for a
+      party in this case.' Only set when a human has confirmed this
+      with the clerk, per the form's own instruction — never inferred
+      from case posture. If checked, the fee-recovery declaration on
+      page 2 must also be completed (see agent_guide); this descriptor
+      does not fill page 2.
+  fee_waiver_did_not:
+    map: "CIV-110[0].Page1[0].List2[0].CheckBox2D[1]"
+    on_value: "/2"
+    doc: >-
+      Item 2 — 'The court did [X] did not waive court fees and costs
+      for a party in this case.' Same fact-check requirement as
+      fee_waiver_did.
+
+  # -- Item 2 and item 3 signature blocks: the identification pair
+  # ("(TYPE OR PRINT NAME OF [ ] ATTORNEY [ ] PARTY WITHOUT ATTORNEY)")
+  # and the role group ("Attorney or party without attorney for:
+  # [ ] Plaintiff/Petitioner [ ] Defendant/Respondent
+  # [ ] Cross-Complainant") each appear ONCE per signature block, twice
+  # on the page total. VERIFIED EMPIRICALLY 2026-08-18 that item2's and
+  # item3's copies are genuinely independent AcroForm fields, not one
+  # shared widget — see agent_guide's "Verified: item2 vs. item3
+  # independence" section for the full account. Short version: despite
+  # the ROLE group reusing the identical leaf name "RB2Choice2[0/1/2]"
+  # in both blocks (unlike the identification pair, which the form
+  # gives distinct names CheckBox2A / CheckBox3A), every check — object
+  # number, /Parent object, XFA data-binding node, and a rasterized
+  # fill of one block with the other left alone — showed the two
+  # blocks do not share state. Mapped normally; no overlay needed.
+  # Item 2's identification checkboxes pair with item2_print_name
+  # (already mapped, above); item 3's pair with item3_print_name.
+  item2_signer_is_attorney:
+    map: "CIV-110[0].Page1[0].List2[0].CheckBox2A[0]"
+    on_value: "/1"
+    doc: "Item 2 signature block — '(TYPE OR PRINT NAME OF [X] ATTORNEY ...)'"
+  item2_signer_is_party:
+    map: "CIV-110[0].Page1[0].List2[0].CheckBox2A[1]"
+    on_value: "/2"
+    doc: "Item 2 signature block — '(TYPE OR PRINT NAME OF ... [X] PARTY WITHOUT ATTORNEY)'"
+  item2_role_plaintiff_petitioner:
+    map: "CIV-110[0].Page1[0].List2[0].RB2Choice2[0]"
+    on_value: "/Yes"
+    doc: >-
+      Item 2 signature block — 'Attorney or party without attorney for
+      [X] Plaintiff/Petitioner'. The form prints Plaintiff/Petitioner
+      as ONE combined checkbox (not separate Plaintiff and Petitioner
+      boxes) — verified against the rasterized blank.
+  item2_role_defendant_respondent:
+    map: "CIV-110[0].Page1[0].List2[0].RB2Choice2[1]"
+    on_value: "/Yes"
+    doc: >-
+      Item 2 signature block — '... for [X] Defendant/Respondent' —
+      also one combined checkbox, same as plaintiff/petitioner.
+  item2_role_cross_complainant:
+    map: "CIV-110[0].Page1[0].List2[0].RB2Choice2[2]"
+    on_value: "/Yes"
+    doc: "Item 2 signature block — '... for [X] Cross-Complainant'"
+  item3_signer_is_attorney:
+    map: "CIV-110[0].Page1[0].Item3[0].CheckBox3A[1]"
+    on_value: "/1"
+    doc: >-
+      Item 3 signature block — '(TYPE OR PRINT NAME OF [X] ATTORNEY
+      ...)'. NOTE the on_value/widget-index pairing flips relative to
+      item2_signer_is_attorney (CheckBox3A[1], not [0]) — verified by
+      filling this exact map and rasterizing; do not assume the [0]/[1]
+      order mirrors item 2's.
+  item3_signer_is_party:
+    map: "CIV-110[0].Page1[0].Item3[0].CheckBox3A[0]"
+    on_value: "/2"
+    doc: >-
+      Item 3 signature block — '(TYPE OR PRINT NAME OF ... [X] PARTY
+      WITHOUT ATTORNEY)'. See item3_signer_is_attorney's note on index
+      order.
+  item3_role_plaintiff_petitioner:
+    map: "CIV-110[0].Page1[0].Item3[0].RB2Choice2[0]"
+    on_value: "/Yes"
+    doc: "Item 3 signature block — 'Attorney or party without attorney for [X] Plaintiff/Petitioner'"
+  item3_role_defendant_respondent:
+    map: "CIV-110[0].Page1[0].Item3[0].RB2Choice2[1]"
+    on_value: "/Yes"
+    doc: "Item 3 signature block — '... for [X] Defendant/Respondent'"
+  item3_role_cross_complainant:
+    map: "CIV-110[0].Page1[0].Item3[0].RB2Choice2[2]"
+    on_value: "/Yes"
+    doc: "Item 3 signature block — '... for [X] Cross-Complainant'"
+
+# Everything else stays deliberately unmapped: everything the clerk
+# completes (items 4-7) and the whole page-2 fee-recovery declaration.
+# Those represent the clerk's own action or a further fact tied to a
+# fee waiver already flagged for human review (fee_waiver_did), never
+# a fact the filing party states going in, and the clerk/parties
+# complete them by hand, like the dates and signatures.
 
 agent_guide: |
   CIV-110 is the Request for Dismissal used in California civil
@@ -342,9 +447,67 @@ agent_guide: |
 
   ALWAYS left blank for hand completion, still: dates, signatures,
   printed names (item2_/item3_* fields default to blank but accept a
-  typed name via the forms block), the attorney-vs-party and
-  plaintiff/defendant/cross-complainant role checkboxes under each
-  signature, the item 2 fee-waiver "did / did not" boxes, items 4–7
-  (clerk's use only), and all of page 2 (court-fee declaration). Do
-  not fill them — those represent a signer's own consent or the
-  clerk's own action, never a fact the filing party states.
+  typed name via the forms block), items 4-7 (clerk's use only), and
+  all of page 2 except the fee-waiver's own follow-through (court-fee
+  declaration). Do not fill them — those represent the clerk's own
+  action, never a fact the filing party states.
+
+  Item 2's fee-waiver fact (`fee_waiver_did` / `fee_waiver_did_not`)
+  and the identification/role checkboxes under EACH signature block
+  ARE now fillable, on the same "explicit human instruction only"
+  basis as item 1.a/1.b — see "Verified: item2 vs. item3 independence"
+  below for why this is safe. The fee waiver in particular is a fact
+  about the case file the form's own parenthetical says to get from
+  the clerk ("This information may be obtained from the clerk.") —
+  never infer it from the parties' apparent means, and never set it
+  without a human confirming they actually asked. If fee_waiver_did is
+  set, the page-2 fee-recovery declaration must also be completed by a
+  human; this descriptor has no page-2 wiring for it.
+
+  Each signature block has its own identification pair (attorney vs.
+  party without attorney) and role group (Plaintiff/Petitioner /
+  Defendant/Respondent / Cross-Complainant, each ONE combined checkbox
+  per role, not split further):
+
+      forms:
+        civ110:
+          fee_waiver_did_not: true             # or fee_waiver_did
+          item2_signer_is_party: true           # or item2_signer_is_attorney
+          item2_role_plaintiff_petitioner: true # or _defendant_respondent /
+                                                 # _cross_complainant
+          # item3_* mirror the same three names for the SECOND block —
+          # completely independent of item2_*; set only the block(s) a
+          # human actually asked for.
+
+  Verified: item2 vs. item3 independence (the reported collision that
+  drove this section). A prior report claimed that checking the
+  Plaintiff/Petitioner role box for item 2's signature block also
+  showed item 3's identical-looking box checked in Acrobat — exactly
+  the kind of AcroForm/XFA field-reuse bug this project's descriptor
+  process exists to catch (docs/forms.md's "Field names lie" /
+  "Silent form revisions" rows). It was NOT waved off: verified
+  2026-08-18 by (1) walking the raw PDF object graph — item2's and
+  item3's identification and role checkboxes are twelve distinct
+  indirect objects with distinct /Parent objects (List2[0]'s parent
+  vs. Item3[0]'s parent are different dictionaries), so nothing is
+  shared at the AcroForm level; (2) inspecting the blank's XFA
+  `datasets` packet — item 2's role group binds under a `<List2>` data
+  node and item 3's under a separate `<Item3>` data node, each holding
+  its own three `<RB2Choice2>` children, so the XFA data DOM does not
+  merge them either; and (3) filling item2_role_defendant_respondent +
+  item2_signer_is_party + fee_waiver_did_not on ONE fill alongside
+  item3_signer_is_attorney + item3_role_cross_complainant on the SAME
+  fill, then rasterizing (`pdftoppm`) — every mark landed on its own
+  box, in both directions, with zero bleed into the sibling block.
+  Conclusion: despite the ROLE group's suspicious-looking identical
+  leaf name ("RB2Choice2[0/1/2]" under both List2[0] and Item3[0] —
+  unlike the identification pair, which the form itself disambiguates
+  as CheckBox2A vs. CheckBox3A), the two blocks are genuinely
+  independent once this project's XFA-strip + per-widget /V-and-/AS
+  fill (not a bulk name-based update) is used to fill them. No
+  `method: overlay` workaround was needed. A future filler should NOT
+  reintroduce risk here by switching to a name-based bulk-fill helper
+  that resolves widgets by bare/leaf name instead of the fully
+  qualified (parent-chain) name this descriptor's `map:` values use —
+  that is exactly the shortcut that would re-collapse item2 and item3
+  into one field.

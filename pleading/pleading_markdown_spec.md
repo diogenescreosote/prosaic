@@ -391,14 +391,19 @@ the YAML front matter. At build time, the generator:
 The cache is regenerated automatically whenever the source `.md` or
 the bundled blank form is newer than the cache.
 
-The filled CIV-110 fills item 1.a (dismissal type) and item 1.b
-(pleading type) only when the front matter names one explicitly (see
-`sc form info civ110`'s `dismissal_with_prejudice` /
-`pleading_type_entire_action` / etc. checkboxes) — never guessed or
-defaulted. The fee-waiver checkboxes at item 2, the date fields, and
-all signature lines stay blank, so the parties can complete them by
-hand at signing. The caption section (attorney/filer block, court
-county, parties, case number) is pre-filled on both pages.
+The filled CIV-110 fills item 1.a (dismissal type), item 1.b (pleading
+type), item 2's fee-waiver fact, and the identification/role
+checkboxes under each of the two signature blocks only when the front
+matter names them explicitly (see `sc form info civ110`'s
+`dismissal_with_prejudice` / `pleading_type_entire_action` /
+`fee_waiver_did` / `item2_role_plaintiff_petitioner` / etc.
+checkboxes) — never guessed or defaulted. The two signature blocks'
+checkboxes are independently addressable (`item2_*` vs. `item3_*`);
+setting one never sets its counterpart in the other block, verified
+empirically (civ110.yaml's agent_guide has the details). The date
+fields and all signature lines stay blank, so the parties can complete
+them by hand at signing. The caption section (attorney/filer block,
+court county, parties, case number) is pre-filled on both pages.
 
 Additional YAML keys supported by `cover_sheet: civ110`:
 
