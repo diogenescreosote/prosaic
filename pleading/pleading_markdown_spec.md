@@ -92,6 +92,9 @@ exhibits:
   - shortname: "jones_texts"
     title: "Screenshots of Text Messages with Jones"
     path: "exhibits/jones_texts.png"
+  - shortname: "proposed_subpoena"
+    title: "Form of Subpoena Authorized by This Stipulation"
+    path: "proposed_subpoena.md"      # another SOURCE, rendered and attached
 ---
 # INTRODUCTION
 
@@ -101,6 +104,20 @@ This brief cites \exhibit{whitfield_email} and also refers to \exhibit{jones_tex
 
 More text. See *Doe v. Roe* (2024) 100 Cal.App.5th 123, 130---a case directly on point.
 ```
+
+## Markdown exhibits
+
+An exhibit whose `path` ends in `.md` is itself a prosaic source: the
+build renders it through the same pipeline (cover sheets and all) and
+attaches the resulting PDF, so a stipulation can carry the instruments
+it authorizes without a hand-run second build pass. Bare `.md` names
+resolve **beside the referencing file** (they are sources, not
+`exhibits/` assets); non-`.md` names keep the `exhibits/`-directory
+convention. The child inherits the parent's variant and `--final`
+flag — so `--final` still refuses while the child carries its own
+`notreal:` marker, which is intended: a packet cannot be finalized
+around an exhibit its author still disclaims. Mutually-referential
+exhibits are a hard error naming the cycle, not an infinite regress.
 
 ## Inline body markup
 
