@@ -17,6 +17,7 @@ from __future__ import annotations
 
 import argparse
 import datetime
+import hashlib
 import io
 import json
 import math
@@ -1172,6 +1173,97 @@ def _derive_public_redacted_path(path: Path) -> Path:
     return path.with_name(f"{path.name}_redacted")
 
 
+# ---------------------------------------------------------------------------
+# Markdown exhibits: an exhibit may be another source file, rendered in place
+# ---------------------------------------------------------------------------
+#
+# An exhibit whose `path` ends in .md is itself a prosaic source: it is
+# rendered through this same pipeline and the resulting PDF is attached,
+# so a stipulation can carry the subpoenas it authorizes without a
+# hand-run second build pass. The child build inherits the parent's
+# variant and --final flag; --final therefore still refuses while the
+# child carries its own `notreal:` marker, which is the intended
+# behavior — a packet cannot be finalized around an exhibit its author
+# still disclaims.
+#
+# Mutually-referential exhibits would recurse forever, so every render
+# carries its ancestry in PROSAIC_EXHIBIT_RENDER_STACK (os.pathsep-
+# joined resolved paths) and a document appearing twice in its own
+# chain is a hard error naming the cycle.
+
+_EXHIBIT_STACK_ENV = "PROSAIC_EXHIBIT_RENDER_STACK"
+_CURRENT_DOC_PATH: Optional[Path] = None
+
+
+def _exhibit_render_chain() -> List[str]:
+    """Ancestor documents of the current render, oldest first,
+    including the document currently being built (if known)."""
+    chain = [s for s in os.environ.get(_EXHIBIT_STACK_ENV, "").split(os.pathsep) if s]
+    if _CURRENT_DOC_PATH is not None:
+        me = str(_CURRENT_DOC_PATH)
+        if me not in chain:
+            chain.append(me)
+    return chain
+
+
+def _render_markdown_exhibit(md_path: Path, variant: str, parent_meta: Dict) -> Path:
+    """Render another markdown source to PDF for attachment as an exhibit.
+
+    Runs in a subprocess so the child gets the full pipeline (cover
+    sheets included) without this process's document state. Always
+    rebuilds: an exhibit may have its own exhibits and form
+    dependencies, and a stale cached PDF inside a fresh parent is the
+    kind of defect nobody sees until it is served.
+    """
+    md_path = md_path.resolve()
+    chain = _exhibit_render_chain()
+    if str(md_path) in chain:
+        names = [Path(c).name for c in chain] + [md_path.name]
+        raise ValueError(
+            "markdown-exhibit cycle: " + " -> ".join(names)
+            + " — a document cannot (directly or transitively) attach itself as an exhibit"
+        )
+    out_dir = Path(tempfile.gettempdir()) / "prosaic_exhibit_builds"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    digest = hashlib.sha1(
+        f"{md_path}|{variant}|{'final' if parent_meta.get('_final') else 'draft'}".encode()
+    ).hexdigest()[:12]
+    out_pdf = out_dir / f"{md_path.stem}.{digest}.pdf"
+    cmd = [sys.executable, str(Path(__file__).resolve()), str(md_path), str(out_pdf),
+           "--variant", variant]
+    if parent_meta.get("_final"):
+        cmd.append("--final")
+    env = dict(os.environ)
+    env[_EXHIBIT_STACK_ENV] = os.pathsep.join(chain)
+    result = subprocess.run(cmd, env=env, capture_output=True, text=True)
+    if result.stderr:
+        sys.stderr.write(result.stderr)
+    if result.returncode != 0:
+        tail = (result.stdout or "").strip().splitlines()[-3:]
+        raise ValueError(
+            f"failed to render markdown exhibit {md_path.name}"
+            + (": " + " / ".join(tail) if tail else "")
+        )
+    print(f"    rendered markdown exhibit {md_path.name}", file=sys.stderr, flush=True)
+    return out_pdf
+
+
+def _resolve_markdown_exhibit_path(path_str: str, base_dir: Path) -> Path:
+    """Resolve a .md exhibit path.
+
+    Markdown exhibits are sources, so a bare name resolves beside the
+    referencing file (its src/ directory) first, falling back to the
+    conventional exhibits/ directory only if nothing is there.
+    """
+    path = Path(path_str)
+    if path.is_absolute():
+        return path
+    beside = (base_dir / path).resolve()
+    if beside.exists() or path.parent != Path("."):
+        return beside
+    return (base_dir.parent / "exhibits" / path).resolve()
+
+
 def _resolve_exhibit_path(path_str: str, base_dir: Path) -> Path:
     """Resolve an exhibit path.
 
@@ -1271,7 +1363,8 @@ def _resolve_public_disclosure(raw_item: Dict, item_resolved: Dict, variant: str
     return "full"
 
 
-def _parse_exhibits(meta: Dict, base_dir: Path, variant: str) -> List[Exhibit]:
+def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
+                    render_md: bool = True) -> List[Exhibit]:
     """Parse the 'exhibits' list from YAML metadata into Exhibit objects.
 
     Shared by validate_meta (for the current file) and load_external_exhibits
@@ -1316,24 +1409,33 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str) -> List[Exhibit]:
         else:
             if "path" not in item_resolved or not isinstance(item_resolved["path"], str) or not item_resolved["path"].strip():
                 raise ValueError(f"exhibits[{idx}] missing required string field: path")
-            path = _resolve_exhibit_path(item_resolved["path"], base_dir)
-            if (
-                variant == "public"
-                and public_disclosure == "redacted"
-                and not raw_has_variant_path
-            ):
-                path = _derive_public_redacted_path(path)
-            ext = path.suffix.lower()
-            if ext not in SUPPORTED_EXHIBIT_EXTS:
-                raise ValueError(f"Unsupported exhibit type for {shortname}: {path.suffix}")
-            if not path.exists():
-                raise ValueError(f"Exhibit file not found for {shortname}: {path}")
+            raw_path = item_resolved["path"]
+            if raw_path.strip().lower().endswith(".md"):
+                path = _resolve_markdown_exhibit_path(raw_path, base_dir)
+                if not path.exists():
+                    raise ValueError(f"Markdown exhibit not found for {shortname}: {path}")
+                if render_md:
+                    path = _render_markdown_exhibit(path, variant, meta)
+            else:
+                path = _resolve_exhibit_path(raw_path, base_dir)
+                if (
+                    variant == "public"
+                    and public_disclosure == "redacted"
+                    and not raw_has_variant_path
+                ):
+                    path = _derive_public_redacted_path(path)
+                ext = path.suffix.lower()
+                if ext not in SUPPORTED_EXHIBIT_EXTS:
+                    raise ValueError(f"Unsupported exhibit type for {shortname}: {path.suffix}")
+                if not path.exists():
+                    raise ValueError(f"Exhibit file not found for {shortname}: {path}")
             exhibits.append(Exhibit(shortname=shortname, title=title,
                                     path=path, letter=alpha(idx), pages=pages_spec))
     return exhibits
 
 
-def validate_meta(meta: Dict, input_path: Path, variant: str) -> List[Exhibit]:
+def validate_meta(meta: Dict, input_path: Path, variant: str,
+                  render_md_exhibits: bool = True) -> List[Exhibit]:
     doctype = meta.get("doctype", "pleading")
     required = REQUIRED_FIELDS_BY_DOCTYPE.get(doctype)
     if required is None:
@@ -1351,7 +1453,8 @@ def validate_meta(meta: Dict, input_path: Path, variant: str) -> List[Exhibit]:
             isinstance(x, str) for x in meta["to_address_lines"]
         ):
             raise ValueError("to_address_lines must be a YAML list of strings")
-    exhibits = _parse_exhibits(meta, input_path.parent.resolve(), variant)
+    exhibits = _parse_exhibits(meta, input_path.parent.resolve(), variant,
+                               render_md=render_md_exhibits)
     if meta.get("cover_sheet_only") and exhibits:
         # cover_sheet_only skips building any body at all, and an
         # exhibit appendix has nothing to attach behind -- there is no
@@ -1375,7 +1478,8 @@ def load_external_exhibits(source_path: Path, variant: str) -> List[Exhibit]:
     with open(source_path, "r", encoding="utf-8") as f:
         raw = f.read()
     ext_meta, _ = parse_front_matter(raw)
-    return _parse_exhibits(ext_meta, source_path.parent.resolve(), variant)
+    return _parse_exhibits(ext_meta, source_path.parent.resolve(), variant,
+                           render_md=False)
 
 
 # ---------------------------------------------------------------------------
@@ -1492,7 +1596,8 @@ def emit_consumer_notices(meta: Dict, output_pdf: Path) -> List[Path]:
     return written
 
 
-def dependency_info(input_path: Path, requested_variant: Optional[str] = None) -> Dict:
+def dependency_info(input_path: Path, requested_variant: Optional[str] = None,
+                    _dep_seen: Optional[set] = None) -> Dict:
     """Build-dependency metadata for one source file.
 
     Importable API for build_envelope's staleness checks (replacing an
@@ -1506,9 +1611,20 @@ def dependency_info(input_path: Path, requested_variant: Optional[str] = None) -
     meta, body = parse_front_matter(raw)
     variant = effective_variant(meta, body, requested_variant)
     meta = apply_variant_to_meta(meta, variant)
-    exhibits = validate_meta(meta, input_path, variant)
+    exhibits = validate_meta(meta, input_path, variant, render_md_exhibits=False)
     deps = [str(input_path)]
     deps.extend(str(ex.path.resolve()) for ex in exhibits if ex.path is not None)
+    # A markdown exhibit's own dependencies are this document's too: a
+    # change inside the child must make the parent stale. Cycles are the
+    # build's error to raise; a staleness probe just refuses to loop.
+    if _dep_seen is None:
+        _dep_seen = set()
+    _dep_seen.add(str(input_path))
+    for ex in exhibits:
+        if ex.path is not None and ex.path.suffix.lower() == ".md" \
+                and str(ex.path.resolve()) not in _dep_seen:
+            child = dependency_info(ex.path, requested_variant, _dep_seen=_dep_seen)
+            deps.extend(d for d in child["deps"] if d not in deps)
     exhibit_source = meta.get("exhibit_source")
     return {
         "deps": deps,
@@ -4534,6 +4650,8 @@ def main() -> None:
 
     input_path = Path(args.input_md).resolve()
     output_path = Path(args.output_pdf).resolve()
+    global _CURRENT_DOC_PATH
+    _CURRENT_DOC_PATH = input_path
 
     with open(input_path, "r", encoding="utf-8") as f:
         raw = f.read()
