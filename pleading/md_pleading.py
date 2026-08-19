@@ -151,8 +151,10 @@ PAREN_X = CENTER_X - 36                           # x position for the ) column
 RIGHT_COL_X = PAREN_X + 18                        # right column text starts here
 RIGHT_COL_WIDTH = PAGE_WIDTH - RIGHT_MARGIN - RIGHT_COL_X
 LEFT_COL_WIDTH = PAREN_X - LEFT_MARGIN - 12       # party names column width
-ATTACH_MAX_W = 7.5 * 72
-ATTACH_MAX_H = 10 * 72
+# Exhibits attach at native size; only pages physically larger than letter
+# are scaled down (see scale_and_center_page). The old 7.5x10in inset box
+# is gone: it re-typeset other people's documents and broke statutes that
+# regulate typeface size (Civ. Code 56.11(c)).
 
 # --- Inline-rendering geometry (fractions of the font size unless noted) ---
 SUPERSCRIPT_SCALE = 0.72        # footnote-marker glyph size vs body size
@@ -4312,9 +4314,20 @@ def _transform_annotations(page: PageObject, scale: float, tx: float, ty: float)
 
 
 def scale_and_center_page(src_page: PageObject,
-                          max_w: float = ATTACH_MAX_W,
-                          max_h: float = ATTACH_MAX_H) -> PageObject:
-    """Scale a source page to fit within max_w x max_h, centered on a letter page.
+                          max_w: float = PAGE_WIDTH,
+                          max_h: float = PAGE_HEIGHT) -> PageObject:
+    """Center a source page on a letter page, scaling ONLY if it is larger.
+
+    Attached exhibits used to be shrunk into a 7.5 x 10 inch box so they
+    sat inside the pleading margins. That inset silently defeated any
+    statute that regulates an instrument's typeface: a CMIA
+    authorization rendered at the mandatory 14 points (Civ. Code
+    § 56.11(c)) attached at ~12.4 effective points and stopped
+    complying. An exhibit is someone else's document; a packet has no
+    business re-typesetting it. So a page that already fits on letter
+    attaches at native size, and scaling happens only when the source is
+    physically larger than letter (legal, A3, oversize scans), where the
+    alternative is cropping.
 
     Handles both content stream and annotation positions so that overlaid
     elements (redaction labels, form fields, etc.) stay aligned.
@@ -4344,10 +4357,14 @@ def scale_and_center_page(src_page: PageObject,
 
 
 def image_to_letter_pdf(image_path: Path, out_path: str) -> None:
+    # Images keep a 7.5 x 10 inch inset: a screenshot or photo has no
+    # typeface for a statute to regulate, and an inset image on a letter
+    # page reads as an exhibit rather than a full-bleed reproduction.
     img = Image.open(image_path)
     img.load()
     iw, ih = img.size
-    scale = min(ATTACH_MAX_W / iw, ATTACH_MAX_H / ih, 1.0)
+    image_max_w, image_max_h = 7.5 * 72, 10 * 72
+    scale = min(image_max_w / iw, image_max_h / ih, 1.0)
     draw_w = iw * scale
     draw_h = ih * scale
     x = (PAGE_WIDTH - draw_w) / 2
