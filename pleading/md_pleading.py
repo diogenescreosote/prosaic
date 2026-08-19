@@ -471,10 +471,14 @@ class StyledWord:
             return FONT_NAME_ITALIC
         return FONT_NAME
 
-    def effective_size(self, font_size: int = FONT_SIZE) -> float:
+    def effective_size(self, font_size: Optional[int] = None) -> float:
+        if font_size is None:
+            font_size = FONT_SIZE
         return font_size * SUPERSCRIPT_SCALE if self.superscript else font_size
 
-    def width(self, font_size: int = FONT_SIZE) -> float:
+    def width(self, font_size: Optional[int] = None) -> float:
+        if font_size is None:
+            font_size = FONT_SIZE
         return pdfmetrics.stringWidth(self.text, self.font_name(),
                                       self.effective_size(font_size))
 
@@ -839,7 +843,9 @@ def glue_clusters(words: List[StyledWord]) -> List[List[StyledWord]]:
     return clusters
 
 
-def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: int = FONT_SIZE) -> List[List[StyledWord]]:
+def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: Optional[int] = None) -> List[List[StyledWord]]:
+    if font_size is None:
+        font_size = FONT_SIZE
     if not words:
         return []
     lines: List[List[StyledWord]] = []
@@ -862,7 +868,9 @@ def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: int 
 
 
 def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWord],
-                      font_size: int = FONT_SIZE) -> List[Tuple[float, float, float, str]]:
+                      font_size: Optional[int] = None) -> List[Tuple[float, float, float, str]]:
+    if font_size is None:
+        font_size = FONT_SIZE
     """Draw words and return list of (x, width, y, link_dest) for any linked words.
 
     Underlined runs are drawn as a single continuous rule beneath the text
@@ -4677,6 +4685,17 @@ def main() -> None:
             flush=True,
         )
     meta = apply_variant_to_meta(meta, variant)
+    # body_font_size: per-document body point size. Exists for documents a
+    # statute obliges to be LARGER than house style -- Civ. Code § 56.11(c)
+    # voids a CMIA authorization "in a typeface no smaller than 14-point"
+    # unless handwritten. Bounded so a typo cannot render confetti or posters.
+    if meta.get("body_font_size") is not None:
+        global FONT_SIZE
+        size = int(meta["body_font_size"])
+        if not 8 <= size <= 18:
+            raise SystemExit(
+                f"{input_path.name}: body_font_size {size} out of range 8-18")
+        FONT_SIZE = size
     # A source cannot self-finalize: only the build flag clears the
     # default draft banner, and it does so per invocation.
     meta.pop("_final", None)

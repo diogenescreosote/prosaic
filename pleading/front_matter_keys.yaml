@@ -57,6 +57,7 @@ case:
 document:
   - doctype                  # pleading | letter | document
   - heading_numbers          # false: headings carry their own enumeration
+  - body_font_size           # per-document body pt size (8-18); Civ. Code 56.11(c) demands >=14 for CMIA authorizations
   - paper_title
   - paper_subtitle
   - short_title              # JC cover-sheet short title; never the footer
