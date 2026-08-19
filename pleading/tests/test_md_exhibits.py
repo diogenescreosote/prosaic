@@ -125,3 +125,46 @@ def test_dependency_info_survives_a_cycle_without_hanging(tmp_path):
     import md_pleading
     deps = md_pleading.dependency_info(tmp_path / "a.md")["deps"]
     assert str((tmp_path / "b.md").resolve()) in deps
+
+
+def test_letter_size_pdf_exhibit_attaches_at_native_size(tmp_path):
+    """The old 7.5x10in inset shrank every letter exhibit ~12%, which
+    silently defeated statutes that regulate an instrument's typeface
+    (Civ. Code 56.11(c): a CMIA authorization must be >= 14-point). A
+    letter page must attach unscaled.
+
+    Asserted on a --final build: a draft build's banner legitimately
+    reclaims its strip by scaling every page a few percent, and that
+    scaling disappears with the banner. The executed instrument is by
+    definition a final build, so final is where the statute's floor
+    must hold."""
+    child = write(tmp_path / "child.md", title="AUTHORIZATION",
+                  body="I authorize the disclosure of the described records information.",
+                  extra="body_font_size: 14\ndoctype: document\n")
+    # doctype document has different required fields; rebuild front matter minimally
+    child.write_text("""---
+doctype: document
+body_font_size: 14
+paper_title: "AUTHORIZATION"
+short_title: "Authorization"
+---
+I authorize the disclosure of the described records information.
+""")
+    parent = write(tmp_path / "parent.md", title="STIPULATION",
+                   body="Per the authorization attached as \\exhibit{auth}.",
+                   extra=exhibit_yaml("auth", "child.md"))
+    out = tmp_path / "parent.pdf"
+    result = subprocess.run(
+        [sys.executable, str(SCRIPT), str(parent), str(out), "--final"],
+        capture_output=True, text=True)
+    assert result.returncode == 0, result.stdout + result.stderr
+    import fitz
+    doc = fitz.open(out)
+    sizes = set()
+    for page in doc:
+        for block in page.get_text("dict")["blocks"]:
+            for line in block.get("lines", []):
+                for span in line["spans"]:
+                    if "authorize the disclosure" in span["text"]:
+                        sizes.add(round(span["size"], 1))
+    assert sizes == {14.0}, sizes
