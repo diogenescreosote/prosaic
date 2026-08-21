@@ -216,6 +216,13 @@ checkboxes:
     on_value: "/1"
     doc: "Item 3.b: persons served listed in an attachment (POS-050(P)/EFS-050(P))"
 
+# Static gray under-rectangle at the page foot where the privacy
+# banner's widget sat --- page content the flatten cannot remove;
+# painted over (same LiveCycle-era quirk as MC-040).
+whiteouts:
+  - page: 1
+    rect: [35, 2, 249, 27]
+
 agent_guide: |
   POS-050/EFS-050 proves ELECTRONIC service (Cal. Rules of Court, rule
   2.251; CCP § 1010.6). Critical difference from the mail-service
