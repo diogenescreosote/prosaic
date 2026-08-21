@@ -168,3 +168,21 @@ def test_esign_taxonomy_and_parties_are_validated(tmp_path):
         assert es["type"] in form_fill.ESIGN_TYPES, (name, es)
         assert es["party"] in desc["esign_parties"], (name, es)
 
+def test_module_repo_forms_are_discovered(tmp_path, monkeypatch):
+    """ADR-0034: a checkout under modules/<name>/ mirroring the repo
+    layout contributes descriptors and blanks, at lower precedence than
+    local/ and higher than the built-ins."""
+    import shutil
+
+    mod = tmp_path / "modules" / "example-forms" / "pleading" / "forms"
+    (mod / "registry").mkdir(parents=True)
+    desc = form_fill.load_descriptor("mc030")
+    src = form_fill._registry_path("mc030")
+    text = src.read_text().replace("form: mc030", "form: zz998")
+    (mod / "registry" / "zz998.yaml").write_text(text)
+    shutil.copy(form_fill.blank_path(desc), mod / desc["blank"])
+
+    monkeypatch.setattr(form_fill, "MODULES_DIR", tmp_path / "modules")
+    assert "zz998" in form_fill.list_forms()
+    loaded = form_fill.load_descriptor("zz998")
+    assert form_fill.blank_path(loaded).exists()

@@ -94,15 +94,37 @@ import jc_common
 PLEADING_DIR = Path(__file__).resolve().parent
 REPO_ROOT = PLEADING_DIR.parent
 # Local modules (ADR-0032): a gitignored local/ tree mirrors the repo
-# layout and overlays it. Descriptors and blanks are discovered across
-# both; on an id collision the LOCAL descriptor wins, so a deployment
-# can patch a stock form without editing the repo.
+# layout and overlays it. Module repos (ADR-0034): commit-pinned
+# checkouts (usually git submodules) under modules/<name>/, each
+# mirroring the repo layout, scanned in alphabetical order. Discovery
+# precedence, first hit wins: local/ → modules/<name>/ → built-in — so
+# a deployment can patch a stock or module form without editing either
+# repo.
 LOCAL_PLEADING_DIR = REPO_ROOT / "local" / "pleading"
-REGISTRY_DIRS = [d for d in (LOCAL_PLEADING_DIR / "forms" / "registry",
-                             PLEADING_DIR / "forms" / "registry") if d.is_dir()]
-BLANKS_DIRS = [d for d in (LOCAL_PLEADING_DIR / "forms",
-                           PLEADING_DIR / "forms") if d.is_dir()]
-# Back-compat names (first entry is the local overlay when present).
+MODULES_DIR = REPO_ROOT / "modules"
+
+
+def _overlay_dirs(*sub: str) -> list[Path]:
+    dirs = [LOCAL_PLEADING_DIR.joinpath(*sub)]
+    if MODULES_DIR.is_dir():
+        dirs += [m / "pleading" / Path(*sub)
+                 for m in sorted(MODULES_DIR.iterdir()) if m.is_dir()]
+    dirs.append(PLEADING_DIR.joinpath(*sub))
+    return [d for d in dirs if d.is_dir()]
+
+
+def registry_dirs() -> list[Path]:
+    return _overlay_dirs("forms", "registry")
+
+
+def blanks_dirs() -> list[Path]:
+    return _overlay_dirs("forms")
+
+
+# Back-compat names (snapshot at import; internal code calls the
+# functions so tests and long-lived processes see modules appear).
+REGISTRY_DIRS = registry_dirs()
+BLANKS_DIRS = blanks_dirs()
 REGISTRY_DIR = PLEADING_DIR / "forms" / "registry"
 BLANKS_DIR = PLEADING_DIR / "forms"
 
@@ -134,11 +156,11 @@ CHECKBOX_COLOR = (0.45, 0.30, 0.70)
 # ---------------------------------------------------------------------------
 
 def list_forms() -> list[str]:
-    return sorted({p.stem for d in REGISTRY_DIRS for p in d.glob("*.yaml")})
+    return sorted({p.stem for d in registry_dirs() for p in d.glob("*.yaml")})
 
 
 def _registry_path(form_id: str):
-    for d in REGISTRY_DIRS:
+    for d in registry_dirs():
         candidate = d / f"{form_id}.yaml"
         if candidate.exists():
             return candidate
@@ -162,7 +184,7 @@ def load_descriptor(form_id: str) -> dict:
 
 
 def blank_path(desc: dict) -> Path:
-    for d in BLANKS_DIRS:
+    for d in blanks_dirs():
         candidate = d / desc["blank"]
         if candidate.exists():
             return candidate
