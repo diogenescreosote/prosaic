@@ -1,0 +1,246 @@
+# POS-050/EFS-050 — Proof of Electronic Service (Judicial Council of
+# California)
+#
+# One page: the declarant states their own addresses, lists the
+# documents served (exact titles), and identifies the person served
+# with their electronic service address and the service date, under
+# penalty of perjury. NOTE THE DECLARATION: "I am at least 18 years
+# old" --- unlike the mail-service forms, there is NO not-a-party
+# recital, so a party may electronically serve and declare (CCP
+# § 1010.6; Cal. Rules of Court, rule 2.251).
+#
+# Overlay technology (ADR-0033): values draw at widget rects, output
+# flattens; the interactive chrome (Print/Save/Clear buttons, privacy
+# banner) vanishes with the flatten. Field names verified against the
+# /TU tooltip dump of the blank.
+
+form: efs050
+title: Proof of Electronic Service
+domain: ca/general
+revision: "2017-02"           # footer: "POS-050/EFS-050 [Rev. February 1, 2017]"
+source_url: https://courts.ca.gov/documents/pos050.pdf
+blank: efs050.pdf
+technology: overlay
+
+# One signer: the declarant (often the serving party itself, which
+# electronic service permits).
+esign_parties: [declarant]
+
+fields:
+  # -- Caption: granular attorney/party block ------------------------------
+  atty_name:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyName_ft[0]"
+    page: 1
+    doc: "NAME"
+    auto: filer_name_bare
+  atty_bar_no:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyBarNo_dc[0]"
+    page: 1
+    doc: "STATE BAR NO (blank for self-represented filers)"
+    auto: filer_bar_number
+  atty_firm:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyFirm_ft[0]"
+    page: 1
+    doc: "FIRM NAME"
+    auto: filer_firm
+  atty_street:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyStreet_ft[0]"
+    page: 1
+    doc: "STREET ADDRESS"
+    auto: filer_street
+  atty_city:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyCity_ft[0]"
+    page: 1
+    doc: "CITY"
+    auto: filer_city
+  atty_state:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyState_ft[0]"
+    page: 1
+    doc: "STATE"
+    auto: filer_state
+  atty_zip:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyZip_ft[0]"
+    page: 1
+    doc: "ZIP CODE"
+    auto: filer_zip
+  phone:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].Phone_ft[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+  fax:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].Fax_ft[0]"
+    page: 1
+    doc: "FAX NO."
+    auto: fax
+  email:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].Email_ft[0]"
+    page: 1
+    doc: "E-MAIL ADDRESS"
+    auto: email
+  attorney_for:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyFor_ft[0]"
+    page: 1
+    doc: "ATTORNEY FOR (name) --- or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Caption: court + parties + case ---------------------------------------
+  court_county:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].CourtInfo[0].CrtCounty_ft[0]"
+    page: 1
+    doc: "SUPERIOR COURT OF CALIFORNIA, COUNTY OF"
+    auto: court_county
+  court_street_address:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].CourtInfo[0].Street_ft[0]"
+    page: 1
+    doc: "Court street address"
+    auto: court_street_address
+  court_mailing_address:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].CourtInfo[0].MailingAdd_ft[0]"
+    page: 1
+    doc: "Court mailing address"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].CourtInfo[0].CityZip_ft[0]"
+    page: 1
+    doc: "Court city and ZIP"
+    auto: court_city_zip
+  court_branch:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].CourtInfo[0].Branch_ft[0]"
+    page: 1
+    doc: "BRANCH NAME"
+    auto: court_branch
+  petitioner:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].TitlePartyName[0].Party1_ft[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name"
+    auto: petitioner
+    fit: shrink
+  respondent:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].TitlePartyName[0].Party2_ft[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name"
+    auto: respondent
+    fit: shrink
+  case_number:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].CaseNumber[0].CaseNumber_ft[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+  dept:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].Dept_sf[0].Dept_ft[0]"
+    page: 1
+    doc: "DEPARTMENT"
+    auto: hearing_dept
+  judicial_officer:
+    map: "topmostSubform[0].Page1[0].P1Caption_sf[0].JudOfcr_sf[0].JudOfcr_ft[0]"
+    page: 1
+    doc: "JUDICIAL OFFICER"
+    auto: judge
+
+  # -- Item 1: the declarant ---------------------------------------------------
+  efs050_residence_address:
+    map: "topmostSubform[0].Page1[0].FillText18[0]"
+    page: 1
+    doc: "Item 1.a: 'My residence or business address is (specify)'"
+    default: ""
+    fit: shrink_wrap
+  efs050_declarant_eservice_address:
+    map: "topmostSubform[0].Page1[0].FillText19[0]"
+    page: 1
+    doc: "Item 1.b: 'My electronic service address is (specify)'"
+    default: ""
+
+  # -- Item 2: the documents served ---------------------------------------------
+  efs050_documents:
+    map: "topmostSubform[0].Page1[0].FillText20[0]"
+    page: 1
+    doc: "Item 2: 'I electronically served the following documents (exact titles)'"
+    default: ""
+    fit: shrink_wrap
+
+  # -- Item 3.a: the person served -------------------------------------------------
+  efs050_served_name:
+    map: "topmostSubform[0].Page1[0].FillText27[0]"
+    page: 1
+    doc: "Item 3.a: Name of person served"
+    default: ""
+    size_group: served
+  efs050_served_on_behalf_of:
+    map: "topmostSubform[0].Page1[0].FillText21[0]"
+    page: 1
+    doc: "Item 3.a: On behalf of (parties represented, if person served is an attorney)"
+    default: ""
+    size_group: served
+  efs050_served_eservice_address:
+    map: "topmostSubform[0].Page1[0].FillText22[0]"
+    page: 1
+    doc: "Item 3.a: Electronic service address of person served (multiple addresses for the same office may be listed together)"
+    default: ""
+    size_group: served
+  efs050_service_date:
+    map: "topmostSubform[0].Page1[0].FillText23[0]"
+    page: 1
+    doc: "Item 3.a: On (date) --- the date of electronic service"
+    default: ""
+
+  # -- Signature block --------------------------------------------------------------
+  sig_date:
+    map: "topmostSubform[0].Page1[0].FillText25[0]"
+    page: 1
+    doc: "Date next to the declaration --- LEAVE BLANK for signing time"
+    default: ""
+    esign: {type: date, party: declarant}
+  print_name:
+    map: "topmostSubform[0].Page1[0].FillText26[0]"
+    page: 1
+    doc: "(TYPE OR PRINT NAME OF DECLARANT)"
+    default: ""
+  signature:
+    page: 1
+    # No widget exists for the signature stroke; hand-authored rect,
+    # the right-hand column beside (TYPE OR PRINT NAME OF DECLARANT),
+    # verified with `sc form preview efs050`.
+    rect: [310, 99, 576, 120]
+    doc: "SIGNATURE OF DECLARANT --- reserved; never machine-filled"
+    default: ""
+    esign: {type: signature, party: declarant}
+
+checkboxes:
+  docs_in_attachment:
+    map: "topmostSubform[0].Page1[0].#area[0].CheckBox1[0]"
+    on_value: "/1"
+    doc: "Item 2: documents listed in an attachment (POS-050(D)/EFS-050(D))"
+  persons_in_attachment:
+    map: "topmostSubform[0].Page1[0].CheckBox2[0]"
+    on_value: "/1"
+    doc: "Item 3.b: persons served listed in an attachment (POS-050(P)/EFS-050(P))"
+
+agent_guide: |
+  POS-050/EFS-050 proves ELECTRONIC service (Cal. Rules of Court, rule
+  2.251; CCP § 1010.6). Critical difference from the mail-service
+  forms: the declaration says only "I am at least 18 years old" ---
+  there is no not-a-party recital, so a self-represented party who
+  e-served a document may sign this proof themselves.
+
+  The caption resolves from standard front matter (granular
+  attorney-block autos, court_*, petitioner/respondent, case_number,
+  hearing_dept, judge). The substance goes in the forms block:
+
+      forms:
+        efs050:
+          efs050_residence_address: "PO Box 999, Example City, CA 90000"
+          efs050_declarant_eservice_address: "jane.roe@example.com"
+          efs050_documents: "Notice of Change of Address or Other Contact Information (form MC-040)"
+          efs050_served_name: "Sally Sattler, Esq., Example Firm LLP"
+          efs050_served_on_behalf_of: "Petitioner John Smith"
+          efs050_served_eservice_address: "sally@examplefirm.com; assistant@examplefirm.com"
+          efs050_service_date: "August 21, 2026"
+          print_name: "Jane Roe"
+
+  Item 2 wants EXACT document titles. The single item-3 block covers
+  one person served; several e-addresses for the same attorney/office
+  can be listed together in efs050_served_eservice_address, but
+  DIFFERENT persons served need the POS-050(P) attachment (check
+  persons_in_attachment). ALWAYS left blank: sig_date and the
+  signature itself (the declarant signs).
