@@ -496,12 +496,12 @@ def _strip_all_form_machinery(writer: PdfWriter) -> None:
 def _checkbox_field_node(wobj):
     """The node that owns a checkbox widget's /V: the nearest node in the
     parent chain carrying its own /T. Writing /V any higher poisons the
-    form: JC forms group unrelated fields under a shared parent (FL-300's
-    Li1 holds the TO-name text field beside the party checkboxes), and PDF
-    children INHERIT /V they lack -- so a /V='/1' on the group node makes
-    every untouched sibling text field render as '1'. A widget with its
-    own /T is itself the field; a bare widget defers to the ancestor that
-    names it."""
+    form: JC forms group unrelated fields under a shared parent (one
+    form's list node holds a free-text field beside the party
+    checkboxes), and PDF children INHERIT /V they lack -- so a /V='/1'
+    on the group node makes every untouched sibling text field render
+    as '1'. A widget with its own /T is itself the field; a bare widget
+    defers to the ancestor that names it."""
     node = wobj
     while node is not None and "/T" not in node:
         parent = node.get("/Parent")
