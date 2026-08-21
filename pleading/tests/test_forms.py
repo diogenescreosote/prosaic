@@ -168,13 +168,25 @@ def test_smoke_fill(form_id, tmp_path):
     drift = [w for w in res.warnings if "not found" in w or "drift" in w]
     assert not drift, f"{form_id}: {drift}"
 
-    # The case number must actually land in some field's /V.
+    desc = form_fill.load_descriptor(form_id)
     reader = PdfReader(str(out))
-    fields = reader.get_fields() or {}
-    values = " | ".join(str(f.get("/V") or "") for f in fields.values())
-    if any(spec.get("auto") == "case_number"
-           for spec in (form_fill.load_descriptor(form_id).get("fields") or {}).values()):
-        assert "24CV00000" in values, f"{form_id}: case number not present in field values"
+    has_case_number = any(spec.get("auto") == "case_number"
+                          for spec in (desc.get("fields") or {}).values())
+    if desc.get("technology") == "overlay":
+        # Overlay outputs are flattened: no form machinery at all, and
+        # the values live in the page CONTENT, not in field /V's.
+        assert not (reader.get_fields() or {}), (
+            f"{form_id}: overlay output must carry no AcroForm fields")
+        if has_case_number:
+            text = "".join(p.extract_text() for p in reader.pages)
+            assert "24CV00000" in text, (
+                f"{form_id}: case number not drawn into page content")
+    else:
+        # The case number must actually land in some field's /V.
+        fields = reader.get_fields() or {}
+        values = " | ".join(str(f.get("/V") or "") for f in fields.values())
+        if has_case_number:
+            assert "24CV00000" in values, f"{form_id}: case number not present in field values"
 
 
 @pytest.mark.parametrize("form_id", FORMS)

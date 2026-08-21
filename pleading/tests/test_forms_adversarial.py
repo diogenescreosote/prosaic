@@ -78,10 +78,11 @@ def test_every_field_lands_in_its_mapped_widget(form_id, tmp_path):
     form_fill.fill(form_id, out, meta={}, data=data)
 
     vals = dict(out_widget_values(out))  # single form: names unique
+    overlay_form = str(desc.get("technology") or "") == "overlay"
     problems = []
     for name, spec in fields.items():
         token = f"TOK_{name}_KOT"
-        if spec.get("method") == "overlay":
+        if overlay_form or spec.get("method") == "overlay":
             txt = page_text(out, int(spec.get("page", 1)))
             if token not in txt.replace("\n", " "):
                 problems.append(f"{name}: overlay token absent from page {spec.get('page')}")

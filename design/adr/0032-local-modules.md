@@ -1,8 +1,6 @@
 # 0032. Local modules: a gitignored overlay for deployment-specific content
 
-## Status
-
-Accepted (August 2026).
+**Status:** Accepted (August 2026)
 
 ## Context
 

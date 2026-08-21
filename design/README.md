@@ -52,6 +52,8 @@ project accretes decisions instead of middleware.
 - [0029](adr/0029-skill-granularity.md) Skill granularity: split by co-activation, demote by layer
 - [0030](adr/0030-ron-through-proof.md) RON through Proof; parallel clients, not an e-sign abstraction
 - [0031](adr/0031-matter-held-configuration.md) Matters own their configuration; prosaic stores no state
+- [0032](adr/0032-local-modules.md) Local modules: a gitignored local/ overlay for deployment-specific descriptors
+- [0033](adr/0033-overlay-form-technology.md) Overlay form technology: draw, flatten, never trust AcroForm
 
 Also:
 

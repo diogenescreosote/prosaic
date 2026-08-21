@@ -1,0 +1,404 @@
+# MC-040 — Notice of Change of Address or Other Contact Information
+# (Judicial Council of California)
+#
+# Two pages: page 1 is the notice itself (who changed, effective date,
+# the new contact information, declarant signature); page 2 is a
+# built-in Proof of Service by Mail. LiveCycle (XFA) form; field names
+# verified against the /TU tooltip dump of the blank. Two widget pairs
+# share a field name with DIFFERENT on-states (Representative[0]=/1 vs
+# Representative[1]=/2; the two POS Service[0] boxes likewise /1 vs
+# /2) --- re-verify against a fresh dump before extending.
+#
+# NOTE ON THE POS PAGE: the page-2 declarant fields are left unfilled
+# by default --- CCP 1013a requires service by a person over 18 who is
+# NOT a party, so the party noticing the change cannot be the declarant.
+# Only the served-person blocks (opposing counsel) are pre-filled.
+
+form: mc040
+title: Notice of Change of Address or Other Contact Information
+domain: ca/general
+revision: "2013-01"           # footer: "MC-040 [Rev. January 1, 2013]"
+source_url: https://courts.ca.gov/documents/mc040.pdf
+blank: mc040.pdf
+# The pilot form for ADR-0033: no AcroForm values are ever set. Every
+# field draws as page content at its widget's rectangle (map: names
+# the widget only for geometry) and the output is flattened --- no
+# form machinery survives, so it renders identically in every viewer.
+# chrome widgets (Print/Save/Clear buttons, privacy banner) vanish
+# with the flatten; no chrome_fields list is needed.
+technology: overlay
+
+# E-sign roles (ADR-0033 taxonomy), in signing order: the party giving
+# the notice signs page 1; a non-party adult serves it and signs the
+# page-2 proof of service (CCP 1013a).
+esign_parties: [filer, server]
+
+fields:
+  # -- Page 1: attorney/party block (carries the NEW contact info ---
+  #    this form IS the notice of it) -----------------------------------
+  atty_party_block:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].AttyPartyInfo[0].TextField1[0]"
+    page: 1
+    doc: >-
+      ATTORNEY OR PARTY WITHOUT ATTORNEY (Name, State Bar number, and
+      address) --- multiline; carries the NEW address. No auto binding
+      (the standard filer_* autos would need the same multiline
+      assembly MC-030 does); supply via the forms block.
+    default: ""
+    fit: shrink_wrap
+  phone:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+  fax:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO."
+    auto: fax
+  email:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "E-MAIL ADDRESS"
+    auto: email
+  attorney_for:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].AttyPartyInfo[0].Name[0]"
+    page: 1
+    doc: "ATTORNEY FOR (Name) --- or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Page 1: court block ------------------------------------------------
+  court_county:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].CourtInfo[0].CrtCounty_ft[0]"
+    page: 1
+    doc: "County name after 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].CourtInfo[0].Street_ft[0]"
+    page: 1
+    doc: "Court street address"
+    auto: court_street_address
+  court_mailing_address:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].CourtInfo[0].MailingAdd_ft[0]"
+    page: 1
+    doc: "Court mailing address"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].CourtInfo[0].CityZip_ft[0]"
+    page: 1
+    doc: "Court city and ZIP"
+    auto: court_city_zip
+  court_branch:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].CourtInfo[0].Branch_ft[0]"
+    page: 1
+    doc: "Court branch name"
+    auto: court_branch
+
+  # -- Page 1: caption + header extras -------------------------------------
+  petitioner:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].TitlePartyName[0].Party1_ft[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name"
+    auto: petitioner
+  respondent:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].TitlePartyName[0].Party2_ft[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name"
+    auto: respondent
+  case_number:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].CaseNumber[0].CaseNumber_ft[0]"
+    page: 1
+    doc: "Case number"
+    auto: case_number
+  judicial_officer:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].Judicial[0].JudicialOfcr[0]"
+    page: 1
+    doc: "JUDICIAL OFFICER box in the header (assigned judge, if known)"
+    auto: judge
+  dept:
+    map: "MC-040[0].Page1[0].StdP1Header_sf[0].Department[0].Dept[0]"
+    page: 1
+    doc: "DEPT. box in the header"
+    auto: hearing_dept
+
+  # -- Page 1, Item 1: whose information changed, and when ------------------
+  mc040_effective_date:
+    map: "MC-040[0].Page1[0].List1[0].FillText1[0]"
+    page: 1
+    doc: "Item 1 'Please take notice that, as of (date):' --- effective date of the change"
+    default: ""
+  mc040_plaintiff_name:
+    map: "MC-040[0].Page1[0].List1[0].Lia[0].FillText2[0]"
+    page: 1
+    doc: "Item 1.a: name after the 'plaintiff' checkbox"
+    default: ""
+  mc040_defendant_name:
+    map: "MC-040[0].Page1[0].List1[0].Lib[0].FillText3[0]"
+    page: 1
+    doc: "Item 1.b: name after the 'defendant' checkbox"
+    default: ""
+  mc040_petitioner_name:
+    map: "MC-040[0].Page1[0].List1[0].Lic[0].FillText4[0]"
+    page: 1
+    doc: "Item 1.c: name after the 'petitioner' checkbox"
+    default: ""
+  mc040_respondent_name:
+    map: "MC-040[0].Page1[0].List1[0].Lid[0].FillText5[0]"
+    page: 1
+    doc: "Item 1.d: name after the 'respondent' checkbox"
+    default: ""
+  mc040_other_name:
+    map: "MC-040[0].Page1[0].List1[0].Lie[0].FillText6[0]"
+    page: 1
+    doc: "Item 1.e: description after the 'other (describe)' checkbox"
+    default: ""
+    fit: shrink_wrap
+
+  # -- Page 1, Item 2: the new contact information ---------------------------
+  mc040_for_name:
+    map: "MC-040[0].Page1[0].List2[0].FillText7[0]"
+    page: 1
+    doc: "Item 2 'The new address or other contact information for (name):'"
+    default: ""
+  mc040_new_street:
+    map: "MC-040[0].Page1[0].List2[0].Lia[0].FillText8[0]"
+    page: 1
+    doc: "Item 2.a: Street"
+    default: ""
+    size_group: new_contact
+  mc040_new_city:
+    map: "MC-040[0].Page1[0].List2[0].Lib[0].FillText9[0]"
+    page: 1
+    doc: "Item 2.b: City"
+    default: ""
+    size_group: new_contact
+  mc040_new_mailing:
+    map: "MC-040[0].Page1[0].List2[0].Lic[0].FillText10[0]"
+    page: 1
+    doc: "Item 2.c: Mailing address (if different from above)"
+    default: ""
+    size_group: new_contact
+  mc040_new_state_zip:
+    map: "MC-040[0].Page1[0].List2[0].Lid[0].FillText11[0]"
+    page: 1
+    doc: "Item 2.d: State and zip code"
+    default: ""
+    size_group: new_contact
+  mc040_new_phone:
+    map: "MC-040[0].Page1[0].List2[0].Lie[0].FillText12[0]"
+    page: 1
+    doc: "Item 2.e: Telephone number"
+    default: ""
+    size_group: new_contact
+  mc040_new_fax:
+    map: "MC-040[0].Page1[0].List2[0].Lif[0].FillText13[0]"
+    page: 1
+    doc: "Item 2.f: Fax number (if available)"
+    default: ""
+    size_group: new_contact
+  mc040_new_email:
+    map: "MC-040[0].Page1[0].List2[0].Lig[0].FillText14[0]"
+    page: 1
+    doc: "Item 2.g: E-mail address (if available)"
+    default: ""
+    size_group: new_contact
+
+  # -- Page 1: signature block ----------------------------------------------
+  sig_date:
+    map: "MC-040[0].Page1[0].sign[0].Date[0]"
+    page: 1
+    doc: "Date next to the declarant's signature --- LEAVE BLANK for signing time"
+    default: ""
+    esign: {type: date, party: filer}
+  print_name:
+    map: "MC-040[0].Page1[0].sign[0].printname[0]"
+    page: 1
+    doc: "(TYPE OR PRINT NAME) under the signature line"
+    default: ""
+  signature:
+    page: 1
+    # No widget exists for the signature stroke; hand-authored rect,
+    # the right-hand column beside (TYPE OR PRINT NAME), verified with
+    # `sc form preview mc040`.
+    rect: [300, 101, 576, 132]
+    doc: "SIGNATURE line --- reserved for the filer's signature; never machine-filled"
+    default: ""
+    esign: {type: signature, party: filer}
+
+  # -- Page 2: caption echo ----------------------------------------------------
+  petitioner_p2:
+    map: "MC-040[0].Page2[0].Header[0].TitlePartyName[0].Party1_ft[0]"
+    page: 2
+    doc: "Page-2 caption echo of the plaintiff/petitioner"
+    auto: petitioner
+  respondent_p2:
+    map: "MC-040[0].Page2[0].Header[0].TitlePartyName[0].Party2_ft[0]"
+    page: 2
+    doc: "Page-2 caption echo of the defendant/respondent"
+    auto: respondent
+  case_number_p2:
+    map: "MC-040[0].Page2[0].Header[0].CaseNumber[0].CaseNumber_ft[0]"
+    page: 2
+    doc: "Page-2 caption echo of the case number"
+    auto: case_number
+
+  # -- Page 2: Proof of Service by Mail ----------------------------------------
+  # Declarant fields stay blank by default (CCP 1013a: a non-party over
+  # 18 serves and declares); only the served-person blocks are mapped for
+  # pre-fill.
+  pos_declarant_address:
+    map: "MC-040[0].Page2[0].List2[0].item2[0].TextField1[0]"
+    page: 2
+    doc: "POS item 2: server's residence or business address --- LEAVE for the (non-party) server"
+    default: ""
+    fit: shrink_wrap
+    esign: {type: text, party: server}
+  pos_mail_date:
+    map: "MC-040[0].Page2[0].List4[0].Lia[0].Date1[0]"
+    page: 2
+    doc: "POS item 4.a: date of mailing --- LEAVE for the server"
+    default: ""
+    esign: {type: date, party: server}
+  pos_mail_place:
+    map: "MC-040[0].Page2[0].List4[0].Lib[0].TextField2[0]"
+    page: 2
+    doc: "POS item 4.b: city and state of mailing --- LEAVE for the server"
+    default: ""
+    esign: {type: text, party: server}
+  pos_served1_name:
+    map: "MC-040[0].Page2[0].List5[0].Lia[0].FillText1[0]"
+    page: 2
+    doc: "POS item 5.a: name of person served"
+    default: ""
+  pos_served1_street:
+    map: "MC-040[0].Page2[0].List5[0].Lia[0].FillText2[0]"
+    page: 2
+    doc: "POS item 5.a: street address"
+    default: ""
+  pos_served1_city:
+    map: "MC-040[0].Page2[0].List5[0].Lia[0].FillText3[0]"
+    page: 2
+    doc: "POS item 5.a: city"
+    default: ""
+  pos_served1_state_zip:
+    map: "MC-040[0].Page2[0].List5[0].Lia[0].FillText4[0]"
+    page: 2
+    doc: "POS item 5.a: state and zip code"
+    default: ""
+  pos_served2_name:
+    map: "MC-040[0].Page2[0].List5[0].Lib[0].FillText5[0]"
+    page: 2
+    doc: "POS item 5.b: name of person served"
+    default: ""
+  pos_served2_street:
+    map: "MC-040[0].Page2[0].List5[0].Lib[0].FillText6[0]"
+    page: 2
+    doc: "POS item 5.b: street address"
+    default: ""
+  pos_served2_city:
+    map: "MC-040[0].Page2[0].List5[0].Lib[0].FillText7[0]"
+    page: 2
+    doc: "POS item 5.b: city"
+    default: ""
+  pos_served2_state_zip:
+    map: "MC-040[0].Page2[0].List5[0].Lib[0].FillText8[0]"
+    page: 2
+    doc: "POS item 5.b: state and zip code"
+    default: ""
+  pos_sig_date:
+    map: "MC-040[0].Page2[0].sign[0].Datesign[0]"
+    page: 2
+    doc: "POS signature date --- LEAVE for the server"
+    default: ""
+    esign: {type: date, party: server}
+  pos_print_name:
+    map: "MC-040[0].Page2[0].sign[0].printname[0]"
+    page: 2
+    doc: "POS (TYPE OR PRINT NAME OF DECLARANT) --- LEAVE for the server"
+    default: ""
+    esign: {type: name, party: server}
+  pos_signature:
+    page: 2
+    # Hand-authored rect (no widget); verified with `sc form preview`.
+    rect: [300, 127, 576, 158]
+    doc: "POS SIGNATURE line --- reserved for the server's signature; never machine-filled"
+    default: ""
+    esign: {type: signature, party: server}
+
+checkboxes:
+  # Item 1: who is giving notice. Note the two 'Representative' widgets
+  # share a name but have DIFFERENT on-states: [0] (self-represented
+  # party) turns on with /1, [1] (the attorney for) with /2.
+  self_represented:
+    map: "MC-040[0].Page1[0].List1[0].Representative[0]"
+    on_value: "/1"
+    doc: "Item 1: 'the following self-represented party' (on-state /1)"
+  attorney_for_party:
+    map: "MC-040[0].Page1[0].List1[0].Representative[1]"
+    on_value: "/2"
+    doc: "Item 1: 'the attorney for' (on-state /2 --- same field name as self_represented, different widget and state)"
+  role_plaintiff:
+    map: "MC-040[0].Page1[0].List1[0].Lia[0].NamePlntf[0]"
+    on_value: "/Yes"
+    doc: "Item 1.a: 'plaintiff' (pair with mc040_plaintiff_name)"
+  role_defendant:
+    map: "MC-040[0].Page1[0].List1[0].Lib[0].NameDefndt[0]"
+    on_value: "/Yes"
+    doc: "Item 1.b: 'defendant' (pair with mc040_defendant_name)"
+  role_petitioner:
+    map: "MC-040[0].Page1[0].List1[0].Lic[0].NamePetitnr[0]"
+    on_value: "/Yes"
+    doc: "Item 1.c: 'petitioner' (pair with mc040_petitioner_name)"
+  role_respondent:
+    map: "MC-040[0].Page1[0].List1[0].Lid[0].NameRespondt[0]"
+    on_value: "/Yes"
+    doc: "Item 1.d: 'respondent' (pair with mc040_respondent_name)"
+  role_other:
+    map: "MC-040[0].Page1[0].List1[0].Lie[0].NameOther[0]"
+    on_value: "/Yes"
+    doc: "Item 1.e: 'other (describe)' (pair with mc040_other_name)"
+  additional_parties_attached:
+    map: "MC-040[0].Page1[0].List1[0].AddlParties[0]"
+    on_value: "/Yes"
+    doc: "Item 1: 'A list of additional parties represented is provided in Attachment 1'"
+  pos_deposited_usps:
+    map: "MC-040[0].Page2[0].List3[0].Lia[0].Service[0]"
+    on_value: "/1"
+    doc: "POS item 3.a: deposited the sealed envelope with USPS, postage prepaid"
+  pos_business_practice:
+    map: "MC-040[0].Page2[0].List3[0].Lib[0].Service[0]"
+    on_value: "/2"
+    doc: "POS item 3.b: placed for collection and mailing per ordinary business practices (same field name as 3.a, different widget/state)"
+  pos_additional_served:
+    map: "MC-040[0].Page2[0].sign[0].AddlServed[0]"
+    on_value: "/Yes"
+    doc: "POS: names/addresses of additional persons served attached (POS-030(P))"
+
+agent_guide: |
+  MC-040 gives notice that a party's or attorney's address or other
+  contact information has changed. Two pages: the notice, and a
+  built-in Proof of Service by Mail.
+
+  The attorney/party header block carries the NEW contact information
+  (the form is the notice of it), assembled manually via
+  atty_party_block (multiline) --- do not put the old address there.
+
+  Self-represented party changing their own address (this workspace's
+  posture): check self_represented + the role box (role_respondent
+  etc.), put the party's name in the matching mc040_*_name field, the
+  effective date in mc040_effective_date, the party's name again in
+  mc040_for_name, and the new contact details in the mc040_new_*
+  fields (street, city, state_zip, phone, fax, email; mc040_new_mailing
+  only when a separate mailing address differs from the street line).
+  print_name is the signer; sig_date stays blank for signing.
+
+  PROOF OF SERVICE (page 2): a party cannot serve their own notice
+  (CCP 1013a: server must be a non-party over 18), so the declarant
+  fields (pos_declarant_address, pos_mail_date, pos_mail_place,
+  pos_sig_date, pos_print_name) and the service-method checkboxes stay
+  blank for the actual server to complete. Pre-fill only the
+  pos_served* blocks with the persons to be served (opposing counsel
+  of record; the court gets the filed original, not a service copy).
+
+  ALWAYS left blank: sig_date, the signature lines, and the POS
+  declarant fields per above.

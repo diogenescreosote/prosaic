@@ -27,6 +27,21 @@ Fill methods
   directly on the page at ``rect`` with reportlab, merged in. This is
   the escape hatch for fields whose widgets are broken or missing.
 
+Technologies (``technology:``)
+------------------------------
+- ``acroform`` (default): fill widget values, set /NeedAppearances.
+- ``xfa``: same, then strip the /XFA packet so every viewer reads the
+  AcroForm layer that was actually filled.
+- ``overlay``: draw EVERY field and checkbox directly on the page as
+  ordinary content — each ``map:`` names its widget only to borrow the
+  widget's rectangle — then FLATTEN the output (no AcroForm, no widget
+  annotations). AcroForm rendering is viewer-dependent no matter how
+  carefully values are set (stale appearance streams, inherited /V,
+  /NeedAppearances support); a flattened overlay renders identically
+  everywhere. ``size_group:`` on fields keeps related boxes visually
+  consistent: every member renders at the smallest size any member
+  needed to fit (ADR-0033).
+
 Fit strategies (``fit:``)
 -------------------------
 - ``none``  (default): warn if the text overflows the box.
@@ -95,6 +110,23 @@ DEFAULT_FONT = "Helvetica"
 DEFAULT_FONT_SIZE = 9.0
 DEFAULT_MIN_FONT_SIZE = 6.0
 LEADING_RATIO = 1.15
+
+# E-sign field taxonomy: the least common multiple of DocuSeal,
+# DocuSign, and Dropbox Sign field types — every type here maps onto a
+# native type on each platform (platforms lacking name/email render
+# them as text). A descriptor tags a field with
+# ``esign: {type: date, party: filer}``; parties are declared in
+# descriptor-level ``esign_parties:`` (abstract role names — petitioner,
+# attorney_for_petitioner, server — in signing order). See ADR-0033.
+ESIGN_TYPES = {"signature", "initials", "date", "name",
+               "email", "phone", "text", "checkbox"}
+
+# Geometry-preview palette. Parties get colors by their position in
+# ``esign_parties`` (party 1 red, 2 blue, 3 green, 4 orange).
+PARTY_COLORS = [(0.80, 0.12, 0.12), (0.10, 0.30, 0.80),
+                (0.10, 0.55, 0.20), (0.75, 0.45, 0.00)]
+FIELD_BOX_COLOR = (0.25, 0.45, 0.85)
+CHECKBOX_COLOR = (0.45, 0.30, 0.70)
 
 
 # ---------------------------------------------------------------------------
@@ -421,6 +453,40 @@ def _set_need_appearances(writer: PdfWriter) -> None:
         af[NameObject("/NeedAppearances")] = BooleanObject(True)
 
 
+def _strip_all_form_machinery(writer: PdfWriter) -> None:
+    """Flatten an overlay-technology output: drop every widget
+    annotation and the AcroForm dictionary itself. Nothing interactive
+    remains, so every viewer renders the same page content — the whole
+    point of ``technology: overlay``."""
+    for page in writer.pages:
+        if "/Annots" in page:
+            kept = ArrayObject()
+            for annot in page["/Annots"]:
+                if annot.get_object().get("/Subtype") == "/Widget":
+                    continue
+                kept.append(annot)
+            page[NameObject("/Annots")] = kept
+    catalog = writer._root_object  # type: ignore[attr-defined]
+    if "/AcroForm" in catalog:
+        del catalog[NameObject("/AcroForm")]
+
+
+def _checkbox_field_node(wobj):
+    """The node that owns a checkbox widget's /V: the nearest node in the
+    parent chain carrying its own /T. Writing /V any higher poisons the
+    form: JC forms group unrelated fields under a shared parent (FL-300's
+    Li1 holds the TO-name text field beside the party checkboxes), and PDF
+    children INHERIT /V they lack -- so a /V='/1' on the group node makes
+    every untouched sibling text field render as '1'. A widget with its
+    own /T is itself the field; a bare widget defers to the ancestor that
+    names it."""
+    node = wobj
+    while node is not None and "/T" not in node:
+        parent = node.get("/Parent")
+        node = parent.get_object() if parent is not None else None
+    return node if node is not None else wobj
+
+
 def _apply_font_size(annot_obj, size: float, font: str = "Helv") -> None:
     """Pin a widget's default appearance to a concrete font size.
 
@@ -447,11 +513,17 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     reader = PdfReader(str(blank))
     writer = PdfWriter(clone_from=reader)
 
-    # Index widgets by qualified name (and bare name as fallback).
+    # Index widgets by qualified name (and bare name as fallback),
+    # keeping each widget's rectangle: overlay-technology fills borrow
+    # the widget geometry and never touch the widget itself.
     widgets: dict[str, tuple[int, Any]] = {}
+    widget_rects: dict[str, tuple[int, list[float]]] = {}
     for page_idx, name, obj in iter_widgets(PdfReader(str(blank))):
         widgets.setdefault(name, (page_idx, name))
         widgets.setdefault(name.split(".")[-1], (page_idx, name))
+        rect = [float(v) for v in (obj.get("/Rect") or [0, 0, 0, 0])]
+        widget_rects.setdefault(name, (page_idx, rect))
+        widget_rects.setdefault(name.split(".")[-1], (page_idx, rect))
 
     # Live widget objects in the writer, for /DA edits.
     writer_widgets: dict[str, Any] = {}
@@ -463,25 +535,35 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
 
     acro_values_by_page: dict[int, dict[str, str]] = {}
     overlay_ops: dict[int, list[dict]] = {}
+    overlay_mode = str(desc.get("technology") or "") == "overlay"
+    pending_overlay: list[dict] = []
 
     fields = desc.get("fields") or {}
     for name, spec in fields.items():
         value = texts.get(name, "")
-        method = spec.get("method", "acroform")
+        method = spec.get("method", "overlay" if overlay_mode else "acroform")
 
         if method == "overlay":
             if not value:
                 continue
             rect = spec.get("rect")
             page_no = int(spec.get("page", 1)) - 1
+            if not rect and spec.get("map"):
+                hit = widget_rects.get(spec["map"])
+                if hit is not None:
+                    page_no, rect = hit
             if not rect:
-                result.warnings.append(f"{name}: overlay field missing rect; skipped")
+                result.warnings.append(
+                    f"{name}: overlay field needs a rect, or a map naming a "
+                    f"widget in {blank.name} — form revision drift?")
                 continue
-            fitted = fit_text(value, rect, spec)
-            if not fitted.fits:
-                value, fitted = _handle_overflow(name, spec, value, rect, result)
-            overlay_ops.setdefault(page_no, []).append({
-                "rect": rect, "fit": fitted, "spec": spec,
+            # Under technology: overlay, fitting is the point — a field
+            # with no explicit fit strategy shrinks rather than warns.
+            if overlay_mode and not spec.get("fit"):
+                spec = {**spec, "fit": "shrink"}
+            pending_overlay.append({
+                "name": name, "value": value, "rect": rect,
+                "page": page_no, "spec": spec,
             })
             continue
 
@@ -516,6 +598,31 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
             # is set below), so there is nothing to gain by setting "".
             acro_values_by_page.setdefault(page_idx, {})[qualified] = value
 
+    # Fit the pending overlay text, then enforce size-group consistency:
+    # every member of a ``size_group`` renders at the smallest size any
+    # member needed, so a block of related boxes doesn't end up at three
+    # different sizes (the consistency/fit compromise of ADR-0033).
+    for op in pending_overlay:
+        fitted = fit_text(op["value"], op["rect"], op["spec"])
+        if not fitted.fits:
+            op["value"], fitted = _handle_overflow(
+                op["name"], op["spec"], op["value"], op["rect"], result)
+        op["fit"] = fitted
+    group_min: dict[str, float] = {}
+    for op in pending_overlay:
+        g = op["spec"].get("size_group")
+        if g:
+            group_min[g] = min(group_min.get(g, 1e9), op["fit"].font_size)
+    for op in pending_overlay:
+        g = op["spec"].get("size_group")
+        if g and op["fit"].font_size > group_min[g]:
+            locked = {**op["spec"], "font_size": group_min[g],
+                      "min_font_size": group_min[g]}
+            op["fit"] = fit_text(op["value"], op["rect"], locked)
+    for op in pending_overlay:
+        overlay_ops.setdefault(op["page"], []).append(
+            {"rect": op["rect"], "fit": op["fit"], "spec": op["spec"]})
+
     # Overflow-linked checkboxes: a field spec may declare
     # ``overflow_checkbox`` (checked iff the value spilled to an
     # attachment) and/or ``inline_checkbox`` (checked iff the value fit
@@ -536,6 +643,14 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         if not checks.get(name):
             continue
         mapped = spec.get("map")
+        if overlay_mode:
+            hit_rect = widget_rects.get(mapped or "")
+            if hit_rect is None:
+                result.warnings.append(f"checkbox {name}: '{mapped}' not found — revision drift?")
+                continue
+            page_idx, rect = hit_rect
+            overlay_ops.setdefault(page_idx, []).append({"rect": rect, "mark": True})
+            continue
         hit = widgets.get(mapped or "")
         if hit is None:
             result.warnings.append(f"checkbox {name}: '{mapped}' not found — revision drift?")
@@ -544,20 +659,19 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         on = spec.get("on_value") or "/1"
         wobj = writer_widgets.get(qualified)
         if wobj is not None:
-            wobj[NameObject("/V")] = NameObject(on)
             wobj[NameObject("/AS")] = NameObject(on)
-            node = wobj
-            parent = node.get("/Parent")
-            if parent is not None:
-                parent.get_object()[NameObject("/V")] = NameObject(on)
+            _checkbox_field_node(wobj)[NameObject("/V")] = NameObject(on)
 
     for page_idx, values in acro_values_by_page.items():
         writer.update_page_form_field_values(writer.pages[page_idx], values)
 
-    if desc.get("technology") == "xfa":
-        _strip_xfa(writer)
-    _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
-    _set_need_appearances(writer)
+    if overlay_mode:
+        _strip_all_form_machinery(writer)
+    else:
+        if desc.get("technology") == "xfa":
+            _strip_xfa(writer)
+        _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
+        _set_need_appearances(writer)
 
     # Merge overlays. ``whiteouts:`` (descriptor-level) paints white
     # rectangles first — the tool for static page junk that survives
@@ -579,10 +693,27 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
                        fill=1, stroke=0)
             c.setFillColorRGB(0, 0, 0)
             for op in overlay_ops.get(i, []):
-                rect, fitted, spec = op["rect"], op["fit"], op["spec"]
+                rect = op["rect"]
+                if op.get("mark"):
+                    # Checkbox: a bold X visually centered in the box.
+                    w = abs(rect[2] - rect[0])
+                    h = abs(rect[3] - rect[1])
+                    size = max(6.0, min(w, h) * 0.85)
+                    c.setFont("Helvetica-Bold", size)
+                    cx = (rect[0] + rect[2]) / 2.0
+                    cy = (rect[1] + rect[3]) / 2.0
+                    c.drawCentredString(cx, cy - size * 0.36, "X")
+                    continue
+                fitted, spec = op["fit"], op["spec"]
                 font = str(spec.get("font") or DEFAULT_FONT)
                 c.setFont(font, fitted.font_size)
                 x = min(rect[0], rect[2]) + 2
+                if len(fitted.lines) == 1:
+                    # Single line: vertically center in the box, the way
+                    # viewers render widget text, rather than top-anchor.
+                    cy = (min(rect[1], rect[3]) + max(rect[1], rect[3])) / 2.0
+                    c.drawString(x, cy - fitted.font_size * 0.36, fitted.lines[0])
+                    continue
                 y_top = max(rect[1], rect[3]) - fitted.font_size
                 for j, line in enumerate(fitted.lines):
                     c.drawString(x, y_top - j * fitted.font_size * LEADING_RATIO, line)
@@ -688,6 +819,129 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
 
 
 # ---------------------------------------------------------------------------
+# Geometry preview
+# ---------------------------------------------------------------------------
+
+def geometry_preview(form_id: str, output_path: Path) -> FillResult:
+    """Render the blank with a translucent box over every place the
+    descriptor can put ink — the visual sanity check that a form
+    adapter's geometry is right, made BEFORE trusting a fill.
+
+    Text fields draw in blue, checkboxes in purple, each labeled with
+    its logical name. Fields carrying an ``esign:`` tag draw in their
+    party's color (position in ``esign_parties`` → PARTY_COLORS) with
+    the e-sign TYPE as the label, so name/date/signature areas reserved
+    for each signer are distinguishable at a glance. A legend at the
+    foot of page 1 keys the colors. The output is a review artifact,
+    never a filing.
+    """
+    desc = load_descriptor(form_id)
+    blank = blank_path(desc)
+    if not blank.exists():
+        raise FileNotFoundError(f"Blank form missing: {blank}")
+    reader = PdfReader(str(blank))
+    writer = PdfWriter(clone_from=reader)
+    result = FillResult(output_path=output_path)
+
+    widget_rects: dict[str, tuple[int, list[float]]] = {}
+    for page_idx, name, obj in iter_widgets(reader):
+        rect = [float(v) for v in (obj.get("/Rect") or [0, 0, 0, 0])]
+        widget_rects.setdefault(name, (page_idx, rect))
+        widget_rects.setdefault(name.split(".")[-1], (page_idx, rect))
+
+    parties = [str(p) for p in (desc.get("esign_parties") or [])]
+
+    boxes: dict[int, list[dict]] = {}
+
+    def add(name: str, spec: dict, is_checkbox: bool) -> None:
+        rect = spec.get("rect")
+        page_no = int(spec.get("page", 1)) - 1
+        if not rect and spec.get("map"):
+            hit = widget_rects.get(spec["map"])
+            if hit is not None:
+                page_no, rect = hit
+        if not rect:
+            result.warnings.append(f"{name}: no rect and no matching widget; not drawn")
+            return
+        es = spec.get("esign") or {}
+        color = CHECKBOX_COLOR if is_checkbox else FIELD_BOX_COLOR
+        label = name
+        if es:
+            etype = str(es.get("type") or "text")
+            if etype not in ESIGN_TYPES:
+                result.warnings.append(
+                    f"{name}: esign type '{etype}' outside taxonomy "
+                    f"{sorted(ESIGN_TYPES)}")
+            party = str(es.get("party") or "")
+            if party and party not in parties:
+                result.warnings.append(
+                    f"{name}: esign party '{party}' not declared in "
+                    f"esign_parties {parties}")
+            if party in parties:
+                color = PARTY_COLORS[parties.index(party) % len(PARTY_COLORS)]
+            else:
+                color = (0.4, 0.4, 0.4)
+            label = etype.upper() + (f" · {party}" if party else "")
+        boxes.setdefault(page_no, []).append(
+            {"rect": rect, "color": color, "label": label, "esign": bool(es)})
+
+    for name, spec in (desc.get("fields") or {}).items():
+        add(name, spec, False)
+    for name, spec in (desc.get("checkboxes") or {}).items():
+        add(name, spec, True)
+
+    import io
+    buf = io.BytesIO()
+    c = rl_canvas.Canvas(buf, pagesize=letter)
+    for i in range(len(reader.pages)):
+        for b in boxes.get(i, []):
+            r, col = b["rect"], b["color"]
+            x, y = min(r[0], r[2]), min(r[1], r[3])
+            w, h = abs(r[2] - r[0]), abs(r[3] - r[1])
+            c.saveState()
+            c.setFillColorRGB(*col)
+            c.setStrokeColorRGB(*col)
+            c.setFillAlpha(0.18)
+            c.setStrokeAlpha(0.9)
+            c.setLineWidth(1.2 if b["esign"] else 0.5)
+            c.rect(x, y, w, h, fill=1, stroke=1)
+            c.setFillAlpha(1.0)
+            c.setFont("Helvetica", 4.5)
+            c.drawString(x + 1, y + h + 0.8, b["label"][:70])
+            c.restoreState()
+        if i == 0:
+            c.saveState()
+            c.setFillColorRGB(0, 0, 0)
+            c.setFont("Helvetica-Bold", 7)
+            c.drawString(36, 18, f"GEOMETRY PREVIEW — {desc['form']} — "
+                                 "review artifact, not a filing")
+            c.setFont("Helvetica", 7)
+            x0 = 36
+            entries = [("text field", FIELD_BOX_COLOR),
+                       ("checkbox", CHECKBOX_COLOR)]
+            entries += [(f"e-sign: {p}", PARTY_COLORS[j % len(PARTY_COLORS)])
+                        for j, p in enumerate(parties)]
+            for lbl, col in entries:
+                c.setFillColorRGB(*col)
+                c.rect(x0, 8, 8, 6, fill=1, stroke=0)
+                c.setFillColorRGB(0, 0, 0)
+                c.drawString(x0 + 10, 8, lbl)
+                x0 += 12 + stringWidth(lbl, "Helvetica", 7) + 10
+            c.restoreState()
+        c.showPage()
+    c.save()
+    buf.seek(0)
+    over = PdfReader(buf)
+    for i, page in enumerate(writer.pages):
+        if i < len(over.pages):
+            page.merge_page(over.pages[i])
+    output_path.parent.mkdir(parents=True, exist_ok=True)
+    with open(output_path, "wb") as fh:
+        writer.write(fh)
+    return result
+
+
+# ---------------------------------------------------------------------------
 # Cover-sheet cache + prepend (generic versions of the per-form helpers)
 # ---------------------------------------------------------------------------
 
@@ -750,6 +1004,13 @@ def main() -> int:
     sp = sub.add_parser("fields", help="introspect a blank PDF; emit descriptor skeleton")
     sp.add_argument("pdf")
 
+    sp = sub.add_parser(
+        "preview",
+        help="render the blank with colored boxes over every fillable/"
+             "e-sign area — visual geometry check for a descriptor")
+    sp.add_argument("form_id")
+    sp.add_argument("-o", "--output", required=True)
+
     sub.add_parser("list", help="list registered forms")
 
     args = p.parse_args()
@@ -760,6 +1021,12 @@ def main() -> int:
         return 0
     if args.cmd == "fields":
         print(skeleton_yaml(Path(args.pdf)))
+        return 0
+    if args.cmd == "preview":
+        res = geometry_preview(args.form_id, Path(args.output))
+        for w in res.warnings:
+            print(f"warning: {w}", file=sys.stderr)
+        print(f"wrote {res.output_path}")
         return 0
     if args.cmd == "info":
         d = load_descriptor(args.form_id)
