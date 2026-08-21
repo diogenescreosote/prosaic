@@ -222,6 +222,10 @@ AUTO_BINDINGS = {
     "filer_zip": lambda m: filer_address_parts(m)["zip"],
     "hearing_time": lambda m: str(m.get("hearing_time") or "").strip(),
     "hearing_dept": lambda m: str(m.get("hearing_dept") or "").strip(),
+    # Assigned judicial officer, for forms whose header carries a
+    # JUDICIAL OFFICER box (e.g. MC-040); from the same `judge:` front
+    # matter the pleading caption uses.
+    "judge": lambda m: str(m.get("judge") or "").strip(),
     "court_county": lambda m: strip_county_prefix(str(m.get("court_county") or "")),
     # For forms whose caption prints "NAME OF COURT:" and wants the whole
     # designation (e.g. SUBP-002), not just the county.

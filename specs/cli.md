@@ -34,7 +34,13 @@ subcommand's real promises live in that component's spec.
   fill one, dump its fields — and `sc form info <id>` prints enough
   (the descriptor's fields, checkboxes, and agent guide) for an
   agent that has never seen the form to fill it correctly without
-  reading the registry source. *(untested)*
+  reading the registry source. *(untested)* `sc form preview <id> -o
+  out.pdf` renders the blank with a translucent labeled box over every
+  fillable and e-sign area (party-colored, type-labeled, with a
+  legend) — the geometry sanity check that precedes trusting a new
+  descriptor (ADR-0033). *(tested:
+  pleading/tests/test_overlay_forms.test_geometry_preview_draws_clean,
+  via the engine function the subcommand wraps)*
 - **`sc attest ...`** passes through to the attestation engine
   (`crypto/attest.py`): dual hashes, detached signatures, pinned-key
   verification, the signed manifest, timestamps. The real promises
