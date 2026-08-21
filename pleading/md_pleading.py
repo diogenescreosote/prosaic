@@ -4503,10 +4503,37 @@ def append_pdf_scaled(writer: PdfWriter, pdf_path: Path,
             writer.add_page(scale_and_center_page(page))
 
 
+def flatten_form_fields(pdf_path: Path, temp_dir: Path) -> Path:
+    """Bake live form fields into page content before a PDF is embedded.
+
+    An embedded filled form must be ink, not an editable form: pypdf's
+    add_page copies each page's widget annotations but never merges an
+    AcroForm, so a packet embedding two filled copies of the same Judicial
+    Council form accumulates orphaned widgets whose fully-qualified names
+    collide (every filled SUBP-010 has a FillText1). Same-named fields
+    must share one value (PDF 32000-1 12.7.3.2), so readers that
+    reconstruct fields by name unify them -- and one exhibit's field value
+    silently displaces another's. Appearance-stream renderers draw each
+    widget's own ink and look correct, which is exactly why the defect
+    survives visual review.
+
+    Returns the input path unchanged when there is nothing to flatten.
+    """
+    import fitz
+    with fitz.open(str(pdf_path)) as doc:
+        if not any(True for page in doc for _ in page.widgets()):
+            return pdf_path
+        doc.bake(annots=False, widgets=True)
+        flattened = temp_dir / f"flattened_{pdf_path.stem}.pdf"
+        doc.save(str(flattened))
+    return flattened
+
+
 def append_exhibit_attachment(writer: PdfWriter, exhibit: Exhibit, temp_dir: Path) -> None:
     ext = exhibit.path.suffix.lower()
     if ext == ".pdf":
-        append_pdf_scaled(writer, exhibit.path, exhibit.pages)
+        flat = flatten_form_fields(exhibit.path, temp_dir)
+        append_pdf_scaled(writer, flat, exhibit.pages)
         return
     if ext in {".png", ".jpg", ".jpeg"}:
         tmp = temp_dir / f"exhibit_{exhibit.letter}_image.pdf"
