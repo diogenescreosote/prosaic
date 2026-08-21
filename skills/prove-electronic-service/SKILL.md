@@ -51,8 +51,14 @@ front matter, and a forms block. What each field wants:
   *person* needs the POS-050(P) attachment (`persons_in_attachment`).
 - `efs050_service_date` — the date the email/e-service actually went
   out, from the sender's own record, never assumed.
-- `efs050_residence_address` and `efs050_declarant_eservice_address`
-  — the declarant's own.
+- `efs050_residence_address` — the declarant's actual **residence or
+  business address**. Rule 2.251 contemplates the proof stating this
+  SEPARATELY from the electronic-service address, and **a PO box is
+  neither a residence nor a business address — refuse it**. If the
+  declarant does not want their residence stated in a served document,
+  the answer is a business address, never the mailbox.
+- `efs050_declarant_eservice_address` — the declarant's own e-service
+  address (this one is the email).
 - `print_name` filled; `sig_date` and the signature always left for
   the declarant.
 
@@ -75,7 +81,9 @@ front matter, and a forms block. What each field wants:
 3. `make <envelope>` and read stderr per the build-envelope skill.
 4. Verify the render (open it): exact title, addresses, date; the
    signature/date lines blank.
-5. The declarant signs. Whether the signed proof is then **filed** or
+5. The declarant signs **and dates** — the declaration date belongs
+   to the signing step, never to the form data at rest; do not
+   pre-fill `sig_date`. Whether the signed proof is then **filed** or
    **held** depends on the served document: a proof for a document
    being filed is filed with or right after it; a proof for a
    served-not-filed document (safe-harbor motions, discovery) is held

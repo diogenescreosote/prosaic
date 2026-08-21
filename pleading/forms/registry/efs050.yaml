@@ -142,7 +142,11 @@ fields:
   efs050_residence_address:
     map: "topmostSubform[0].Page1[0].FillText18[0]"
     page: 1
-    doc: "Item 1.a: 'My residence or business address is (specify)'"
+    doc: >-
+      Item 1.a: 'My residence or business address is (specify)' ---
+      must be an ACTUAL residence or business address; rule 2.251
+      contemplates this separately from the electronic-service
+      address, and a PO box is neither. Refuse a PO box here.
     default: ""
     fit: shrink_wrap
   efs050_declarant_eservice_address:
