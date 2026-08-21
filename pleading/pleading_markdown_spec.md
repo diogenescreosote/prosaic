@@ -239,6 +239,14 @@ These fields are expected for a normal pleading-style caption:
 - `filer_address_lines` — list of strings
 - `filer_phone` — string
 - `filer_email` — string
+- `filer_eservice_address` — string; the filer's designated
+  electronic-service address (may differ from the contact email; feeds
+  e-service proofs via the `eservice_address` auto binding). Typically
+  supplied once as a front-matter *default* rather than per source:
+  a deployment-wide value lives in `local/config.yaml` and a matter
+  may shadow it in `matter.yaml`, each under a
+  `front_matter_defaults:` block; the source's own front matter wins
+  over both (ADR-0035).
 - `filer_role` — string, e.g. `Plaintiff, In Pro Per`
 - `court_name` — string
 - `court_county` — string

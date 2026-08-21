@@ -29,6 +29,7 @@ filer:
   - filer_phone
   - filer_fax
   - filer_email
+  - filer_eservice_address   # designated e-service address (ADR-0035 defaults)
   - filer_role
   - filer_attorney_for       # JC "ATTORNEY FOR (Name)" override
 

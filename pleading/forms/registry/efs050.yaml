@@ -152,8 +152,13 @@ fields:
   efs050_declarant_eservice_address:
     map: "topmostSubform[0].Page1[0].FillText19[0]"
     page: 1
-    doc: "Item 1.b: 'My electronic service address is (specify)'"
+    doc: >-
+      Item 1.b: 'My electronic service address is (specify)' --- the
+      declarant's DESIGNATED e-service address (filer_eservice_address,
+      usually a deployment/matter default), which may differ from the
+      contact email.
     default: ""
+    auto: eservice_address
 
   # -- Item 2: the documents served ---------------------------------------------
   efs050_documents:

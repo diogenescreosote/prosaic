@@ -55,6 +55,7 @@ project accretes decisions instead of middleware.
 - [0032](adr/0032-local-modules.md) Local modules: a gitignored local/ overlay for deployment-specific descriptors
 - [0033](adr/0033-overlay-form-technology.md) Overlay form technology: draw, flatten, never trust AcroForm
 - [0034](adr/0034-module-repos-as-submodules.md) Module repos: commit-pinned submodules under modules/
+- [0035](adr/0035-front-matter-defaults.md) Front-matter defaults: box config, shadowed by matter config
 
 Also:
 
