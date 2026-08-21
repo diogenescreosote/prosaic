@@ -12,7 +12,35 @@ Extracted from the original per-form fillers; behavior is unchanged.
 
 from __future__ import annotations
 
+from pathlib import Path
 from typing import Optional
+
+import yaml
+
+PLEADING_DIR = Path(__file__).resolve().parent
+REPO_ROOT = PLEADING_DIR.parent
+
+
+def front_matter_defaults(case_dir: Optional[Path] = None) -> dict:
+    """Front-matter defaults, lowest precedence first (ADR-0035): the
+    deployment's ``local/config.yaml`` ``front_matter_defaults:`` block
+    (box-wide), shadowed by the matter's ``matter.yaml``
+    ``front_matter_defaults:`` block. The source's own front matter
+    wins over both --- callers merge with ``{**defaults, **meta}``.
+    Missing or unparseable files contribute nothing."""
+    merged: dict = {}
+    candidates = [REPO_ROOT / "local" / "config.yaml"]
+    if case_dir is not None:
+        candidates.append(Path(case_dir) / "matter.yaml")
+    for path in candidates:
+        try:
+            data = yaml.safe_load(path.read_text()) or {}
+        except (OSError, yaml.YAMLError):
+            continue
+        block = data.get("front_matter_defaults") or {}
+        if isinstance(block, dict):
+            merged.update(block)
+    return merged
 
 
 def strip_county_prefix(county: str) -> str:
@@ -220,6 +248,10 @@ AUTO_BINDINGS = {
     "filer_city": lambda m: filer_address_parts(m)["city"],
     "filer_state": lambda m: filer_address_parts(m)["state"],
     "filer_zip": lambda m: filer_address_parts(m)["zip"],
+    # The filer's designated electronic-service address (may differ
+    # from the contact email); typically supplied by a deployment- or
+    # matter-level front_matter_defaults block (ADR-0035).
+    "eservice_address": lambda m: str(m.get("filer_eservice_address") or "").strip(),
     "hearing_time": lambda m: str(m.get("hearing_time") or "").strip(),
     "hearing_dept": lambda m: str(m.get("hearing_dept") or "").strip(),
     # Assigned judicial officer, for forms whose header carries a

@@ -527,6 +527,9 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     if not blank.exists():
         raise FileNotFoundError(f"Blank form missing: {blank}")
 
+    # Box-level front-matter defaults reach direct fills too; a meta
+    # that came through md_pleading already carries them (idempotent).
+    meta = {**jc_common.front_matter_defaults(), **(meta or {})}
     texts, checks, explicit_checks, problems = resolve_values(desc, meta, data)
     result = FillResult(output_path=output_path, warnings=problems)
     if problems and strict:

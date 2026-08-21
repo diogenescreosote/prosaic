@@ -4434,6 +4434,13 @@ def main() -> None:
     warn_spaced_dashes(raw, input_path)
 
     meta, body = parse_front_matter(raw)
+    # Deployment- and matter-level front-matter defaults (ADR-0035):
+    # local/config.yaml < matter.yaml < the source's own front matter.
+    import form_fill as _ff
+    import jc_common as _jc
+    _defaults = _jc.front_matter_defaults(_ff.find_case_dir(input_path))
+    if _defaults:
+        meta = {**_defaults, **meta}
     variant = effective_variant(meta, body, args.variant)
     if args.variant is None and variant == "public":
         print(
