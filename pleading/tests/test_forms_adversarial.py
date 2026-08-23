@@ -73,7 +73,17 @@ def page_text(pdf: Path, page_no: int) -> str:
 def test_every_field_lands_in_its_mapped_widget(form_id, tmp_path):
     desc = form_fill.load_descriptor(form_id)
     fields = desc.get("fields") or {}
-    data = {name: f"TOK_{name}_KOT" for name in fields}
+    # Tokens must be SHORT: on dense table forms (an income/expense
+    # grid packs sidewise neighbors a few points apart) a long token
+    # overflows its box across the neighbor's, the two overprint, and
+    # poppler drops the mangled glyphs — the token is then "absent"
+    # even though the draw landed exactly where the map said. A short
+    # token fits inside any real box, so what this test proves stays
+    # exactly what it claims: each field draws on its mapped page (and,
+    # for acroform, in its own widget). Z{i}J is substring-safe: the
+    # index is delimited on both sides, so no token contains another.
+    tokens = {name: f"Z{i}J" for i, name in enumerate(fields)}
+    data = dict(tokens)
     out = tmp_path / f"{form_id}.pdf"
     form_fill.fill(form_id, out, meta={}, data=data)
 
@@ -81,7 +91,7 @@ def test_every_field_lands_in_its_mapped_widget(form_id, tmp_path):
     overlay_form = str(desc.get("technology") or "") == "overlay"
     problems = []
     for name, spec in fields.items():
-        token = f"TOK_{name}_KOT"
+        token = tokens[name]
         if overlay_form or spec.get("method") == "overlay":
             txt = page_text(out, int(spec.get("page", 1)))
             if token not in txt.replace("\n", " "):
