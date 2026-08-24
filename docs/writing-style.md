@@ -92,6 +92,50 @@ included.
   prose reads as shouting; let sentence structure carry the weight.
 - `***bold italic***` only when both are genuinely needed.
 
+## Assert the point; do not stage a contrast
+
+Cut the "not X, but Y" construction. It is the single most common tic in
+machine-drafted legal prose, and it costs a sentence to say what half a
+sentence would: the reader did not propose X, so denying it introduces X
+rather than disposing of it. Same for the disclaimer that trails a good
+sentence — "I am not asking the Court to do Z" — which plants Z in the
+judge's mind and makes a confident request sound defensive.
+
+```md
+# WRONG — the contrast is doing no work
+The relief is time-sensitive not because of any emergency but because
+its whole value lies in the lead time it buys.
+The regular calendar is the obstacle, not the notice period.
+That is not a complaint about counsel's advocacy; it is a
+structural gap.
+
+# RIGHT — assert the operative fact
+The relief is worth having only if counsel has lead time to use it.
+I can serve the day an order issues. The difficulty is the hearing
+date.
+No one presently speaks for the child's own interests.
+```
+
+Three narrow cases where the contrast earns its place, because the
+reader arrives already holding X:
+
+- **Correcting a specific thing on the record.** The other side, an
+  order, or a cited document says X. Name it and quote it: "The brief
+  asserts the child witnessed the incident. The note it cites records
+  only that she described being upstairs." That is a rebuttal, and the
+  contrast is the substance.
+- **A legal standard the court will otherwise assume.** "The standard
+  is good cause, not irreparable harm" is worth writing when the
+  authority is genuinely mistaken for the stricter test, and the
+  contrast is the point being briefed.
+- **A disclaimer with legal consequence.** A status-quo disclosure
+  required by rule, or a statement that no privilege is waived, is
+  operative language. Keep it, once, and do not repeat it.
+
+Outside those, delete the negative half and let the affirmative
+sentence carry the weight. If deleting it loses nothing, it was never
+doing anything.
+
 ## Citation format
 
 California style. **Italicize the case name only** — not the reporter,
