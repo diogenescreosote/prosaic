@@ -93,15 +93,26 @@ class LocalSigner(Signer):
         image = store.resolve(req.signer_key)
         mark = marks.prepare(image)
 
-        found = self.slots(req.pdf)
+        every = self.slots(req.pdf)
+        found, skipped_theirs = self._partition(every, req)
         marks_found = [s for s in found if s.role is SlotRole.SIGNATURE_MARK]
         if not marks_found:
+            others = sorted(
+                {s.belongs_to for s in skipped_theirs if s.belongs_to}
+            )
+            detail = (
+                "\n  Blocks on this document belong to: "
+                + "; ".join(others)
+                + f"\n  Signing as: {req.signer_name}"
+                if others else ""
+            )
             raise SignerError(
-                f"{req.pdf.name} has no signature line. Signature blocks are "
-                "found by their printed text, so a document built before "
-                "\\signblock existed, or one whose blocks were removed, "
-                "offers nothing to sign. Run with --slots to see what was "
-                "found."
+                f"{req.pdf.name} has no signature line for "
+                f"{req.signer_name}.{detail}\n"
+                "  Names are matched exactly, never approximately, because a "
+                "near miss would put a signature on somebody else's line. If "
+                "the printed name differs from the legal name, pass --block "
+                "with the printed form. `sc sign slots` lists what was found."
             )
 
         out = self._output_path(req)
@@ -138,6 +149,11 @@ class LocalSigner(Signer):
                 f"  note: no clear space for the reference stamp on page(s) "
                 f"{pages}; those pages carry no stamp",
             )
+        for owner in sorted({s.belongs_to or "(unattributed)"
+                             for s in skipped_theirs}):
+            n = sum(1 for s in skipped_theirs
+                    if (s.belongs_to or "(unattributed)") == owner)
+            print(f"  left blank for {owner}: {n} field(s)")
 
         directory, att = audit.write(
             audit_root=req.audit_root,
@@ -161,6 +177,40 @@ class LocalSigner(Signer):
                 f"attested as {att.reference}"
             ),
         )
+
+    # -- whose blanks are whose --------------------------------------------
+
+    def _partition(
+        self, every: list[Slot], req: SignRequest
+    ) -> tuple[list[Slot], list[Slot]]:
+        """Split discovered slots into this signer's and everyone else's.
+
+        A multi-party document --- a stipulation carries four party blocks
+        and a judge's --- prints identical signature rules, distinguished
+        only by the name beneath each. Matching that name is what keeps a
+        signature off the other parties' lines, and it is not optional: an
+        earlier version signed all four.
+
+        Attribution is exact after normalisation. Where a document names
+        nobody at all, its blocks are taken as the signer's, since there
+        is no other party to confuse them with.
+        """
+        wanted = {slots_mod.normalise_name(req.signer_name)}
+        if req.block:
+            wanted.add(slots_mod.normalise_name(req.block))
+        anyone_named = any(s.belongs_to for s in every)
+
+        mine, theirs = [], []
+        for slot in every:
+            if not slot.for_signer:
+                theirs.append(slot)
+            elif slots_mod.normalise_name(slot.belongs_to) in wanted:
+                mine.append(slot)
+            elif not slot.belongs_to and not anyone_named:
+                mine.append(slot)
+            else:
+                theirs.append(slot)
+        return mine, theirs
 
     # -- output location ---------------------------------------------------
 

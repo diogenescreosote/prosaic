@@ -29,6 +29,7 @@ drift rather than trusting the two files to stay in step.
 from __future__ import annotations
 
 import re
+from dataclasses import replace
 from pathlib import Path
 
 import fitz
@@ -40,13 +41,58 @@ from .base import Slot, SlotRole
 # blank is followed immediately by a comma.
 _BLANK_RE = re.compile(r"^_{3,}$")
 
+# A two-digit-year blank prints its own century: "20___". It is not all
+# underscores, so it is invisible to _BLANK_RE --- and being invisible is
+# not harmless. In the whereof clause it sits between the month and the
+# location, so skipping it shifted every later blank up by one and put a
+# two-digit year into the *location* blank. A blank that cannot be seen
+# is worse than one that cannot be filled.
+_YEAR_BLANK_RE = re.compile(r"^(?:19|20)_{2,}$")
+
 # The signature rule is much longer than any date blank, which is what
 # distinguishes it without having to count exact underscores --- those
 # are a typography decision and may reasonably be retuned.
 _RULE_MIN_UNDERSCORES = 30
 
 _EXECUTED_RE = re.compile(r"\bExecuted this\b.*\bday of\b", re.I)
+_WHEREOF_RE = re.compile(r"\bIN WITNESS WHEREOF\b", re.I)
 _DATED_RE = re.compile(r"^Dated:\s*_{3,}", re.I)
+
+# A date clause and the roles its blanks take, in printed order. Matching
+# is per *clause*, not per line, because a clause wraps: the whereof
+# clause runs onto a second line, which is why an earlier line-at-a-time
+# version found its signature rule and none of its four date blanks --- it
+# would have signed a will and left it undated.
+_CLAUSES: tuple[tuple[re.Pattern[str], tuple[SlotRole, ...]], ...] = (
+    # "Executed this ___ day of ______, 2026, at Reno, Nevada."
+    # Year and location are printed from front matter, so only two blanks.
+    (_EXECUTED_RE, (SlotRole.DAY_ORDINAL, SlotRole.MONTH_NAME)),
+    # "IN WITNESS WHEREOF, I, NAME, sign this Will on this ___ day of
+    #  _______, 20___, at ____________."  Four blanks, and the year is
+    # two-digit because the clause prints its own "20".
+    (
+        _WHEREOF_RE,
+        (
+            SlotRole.DAY_ORDINAL,
+            SlotRole.MONTH_NAME,
+            SlotRole.YEAR_TWO_DIGIT,
+            SlotRole.LOCATION,
+        ),
+    ),
+)
+
+# Titles printed beneath a judicial officer's signature rule. A judge
+# block is "Dated: ____" + rule + title, so its date line is textually
+# identical to a filer's --- the title is the only thing that tells them
+# apart.
+_JUDICIAL_TITLE_RE = re.compile(
+    r"^(?:HON\.|HONORABLE\b|JUDGE\b|COMMISSIONER\b|JUDICIAL OFFICER\b|"
+    r"JUDGE PRO TEM\b|REFEREE\b)", re.I
+)
+
+# How far below a slot a judicial title may sit and still claim it. The
+# judge block spans about four lines at 12pt double-spaced.
+_JUDICIAL_REACH_PT = 72.0
 
 # Printed labels beneath the signature line on Judicial Council forms.
 # A flattened form has no widgets, so the label is the only anchor left.
@@ -77,44 +123,135 @@ def _lines(page: fitz.Page) -> list[list[tuple]]:
 
 
 def _is_blank(word: str) -> bool:
+    """Whether a word is a fillable blank of any shape."""
+    stripped = word.strip(" .,;:")
+    return bool(_BLANK_RE.match(stripped) or _YEAR_BLANK_RE.match(stripped))
+
+
+def _is_plain_blank(word: str) -> bool:
     return bool(_BLANK_RE.match(word.strip(" .,;:")))
 
 
 def _blank_boxes(line: list[tuple]) -> list[tuple[float, float, float, float]]:
-    return [(w[0], w[1], w[2], w[3]) for w in line if _is_blank(w[4])]
+    """Every blank on the line, left to right as printed.
+
+    Order is what the clause mapping relies on, so this sorts by x rather
+    than trusting word index --- a wrapped clause is still one line to
+    PyMuPDF's grouping, but justified text can hand words back out of
+    visual order.
+    """
+    boxes = [(w[0], w[1], w[2], w[3]) for w in line if _is_blank(w[4])]
+    return sorted(boxes, key=lambda b: b[0])
+
+
+def _is_rule(line: list[tuple]) -> bool:
+    return (
+        len(line) == 1
+        and _is_plain_blank(line[0][4])
+        and line[0][4].count("_") >= _RULE_MIN_UNDERSCORES
+    )
+
+
+def normalise_name(name: str) -> str:
+    """A name reduced for comparison: upper case, no punctuation.
+
+    Comparison is exact after this, never fuzzy. A near-match rule would
+    make "ANDREW CONE" match "ANDREA CONE", and the cost of a false
+    positive here is a signature on the wrong person's line --- so an
+    unrecognised name fails loudly instead.
+    """
+    return " ".join(re.sub(r"[.,]", "", name).upper().split())
+
+
+def _owner_below(lines: list[list[tuple]], start: int) -> str:
+    """The name or title printed under a signature rule.
+
+    A signature block is rule + name (+ role), so the first line of real
+    text below the rule names whose block it is. This is what tells a
+    four-party stipulation apart: the rules are identical, the names are
+    not.
+    """
+    for k in range(start + 1, min(start + 4, len(lines))):
+        text = " ".join(w[4] for w in lines[k]).strip()
+        if not text or _is_rule(lines[k]):
+            continue
+        if _blank_boxes(lines[k]):
+            # Another block's date line: this rule had no name under it.
+            return ""
+        return text
+    return ""
 
 
 def discover(pdf: Path) -> list[Slot]:
-    """Every signature-block blank in the document, in page order."""
+    """Every signature-block blank in the document, in page order.
+
+    Slots belonging to a judicial officer are returned too, flagged
+    `for_signer=False`, rather than dropped: an inventory that silently
+    omitted them would make a proposed order look like it had no
+    signature area at all.
+    """
     found: list[Slot] = []
     with fitz.open(pdf) as doc:
         for pno, page in enumerate(doc):
-            for line in _lines(page):
+            lines = _lines(page)
+            page_slots: list[Slot] = []
+            # Date blanks seen since the last rule. A "Dated: ___" line
+            # belongs to the block whose rule follows it, so attribution
+            # has to wait until that rule names its owner.
+            pending: list[int] = []
+            i = 0
+            while i < len(lines):
+                line = lines[i]
                 text = " ".join(w[4] for w in line).strip()
-                boxes = _blank_boxes(line)
 
-                # The signature rule: a line that is one long blank and
-                # nothing else.
-                if len(line) == 1 and _is_blank(line[0][4]):
-                    if line[0][4].count("_") >= _RULE_MIN_UNDERSCORES:
-                        found.append(
-                            Slot(pno, SlotRole.SIGNATURE_MARK, boxes[0], text)
+                if _is_rule(line):
+                    owner = _owner_below(lines, i)
+                    judicial = bool(_JUDICIAL_TITLE_RE.match(owner))
+                    page_slots.append(
+                        Slot(pno, SlotRole.SIGNATURE_MARK,
+                             _blank_boxes(line)[0], text,
+                             for_signer=not judicial,
+                             belongs_to=owner)
+                    )
+                    for idx in pending:
+                        page_slots[idx] = replace(
+                            page_slots[idx],
+                            for_signer=not judicial,
+                            belongs_to=owner,
                         )
-                        continue
-
-                # "Executed this ___ day of _______, YEAR, at PLACE."
-                # Two blanks, in order: ordinal day, then month name. The
-                # year and location are already printed.
-                if _EXECUTED_RE.search(text) and len(boxes) >= 2:
-                    found.append(Slot(pno, SlotRole.DAY_ORDINAL, boxes[0], text))
-                    found.append(Slot(pno, SlotRole.MONTH_NAME, boxes[1], text))
+                    pending = []
+                    i += 1
                     continue
 
-                # "Dated: ______" takes the whole date, deliberately, so
-                # a December build signed in January is not wrong.
-                if _DATED_RE.match(text) and boxes:
-                    found.append(Slot(pno, SlotRole.DATE_FULL, boxes[0], text))
+                clause = next(
+                    (roles for rx, roles in _CLAUSES if rx.search(text)), None
+                )
+                if clause:
+                    # Gather blanks across the clause's own lines, in
+                    # printed order, stopping at the signature rule.
+                    boxes: list[tuple[float, float, float, float]] = []
+                    j = i
+                    while j < len(lines) and len(boxes) < len(clause):
+                        if j > i and _is_rule(lines[j]):
+                            break
+                        boxes += _blank_boxes(lines[j])
+                        j += 1
+                    for role, box in zip(clause, boxes):
+                        pending.append(len(page_slots))
+                        page_slots.append(Slot(pno, role, box, text))
+                    i = max(j, i + 1)
                     continue
+
+                if _DATED_RE.match(text):
+                    boxes = _blank_boxes(line)
+                    if boxes:
+                        pending.append(len(page_slots))
+                        page_slots.append(
+                            Slot(pno, SlotRole.DATE_FULL, boxes[0], text)
+                        )
+                i += 1
+
+            found += page_slots
 
     return found
 
@@ -151,8 +288,9 @@ def describe(slots: list[Slot]) -> str:
     out = []
     for s in slots:
         x0, y0, x1, y1 = (round(v, 1) for v in s.rect)
+        owner = s.belongs_to or "(unattributed)"
+        never = "" if s.for_signer else "  NEVER SIGNED HERE"
         out.append(
-            f"  p{s.page + 1}  {s.role.value:<15} "
-            f"[{x0}, {y0}, {x1}, {y1}]  {s.anchor[:58]}"
+            f"  p{s.page + 1}  {s.role.value:<15} {owner:<28}{never}"
         )
     return "\n".join(out)

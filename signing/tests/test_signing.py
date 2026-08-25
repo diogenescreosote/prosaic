@@ -81,7 +81,7 @@ def specimen(tmp_path: Path, w: int = 600, h: int = 200) -> Path:
 def test_slots_found_in_real_build(tmp_path):
     pdf = build_pleading(
         tmp_path,
-        "\\signblock{decl}{ANDREW CONE}{Reno, Nevada}{Respondent, In Pro Per}",
+        "\\signblock{decl}{JOHN DOE}{Reno, Nevada}{Respondent, In Pro Per}",
     )
     found = slots_mod.discover(pdf)
     roles = [s.role for s in found]
@@ -94,7 +94,7 @@ def test_slots_found_in_real_build(tmp_path):
 
 def test_dated_style_takes_a_whole_date(tmp_path):
     pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{ANDREW CONE}{Respondent}"
+        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
     )
     roles = [s.role for s in slots_mod.discover(pdf)]
     assert SlotRole.DATE_FULL in roles
@@ -105,6 +105,87 @@ def test_dated_style_takes_a_whole_date(tmp_path):
 def test_no_signature_block_means_no_slots(tmp_path):
     pdf = build_pleading(tmp_path, "Just prose, no signature block.")
     assert slots_mod.discover(pdf) == []
+
+
+def test_whereof_clause_wraps_and_all_four_blanks_are_found(tmp_path):
+    """The whereof clause runs onto a second line and prints its own "20".
+
+    Two bugs lived here. A line-at-a-time scan found the signature rule
+    and none of the date blanks, so a will would have been signed and left
+    undated. Then, once the clause was read across lines, the "20___"
+    year blank was invisible to an all-underscores test --- which did not
+    merely skip it, it shifted every later blank up one and put a
+    two-digit year into the *location* blank.
+    """
+    pdf = build_pleading(
+        tmp_path, "\\signblock{whereof}{JOHN Q. DOE}{Testator}{Will}"
+    )
+    roles = [s.role for s in slots_mod.discover(pdf) if s.for_signer]
+    assert roles == [
+        SlotRole.DAY_ORDINAL,
+        SlotRole.MONTH_NAME,
+        SlotRole.YEAR_TWO_DIGIT,
+        SlotRole.LOCATION,
+        SlotRole.SIGNATURE_MARK,
+    ]
+
+
+def test_letter_block_has_a_mark_and_no_date(tmp_path):
+    pdf = build_pleading(tmp_path, "\\signblock{letter}{JOHN DOE}{Respondent}")
+    roles = [s.role for s in slots_mod.discover(pdf) if s.for_signer]
+    assert roles == [SlotRole.SIGNATURE_MARK]
+
+
+@pytest.mark.parametrize(
+    "title", ["JUDGE OF THE SUPERIOR COURT", "HON. PAT MORRISON"]
+)
+def test_a_judges_signature_area_is_never_ours(tmp_path, title):
+    """The one defect in this file that would be unrecoverable.
+
+    A judge block prints "Dated: ____" + rule + title. Its date line is
+    textually identical to a filer's own, so nothing but the title
+    distinguishes them --- and an earlier version drew the filer's mark on
+    the judicial officer's line.
+    """
+    pdf = build_pleading(tmp_path, "\\signblock{judge}{%s}" % title)
+    found = slots_mod.discover(pdf)
+    assert found, "the judge's slots should be reported, not dropped"
+    assert not any(s.for_signer for s in found)
+    # belongs_to carries the printed title, so the listing says who.
+    assert all(s.belongs_to == title for s in found)
+
+
+def test_a_stipulation_signs_the_party_and_not_the_judge(tmp_path):
+    pdf = build_pleading(
+        tmp_path,
+        "\\signblock{decl}{JOHN DOE}{Reno, Nevada}{Respondent}\n\n"
+        "\\signblock{judge}{JUDGE OF THE SUPERIOR COURT}",
+    )
+    found = slots_mod.discover(pdf)
+    mine = [s.role for s in found if s.for_signer]
+    theirs = [s.role for s in found if not s.for_signer]
+    assert SlotRole.SIGNATURE_MARK in mine
+    assert SlotRole.DAY_ORDINAL in mine
+    assert theirs.count(SlotRole.SIGNATURE_MARK) == 1
+    assert SlotRole.DATE_FULL in theirs
+
+
+def test_signing_refuses_a_document_that_is_only_a_judges_order(
+    tmp_path, monkeypatch, stub_gpg
+):
+    pdf = build_pleading(
+        tmp_path, "\\signblock{judge}{JUDGE OF THE SUPERIOR COURT}"
+    )
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
+    with pytest.raises(SignerError, match="JUDGE OF THE SUPERIOR COURT"):
+        get_signer("local").request(
+            SignRequest(
+                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
+                audit_root=tmp_path / "audit_log",
+                output=tmp_path / "s.pdf", timestamp=False,
+            )
+        )
 
 
 # --- the mark ---------------------------------------------------------------
@@ -234,10 +315,10 @@ def test_store_refuses_a_signature_inside_a_repo_with_a_remote(tmp_path, monkeyp
         ["git", "remote", "add", "origin", "https://example.invalid/x.git"],
         cwd=repo, check=True,
     )
-    Image.new("RGB", (200, 80), "white").save(repo / "andrew_cone.png")
+    Image.new("RGB", (200, 80), "white").save(repo / "john_doe.png")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(repo))
     with pytest.raises(SignerError, match="published signature"):
-        store.resolve("andrew_cone")
+        store.resolve("john_doe")
 
 
 def test_store_rejects_a_path_as_a_key(tmp_path, monkeypatch):
@@ -248,18 +329,18 @@ def test_store_rejects_a_path_as_a_key(tmp_path, monkeypatch):
 
 def test_store_prefers_a_vector_source(tmp_path, monkeypatch):
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    (tmp_path / "andrew_cone.pdf").write_bytes(b"%PDF-1.4\n")
-    Image.new("RGB", (10, 10), "white").save(tmp_path / "andrew_cone.png")
-    assert store.resolve("andrew_cone").suffix == ".pdf"
+    (tmp_path / "john_doe.pdf").write_bytes(b"%PDF-1.4\n")
+    Image.new("RGB", (10, 10), "white").save(tmp_path / "john_doe.png")
+    assert store.resolve("john_doe").suffix == ".pdf"
 
 
 def test_sidecar_binds_a_mark_to_a_name_and_key(tmp_path, monkeypatch):
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    (tmp_path / "andrew_cone.meta.yaml").write_text(
-        "name: Andrew Cone\ngpg_key: F15991EE7300FD42DBD2F3D0466DD18A60791844\n"
+    (tmp_path / "john_doe.meta.yaml").write_text(
+        "name: John Doe\ngpg_key: F15991EE7300FD42DBD2F3D0466DD18A60791844\n"
     )
-    meta = store.metadata("andrew_cone")
-    assert meta["name"] == "Andrew Cone"
+    meta = store.metadata("john_doe")
+    assert meta["name"] == "John Doe"
     assert meta["gpg_key"].startswith("F15991EE")
 
 
@@ -293,17 +374,17 @@ def stub_gpg(monkeypatch):
 def test_apply_signs_stamps_and_attests(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(
         tmp_path,
-        "\\signblock{decl}{ANDREW CONE}{Reno, Nevada}{Respondent, In Pro Per}",
+        "\\signblock{decl}{JOHN DOE}{Reno, Nevada}{Respondent, In Pro Per}",
     )
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    specimen(tmp_path).rename(tmp_path / "andrew_cone.png")
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
 
     out = tmp_path / "signed" / "doc_SIGNED.pdf"
     result = get_signer("local").request(
         SignRequest(
             pdf=pdf,
-            signer_key="andrew_cone",
-            signer_name="Andrew Cone",
+            signer_key="john_doe",
+            signer_name="John Doe",
             date=dt.date(2026, 8, 25),
             audit_root=tmp_path / "audit_log",
             output=out,
@@ -334,13 +415,13 @@ def test_apply_signs_stamps_and_attests(tmp_path, monkeypatch, stub_gpg):
 
 def test_verify_notices_altered_bytes(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{ANDREW CONE}{Respondent}"
+        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
     )
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    specimen(tmp_path).rename(tmp_path / "andrew_cone.png")
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
     result = get_signer("local").request(
         SignRequest(
-            pdf=pdf, signer_key="andrew_cone", signer_name="Andrew Cone",
+            pdf=pdf, signer_key="john_doe", signer_name="John Doe",
             audit_root=tmp_path / "audit_log",
             output=tmp_path / "signed.pdf", timestamp=False,
         )
@@ -354,14 +435,14 @@ def test_verify_notices_altered_bytes(tmp_path, monkeypatch, stub_gpg):
 
 def test_refuses_to_write_into_a_build_directory(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{ANDREW CONE}{Respondent}"
+        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
     )
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    specimen(tmp_path).rename(tmp_path / "andrew_cone.png")
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
     with pytest.raises(SignerError, match="build directory"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="andrew_cone", signer_name="Andrew Cone",
+                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
                 audit_root=tmp_path / "audit_log",
                 output=tmp_path / "out" / "signed.pdf", timestamp=False,
             )
@@ -370,14 +451,14 @@ def test_refuses_to_write_into_a_build_directory(tmp_path, monkeypatch, stub_gpg
 
 def test_refuses_to_sign_in_place(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{ANDREW CONE}{Respondent}"
+        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
     )
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    specimen(tmp_path).rename(tmp_path / "andrew_cone.png")
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
     with pytest.raises(SignerError, match="in place"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="andrew_cone", signer_name="Andrew Cone",
+                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
                 audit_root=tmp_path / "audit_log", output=pdf, timestamp=False,
             )
         )
@@ -386,11 +467,11 @@ def test_refuses_to_sign_in_place(tmp_path, monkeypatch, stub_gpg):
 def test_unsigned_document_offers_nothing_to_sign(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(tmp_path, "Prose with no signature block.")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
-    specimen(tmp_path).rename(tmp_path / "andrew_cone.png")
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
     with pytest.raises(SignerError, match="no signature line"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="andrew_cone", signer_name="Andrew Cone",
+                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
                 audit_root=tmp_path / "audit_log",
                 output=tmp_path / "s.pdf", timestamp=False,
             )
@@ -413,3 +494,92 @@ def test_synchronous_backend_has_nothing_to_poll():
 def test_unknown_backend_names_the_ones_that_exist():
     with pytest.raises(SignerError, match="local, docuseal"):
         get_signer("carrier-pigeon")
+
+
+# --- multi-party documents -------------------------------------------------
+
+FOUR_PARTY = (
+    "\\signblock{dated}{JANE ROE}{Petitioner}\n\n"
+    "\\signblock{dated}{JOHN DOE}{Respondent}\n\n"
+    "\\signblock{dated}{MARIA SOLIS}{Attorney for Petitioner}\n\n"
+    "\\signblock{judge}{JUDGE OF THE SUPERIOR COURT}"
+)
+
+
+def test_each_block_is_attributed_to_the_name_printed_under_it(tmp_path):
+    pdf = build_pleading(tmp_path, FOUR_PARTY)
+    owners = [s.belongs_to for s in slots_mod.discover(pdf)
+              if s.role is SlotRole.SIGNATURE_MARK]
+    assert owners == [
+        "JANE ROE",
+        "JOHN DOE",
+        "MARIA SOLIS",
+        "JUDGE OF THE SUPERIOR COURT",
+    ]
+
+
+def test_a_stipulation_signs_one_block_and_leaves_the_others(
+    tmp_path, monkeypatch, stub_gpg
+):
+    """The defect this exists to prevent: signing all four party lines.
+
+    Every rule on a stipulation is the same string of underscores. Only
+    the name beneath tells them apart, so attribution is the whole of the
+    safety property.
+    """
+    pdf = build_pleading(tmp_path, FOUR_PARTY)
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
+
+    signer = get_signer("local")
+    mine, theirs = signer._partition(
+        signer.slots(pdf),
+        SignRequest(pdf=pdf, signer_key="john_doe",
+                    signer_name="John Doe", audit_root=tmp_path),
+    )
+    assert [s.belongs_to for s in mine
+            if s.role is SlotRole.SIGNATURE_MARK] == ["JOHN DOE"]
+    assert len([s for s in theirs
+                if s.role is SlotRole.SIGNATURE_MARK]) == 3
+
+
+def test_an_unrecognised_name_refuses_rather_than_guessing(
+    tmp_path, monkeypatch, stub_gpg
+):
+    pdf = build_pleading(tmp_path, FOUR_PARTY)
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    specimen(tmp_path).rename(tmp_path / "somebody.png")
+    with pytest.raises(SignerError, match="JANE ROE"):
+        get_signer("local").request(
+            SignRequest(
+                pdf=pdf, signer_key="somebody", signer_name="Andrea Doe",
+                audit_root=tmp_path / "audit_log",
+                output=tmp_path / "s.pdf", timestamp=False,
+            )
+        )
+
+
+def test_block_override_supplies_the_printed_form_of_a_name(
+    tmp_path, monkeypatch, stub_gpg
+):
+    pdf = build_pleading(tmp_path, FOUR_PARTY)
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
+    result = get_signer("local").request(
+        SignRequest(
+            pdf=pdf, signer_key="john_doe", signer_name="J. Q. Doe",
+            block="JOHN DOE", audit_root=tmp_path / "audit_log",
+            output=tmp_path / "s.pdf", timestamp=False,
+        )
+    )
+    assert result.signed_pdf and result.signed_pdf.is_file()
+
+
+def test_normalise_name_is_exact_not_approximate():
+    n = slots_mod.normalise_name
+    # Case, spacing and punctuation are noise.
+    assert n("John  Doe") == n("JOHN DOE") == n("John, Doe.")
+    # Everything else is signal: a near miss must not compare equal, or a
+    # signature lands on the wrong person's line.
+    assert n("John Doe") != n("John Roe")
+    assert n("John Doe") != n("John Q. Doe")
