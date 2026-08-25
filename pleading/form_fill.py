@@ -475,11 +475,38 @@ def _set_need_appearances(writer: PdfWriter) -> None:
         af[NameObject("/NeedAppearances")] = BooleanObject(True)
 
 
+def _bake_widgets(writer: PdfWriter) -> PdfWriter:
+    """BAKE widget appearance streams into page content, then return a
+    writer over the result. Must run before any widget is dropped.
+
+    Judicial Council blanks carry ReadOnly widgets that draw *static
+    label text* — "Attachment 7.", the blue form numbers like "FL-150" in
+    "A current Income and Expense Declaration (form FL-150)". Those are
+    annotations, not page content, so deleting widgets deletes the
+    labels. FL-300 page 4 alone has 62 widgets of which 4 are ReadOnly
+    labels; an early version of overlay support dropped them and produced
+    a form reading "Attachment ___" with an empty blue gap where the form
+    number belongs. Baking first turns every appearance into ordinary
+    content, so the labels survive and nothing interactive is left.
+    """
+    import io
+    import fitz  # pymupdf, already a hard dependency
+    buf = io.BytesIO()
+    writer.write(buf)
+    buf.seek(0)
+    doc = fitz.open(stream=buf.read(), filetype="pdf")
+    doc.bake()          # widgets + annotations -> page content
+    baked = io.BytesIO(doc.tobytes())
+    doc.close()
+    baked.seek(0)
+    return PdfWriter(clone_from=PdfReader(baked))
+
+
 def _strip_all_form_machinery(writer: PdfWriter) -> None:
-    """Flatten an overlay-technology output: drop every widget
-    annotation and the AcroForm dictionary itself. Nothing interactive
-    remains, so every viewer renders the same page content — the whole
-    point of ``technology: overlay``."""
+    """Belt and braces after :func:`_bake_widgets`: drop any widget
+    annotation and the AcroForm dictionary that survived the bake.
+    Nothing interactive remains, so every viewer renders the same page
+    content — the whole point of ``technology: overlay``."""
     for page in writer.pages:
         if "/Annots" in page:
             kept = ArrayObject()
@@ -691,6 +718,7 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         writer.update_page_form_field_values(writer.pages[page_idx], values)
 
     if overlay_mode:
+        writer = _bake_widgets(writer)
         _strip_all_form_machinery(writer)
     else:
         if desc.get("technology") == "xfa":
