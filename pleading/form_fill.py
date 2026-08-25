@@ -424,6 +424,20 @@ def resolve_values(desc: dict, meta: Optional[dict] = None,
 
     for leftover in data:
         problems.append(f"unknown field '{leftover}' (not in {desc['form']} descriptor)")
+
+    # The `forms:` block is read by name lookup above, never consumed, so a
+    # key that matches nothing in the descriptor was silently ignored --- it
+    # filled no field and checked no box, and the build said nothing. Two
+    # such typos rode into a signed FL-150 before a human noticed a blank
+    # box on the rendered page. A misspelled key is indistinguishable from
+    # an unset one in the output, so it has to be caught here.
+    known = set(desc.get("fields") or {}) | set(desc.get("checkboxes") or {})
+    for leftover in form_block:
+        if leftover not in known:
+            problems.append(
+                f"unknown key '{leftover}' in forms.{desc['form']} block "
+                f"(not in {desc['form']} descriptor) --- it was IGNORED"
+            )
     return texts, checks, explicit_checks, problems
 
 
