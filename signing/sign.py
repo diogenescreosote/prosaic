@@ -100,6 +100,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
         gpg_key=gpg_key,
         audit_root=audit_root,
         output=Path(args.output) if args.output else None,
+        block=args.block,
         timestamp=not args.no_timestamp,
     )
     signer = get_signer(
@@ -160,6 +161,9 @@ def main() -> None:
     sp.add_argument("--gpg-key", default=None,
                     help="gpg key to sign the statement with (fingerprint; "
                          "default: from the mark's .meta.yaml)")
+    sp.add_argument("--block", default=None, metavar="PRINTED",
+                    help="the name as printed under the signature rule, when "
+                         "it differs from --name")
     sp.add_argument("--date", default=None, metavar="YYYY-MM-DD",
                     help="date of execution (default: today)")
     sp.add_argument("-o", "--output", default=None,

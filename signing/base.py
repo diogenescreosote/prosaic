@@ -66,6 +66,14 @@ class Slot:
     role: SlotRole
     rect: tuple[float, float, float, float]
     anchor: str = ""
+    # False for a blank that belongs to somebody else --- above all, a
+    # judicial officer's signature and date on a proposed order. Those
+    # print exactly like the filer's own, so they must be identified and
+    # excluded rather than left to be noticed: drawing the filer's mark
+    # on a judge's line is the worst thing this code could do.
+    for_signer: bool = True
+    # Why it is not ours, for the inventory listing.
+    belongs_to: str = ""
 
     @property
     def width(self) -> float:
@@ -100,6 +108,11 @@ class SignRequest:
     # Explicit destination for the signed artifact. When None the backend
     # picks one, and must not pick the input or a build directory.
     output: Path | None = None
+    # The name as *printed* under the signature rule, when it differs from
+    # the legal name --- "ANDREW P. CONE" against a signer named "Andrew
+    # Cone". Attribution is exact, so this is how an exact match is
+    # supplied rather than guessed at.
+    block: str | None = None
     # Skip OpenTimestamps. The proof is worth having, but it needs the
     # network and a later `ots upgrade`, so it must be declinable.
     timestamp: bool = True

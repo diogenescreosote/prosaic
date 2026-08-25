@@ -72,6 +72,29 @@ distinctive text, and `signing/slots.py` matches on that — which also
 means discovery works on flattened Judicial Council forms, where
 `technology: overlay` has removed every widget.
 
+**Every block is attributed to the name printed under it, and only the
+signer's own are filled.** A stipulation carries four party blocks and a
+judge's; every signature rule is the same string of underscores, and the
+name beneath is the only thing that distinguishes them. Matching is
+**exact** after normalisation (upper case, punctuation stripped) — never
+fuzzy, because a near-match rule would make "ANDREW CONE" match "ANDREA
+CONE" and the cost of a false positive is a signature on somebody else's
+line. An unrecognised name refuses and lists the names it did find;
+`--block` supplies the printed form when it differs from the legal name.
+
+**A judicial officer's signature area is never signed here.** A judge
+block prints "Dated: ___" + rule + title, so its date line is textually
+identical to a filer's own — the title is the only difference. Judicial
+blocks are still *reported*, flagged, rather than dropped, so a proposed
+order does not look like it has no signature area at all.
+
+**Date clauses are read across line breaks, and a blank need not be all
+underscores.** The whereof clause wraps onto a second line and prints its
+own century, so its year blank reads "20___". Both facts were learned the
+hard way: a line-at-a-time scan signed a will and left it undated, and an
+all-underscores blank test skipped the year and thereby shifted every
+later blank up one, writing a two-digit year into the *location* blank.
+
 **The slot vocabulary encodes form, not just content.** "Executed this
 _____ day of" takes an ordinal; a bare "Dated: ______" takes a whole
 date. `SlotRole` distinguishes them so nobody has to remember at signing
@@ -131,7 +154,7 @@ proof rather than reporting the record clean.
 ```
 sc sign marks                          marks available, and whose key each carries
 sc sign slots <pdf>                    what blanks the document offers
-sc sign apply <pdf> --as KEY [--name NAME] [--gpg-key FPR]
+sc sign apply <pdf> --as KEY [--name NAME] [--gpg-key FPR] [--block PRINTED]
                              [--date YYYY-MM-DD] [-o OUT] [--no-timestamp]
 sc sign verify <attestation-dir> [--pubkey KEY.asc]
 ```
