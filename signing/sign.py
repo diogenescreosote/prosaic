@@ -48,7 +48,12 @@ def cmd_marks(_args: argparse.Namespace) -> int:
         print("  (empty --- drop a PNG of the signature in, named <key>.png)")
         return 0
     for key in have:
+        meta = store.metadata(key)
+        who = meta.get("name", "(no name recorded)")
+        fpr = meta.get("gpg_key", "(no key recorded)")
         print(f"  {key}")
+        print(f"      name:    {who}")
+        print(f"      gpg key: {fpr}")
     return 0
 
 
@@ -67,12 +72,32 @@ def cmd_apply(args: argparse.Namespace) -> int:
     when = (
         _dt.date.fromisoformat(args.date) if args.date else _dt.date.today()
     )
+
+    # The sidecar binds a mark to a name and a key, so neither has to be
+    # retyped. An explicit flag still wins --- a one-off signing under a
+    # different key should not require editing the store.
+    meta = store.metadata(args.signer_key)
+    name = args.name or meta.get("name")
+    gpg_key = args.gpg_key or meta.get("gpg_key")
+    if not name:
+        raise SystemExit(
+            f"no name for {args.signer_key!r}: pass --name, or add "
+            f"'name:' to {store.store_dir() / (args.signer_key + '.meta.yaml')}"
+        )
+    if not gpg_key:
+        print(
+            "  warning: no gpg key given or recorded; gpg will use its "
+            "default key, which is only what you want on a single-key "
+            "keyring",
+            file=sys.stderr,
+        )
+
     req = SignRequest(
         pdf=pdf,
         signer_key=args.signer_key,
-        signer_name=args.name,
+        signer_name=name,
         date=when,
-        gpg_key=args.gpg_key,
+        gpg_key=gpg_key,
         audit_root=audit_root,
         output=Path(args.output) if args.output else None,
         timestamp=not args.no_timestamp,
@@ -129,10 +154,12 @@ def main() -> None:
     sp.add_argument("pdf")
     sp.add_argument("--as", dest="signer_key", required=True,
                     metavar="KEY", help="signature image key (see `marks`)")
-    sp.add_argument("--name", required=True,
-                    help="legal name for the statement of assent")
+    sp.add_argument("--name", default=None,
+                    help="legal name for the statement of assent "
+                         "(default: from the mark's .meta.yaml)")
     sp.add_argument("--gpg-key", default=None,
-                    help="gpg key to sign the statement with (fingerprint)")
+                    help="gpg key to sign the statement with (fingerprint; "
+                         "default: from the mark's .meta.yaml)")
     sp.add_argument("--date", default=None, metavar="YYYY-MM-DD",
                     help="date of execution (default: today)")
     sp.add_argument("-o", "--output", default=None,

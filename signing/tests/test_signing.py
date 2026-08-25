@@ -128,6 +128,55 @@ def test_prepare_rejects_a_blank_page(tmp_path):
         marks.prepare(blank)
 
 
+def test_prepare_reads_a_vector_pdf_source(tmp_path):
+    """PDF is a first-class source, and the preferred one when vector.
+
+    A tablet-captured or traced signature has no paper behind it, so
+    rendering with alpha yields real transparency with nothing to key out.
+    """
+    pdf = tmp_path / "sig.pdf"
+    doc = fitz.open()
+    page = doc.new_page(width=140, height=40)
+    page.draw_bezier(fitz.Point(10, 30), fitz.Point(40, 2),
+                     fitz.Point(90, 38), fitz.Point(130, 10),
+                     color=(0, 0, 0), width=2.5)
+    doc.save(str(pdf))
+    doc.close()
+
+    m = marks.prepare(pdf, pdf_dpi=600)
+    img = Image.open(io.BytesIO(m.png))
+    assert img.mode == "RGBA"
+    assert img.getchannel("A").getextrema() == (0, 255)
+    assert m.aspect > 1.0
+
+
+def test_prepare_keeps_the_colour_of_a_source_that_has_alpha(tmp_path):
+    """A prepared source's ink colour is part of the signature."""
+    src = tmp_path / "red.png"
+    img = Image.new("RGBA", (200, 60), (0, 0, 0, 0))
+    ImageDraw.Draw(img).line([(10, 50), (190, 10)], fill=(200, 0, 0, 255), width=6)
+    img.save(src)
+
+    m = marks.prepare(src, ink=(16, 24, 92))
+    out = Image.open(io.BytesIO(m.png))
+    opaque = [out.getpixel((x, y))[:3]
+              for x in range(out.width) for y in range(out.height)
+              if out.getpixel((x, y))[3] > 200]
+    assert opaque, "no opaque ink found"
+    assert all(px[0] > px[2] for px in opaque), "red was not preserved"
+
+
+def test_prepare_recolours_only_a_scan(tmp_path):
+    """`ink` applies when alpha had to be derived from luminance."""
+    m = marks.prepare(specimen(tmp_path), ink=(0, 0, 200))
+    out = Image.open(io.BytesIO(m.png))
+    opaque = [out.getpixel((x, y))[:3]
+              for x in range(0, out.width, 3) for y in range(0, out.height, 3)
+              if out.getpixel((x, y))[3] > 240]
+    assert opaque
+    assert all(px[2] > px[0] for px in opaque), "ink colour was not applied"
+
+
 def test_place_rect_never_distorts(tmp_path):
     m = marks.prepare(specimen(tmp_path, 900, 150))
     # A wide, short rule -- the Judicial Council shape that tempts squashing.
@@ -195,6 +244,37 @@ def test_store_rejects_a_path_as_a_key(tmp_path, monkeypatch):
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     with pytest.raises(SignerError, match="bare name"):
         store.resolve("../../etc/passwd")
+
+
+def test_store_prefers_a_vector_source(tmp_path, monkeypatch):
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    (tmp_path / "andrew_cone.pdf").write_bytes(b"%PDF-1.4\n")
+    Image.new("RGB", (10, 10), "white").save(tmp_path / "andrew_cone.png")
+    assert store.resolve("andrew_cone").suffix == ".pdf"
+
+
+def test_sidecar_binds_a_mark_to_a_name_and_key(tmp_path, monkeypatch):
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    (tmp_path / "andrew_cone.meta.yaml").write_text(
+        "name: Andrew Cone\ngpg_key: F15991EE7300FD42DBD2F3D0466DD18A60791844\n"
+    )
+    meta = store.metadata("andrew_cone")
+    assert meta["name"] == "Andrew Cone"
+    assert meta["gpg_key"].startswith("F15991EE")
+
+
+@pytest.mark.parametrize("body", ["", "just a string", "- a\n- list\n", "{{{"])
+def test_a_missing_or_malformed_sidecar_is_simply_absent(tmp_path, monkeypatch, body):
+    """Degrades to "supply --name and --gpg-key", never to a crash.
+
+    A wrong sidecar is the dangerous case and no parsing strictness
+    catches that, so strictness here would buy nothing and cost a
+    usable failure mode.
+    """
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    if body:
+        (tmp_path / "x.meta.yaml").write_text(body)
+    assert store.metadata("x") == {}
 
 
 # --- signing end to end (gpg stubbed) --------------------------------------

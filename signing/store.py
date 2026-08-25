@@ -12,12 +12,24 @@ signature published, and no later deletion unpublishes it.
 
 Layout:
 
-    ~/.config/prosaic/signatures/andrew_cone.png
-    ~/.config/prosaic/signatures/andrew_cone.meta.yaml   (optional)
+    ~/.config/prosaic/signatures/andrew_cone.pdf          the mark
+    ~/.config/prosaic/signatures/andrew_cone.meta.yaml    who it belongs to
 
-Override the directory with PROSAIC_SIGNATURE_DIR. Files should be PNG
-with a transparent or white background; see marks.py for what happens to
-the background either way.
+Override the directory with PROSAIC_SIGNATURE_DIR. A mark may be PDF
+(preferred when the source is vector --- it renders at any resolution and
+carries real transparency) or PNG/JPEG; see marks.py for how the
+background is handled in each case.
+
+The sidecar binds a mark to an identity:
+
+    name: Andrew Cone
+    gpg_key: F15991EE...1844
+
+`sc sign apply --as andrew_cone` then needs neither `--name` nor
+`--gpg-key`. That matters beyond convenience: the fingerprint typed on a
+command line is the one thing in the attestation nobody would notice was
+wrong, and a mark whose key is recorded once cannot later be signed with
+somebody else's key by accident.
 """
 
 from __future__ import annotations
@@ -29,7 +41,9 @@ from pathlib import Path
 from .base import SignerError
 
 _ENV = "PROSAIC_SIGNATURE_DIR"
-_SUFFIXES = (".png", ".PNG", ".jpg", ".jpeg", ".JPG", ".JPEG")
+# PDF first: when a vector source exists it is the better one, so a store
+# holding both andrew_cone.pdf and andrew_cone.png uses the PDF.
+_SUFFIXES = (".pdf", ".PDF", ".png", ".PNG", ".jpg", ".jpeg", ".JPG", ".JPEG")
 
 
 def store_dir() -> Path:
@@ -72,6 +86,28 @@ def available() -> list[str]:
         return []
     keys = {p.stem for p in d.iterdir() if p.suffix in _SUFFIXES}
     return sorted(keys)
+
+
+def metadata(key: str) -> dict[str, str]:
+    """The mark's sidecar, or {} if it has none.
+
+    Deliberately forgiving: a missing or malformed sidecar means the
+    caller must supply `--name` and `--gpg-key`, which is a worse
+    experience but not a broken one. A *wrong* sidecar is the dangerous
+    case, and no amount of parsing strictness detects that.
+    """
+    path = store_dir() / f"{key}.meta.yaml"
+    if not path.is_file():
+        return {}
+    try:
+        import yaml
+
+        loaded = yaml.safe_load(path.read_text()) or {}
+    except Exception:
+        return {}
+    if not isinstance(loaded, dict):
+        return {}
+    return {str(k): str(v) for k, v in loaded.items() if v is not None}
 
 
 def resolve(key: str) -> Path:

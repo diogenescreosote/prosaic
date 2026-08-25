@@ -76,50 +76,77 @@ def _trim_to_ink(alpha: Image.Image) -> tuple[int, int, int, int] | None:
     return alpha.getbbox()
 
 
+def _open(path: Path, pdf_dpi: int) -> Image.Image:
+    """A signature source as a PIL image.
+
+    PDF is a first-class source, and often the best one: a signature
+    captured on a tablet or traced in a drawing program is *vector*, so it
+    can be rendered at whatever resolution the page needs with no loss,
+    and it carries genuine transparency rather than a photographed sheet
+    of paper. Rendering with alpha keeps that --- there is nothing to key
+    out, because unpainted areas were never painted.
+    """
+    if path.suffix.lower() == ".pdf":
+        import fitz
+
+        with fitz.open(path) as doc:
+            if doc.page_count == 0:
+                raise SignerError(f"{path} has no pages")
+            pix = doc[0].get_pixmap(dpi=pdf_dpi, alpha=True)
+            return Image.open(io.BytesIO(pix.tobytes("png"))).convert("RGBA")
+    try:
+        img = Image.open(path)
+        img.load()
+        return img
+    except OSError as exc:
+        raise SignerError(f"cannot read signature image {path}: {exc}") from None
+
+
 def prepare(
     path: Path,
     ink: tuple[int, int, int] = (16, 24, 92),
     max_dimension: int = 2000,
+    pdf_dpi: int = 1200,
 ) -> Mark:
-    """Load a signature image and return drawable RGBA ink.
+    """Load a signature source and return drawable RGBA ink.
 
-    `ink` defaults to a dark navy: it reads as a pen on a rendered page
-    and stays legible when the filing is photocopied in black and white.
+    A source that already carries real transparency keeps **its own
+    colour**: it was prepared deliberately, and a signature's ink colour
+    is part of what makes it that person's signature. `ink` applies only
+    when alpha had to be derived from luminance --- i.e. a scan of paper,
+    where the source is effectively greyscale anyway. It defaults to a
+    dark navy, which reads as a pen and survives black-and-white
+    photocopying.
     """
-    try:
-        img = Image.open(path)
-    except OSError as exc:
-        raise SignerError(f"cannot read signature image {path}: {exc}") from None
+    img = _open(path, pdf_dpi)
 
     with img:
-        img.load()
-        # An image that already carries alpha was probably prepared
-        # deliberately; honour it rather than re-deriving from luminance,
-        # which would treat its transparent regions as white paper.
+        # Transparency that actually varies means the background is
+        # already absent; re-deriving alpha from luminance would treat
+        # those transparent regions as white paper and paint over them.
         if img.mode in ("RGBA", "LA") and _has_real_alpha(img):
-            alpha = img.convert("RGBA").getchannel("A")
+            rgba = img.convert("RGBA")
         else:
             alpha = _alpha_from_luminance(img)
+            rgba = Image.new("RGBA", alpha.size, (*ink, 255))
+            rgba.putalpha(alpha)
 
-        box = _trim_to_ink(alpha)
+        box = _trim_to_ink(rgba.getchannel("A"))
         if box is None:
             raise SignerError(
                 f"{path} appears blank: no pixel dark enough to be ink. "
-                "Check that it is a signature scan and not a white page."
+                "Check that it is a signature and not an empty page."
             )
-        alpha = alpha.crop(box)
+        rgba = rgba.crop(box)
 
-        if max(alpha.size) > max_dimension:
-            scale = max_dimension / max(alpha.size)
-            new = (max(1, int(alpha.width * scale)), max(1, int(alpha.height * scale)))
-            alpha = alpha.resize(new, Image.LANCZOS)
-
-        solid = Image.new("RGBA", alpha.size, (*ink, 255))
-        solid.putalpha(alpha)
+        if max(rgba.size) > max_dimension:
+            scale = max_dimension / max(rgba.size)
+            new = (max(1, int(rgba.width * scale)), max(1, int(rgba.height * scale)))
+            rgba = rgba.resize(new, Image.LANCZOS)
 
         buf = io.BytesIO()
-        solid.save(buf, format="PNG", optimize=True)
-        return Mark(png=buf.getvalue(), width_px=solid.width, height_px=solid.height)
+        rgba.save(buf, format="PNG", optimize=True)
+        return Mark(png=buf.getvalue(), width_px=rgba.width, height_px=rgba.height)
 
 
 def _has_real_alpha(img: Image.Image) -> bool:
