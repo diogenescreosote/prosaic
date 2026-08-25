@@ -32,10 +32,31 @@ backend states which kind it is through `produces_local_attestation`, so
 callers never branch on a backend's name.
 
 **Signature marks live outside every repository.** `signing/store.py`
-resolves `--as KEY` against `~/.config/prosaic/signatures/KEY.png`
+resolves `--as KEY` against `~/.config/prosaic/signatures/KEY.{pdf,png,jpg}`
 (override with `PROSAIC_SIGNATURE_DIR`) and **refuses** a mark that sits
 inside a git work tree with a remote. A committed signature is a
 published signature, and no later deletion unpublishes it.
+
+**PDF is the preferred source when the mark is vector.** A signature
+captured on a tablet or traced in a drawing program has no paper behind
+it: rendering it with alpha gives real transparency with nothing to key
+out, and it can be rendered at whatever resolution the page needs. A
+store holding both `KEY.pdf` and `KEY.png` uses the PDF.
+
+**A source that already carries transparency keeps its own colour.** Ink
+colour is part of what makes a signature that person's. The `ink`
+parameter applies only where alpha had to be derived from luminance ---
+a scan of paper, which is effectively greyscale anyway.
+
+**A sidecar binds a mark to an identity.** `KEY.meta.yaml` carrying
+`name:` and `gpg_key:` means `sc sign apply --as KEY` needs neither
+`--name` nor `--gpg-key`; an explicit flag still wins. This is more than
+convenience: a fingerprint typed on a command line is the one thing in an
+attestation nobody would notice was wrong. `sc sign marks` prints the
+bound identity for each mark so a mistake is visible. A missing or
+malformed sidecar degrades to "supply the flags", never to a crash --- a
+*wrong* sidecar is the dangerous case, and no parsing strictness detects
+that.
 
 **Marks are never distorted.** Scaling is proportional and driven by
 height; a mark may overhang its rule horizontally rather than be
@@ -108,12 +129,14 @@ proof rather than reporting the record clean.
 ## Commands
 
 ```
-sc sign marks                          signature images available
+sc sign marks                          marks available, and whose key each carries
 sc sign slots <pdf>                    what blanks the document offers
-sc sign apply <pdf> --as KEY --name NAME [--gpg-key FPR] [--date YYYY-MM-DD]
-                                       [-o OUT] [--no-timestamp]
+sc sign apply <pdf> --as KEY [--name NAME] [--gpg-key FPR]
+                             [--date YYYY-MM-DD] [-o OUT] [--no-timestamp]
 sc sign verify <attestation-dir> [--pubkey KEY.asc]
 ```
+
+`--name` and `--gpg-key` come from the mark's sidecar when omitted.
 
 ## Not covered
 
