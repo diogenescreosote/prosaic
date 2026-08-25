@@ -428,7 +428,7 @@ def resolve_values(desc: dict, meta: Optional[dict] = None,
     # The `forms:` block is read by name lookup above, never consumed, so a
     # key that matches nothing in the descriptor was silently ignored --- it
     # filled no field and checked no box, and the build said nothing. Two
-    # such typos rode into a signed FL-150 before a human noticed a blank
+    # such typos rode into a signed filing before a human noticed a blank
     # box on the rendered page. A misspelled key is indistinguishable from
     # an unset one in the output, so it has to be caught here.
     known = set(desc.get("fields") or {}) | set(desc.get("checkboxes") or {})
@@ -494,10 +494,11 @@ def _bake_widgets(writer: PdfWriter) -> PdfWriter:
     writer over the result. Must run before any widget is dropped.
 
     Judicial Council blanks carry ReadOnly widgets that draw *static
-    label text* — "Attachment 7.", the blue form numbers like "FL-150" in
-    "A current Income and Expense Declaration (form FL-150)". Those are
-    annotations, not page content, so deleting widgets deletes the
-    labels. FL-300 page 4 alone has 62 widgets of which 4 are ReadOnly
+    label text* — an item's "Attachment 7." marker, and the blue form
+    numbers printed inside a sentence that cross-references another
+    form. Those are annotations, not page content, so deleting widgets
+    deletes the labels. One request-for-order page alone has 62 widgets
+    of which 4 are ReadOnly
     labels; an early version of overlay support dropped them and produced
     a form reading "Attachment ___" with an empty blue gap where the form
     number belongs. Baking first turns every appearance into ordinary

@@ -29,8 +29,8 @@ nothing. No court asks whether a filing can be regenerated from source.
 The question is always whether a particular document is the one that
 was signed, served, and filed. That is answered by retaining the bytes
 and attesting them — a claim about a file, not about a pipeline. A
-reproducible build is a developer convenience mistaken for a chain of
-custody.
+reproducible build is a developer convenience mistaken for an unbroken
+chain of provenance.
 
 This is also already the workspace's discipline elsewhere: `pleadings/`
 holds the court-filed version and nothing else, precisely because the

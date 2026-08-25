@@ -51,8 +51,7 @@ without ever opening the raw XML.
 - **Direction codes are the phone's, decoded conservatively.** Call
   `type` and SMS `type`/`msg_box` values outside the documented maps
   render as `type=N` rather than a guessed label — a mislabeled
-  direction in a custody or harassment timeline is worse than an
-  honest unknown.
+  direction in a contested timeline is worse than an honest unknown.
 - **This parses one format on purpose.** SMS Backup & Restore XML is
   the format the running deployments actually produce. Carrier CSVs,
   iPhone extractions, and Google Voice takeouts are different tools
