@@ -88,6 +88,6 @@ python_version = "3.12"
 exclude = ["^tests/(harness|scenarios)/", "^tests/test_(docs_coverage|platform_seams|repo_hygiene|system_dependencies)\\.py$"]
 
 [tool.pytest.ini_options]
-testpaths = ["tests", "pleading/tests"]
+testpaths = ["tests", "pleading/tests", "signing/tests"]
 addopts = "-q"
 markers = ["ai: judged by a headless LLM; skipped when unavailable"]

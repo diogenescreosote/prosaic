@@ -49,6 +49,13 @@ subcommand's real promises live in that component's spec.
   (`flows/run.py`): judgment work as a files-first graph with agent,
   command, judge, and gate steps. The real promises live in
   [flows.md](flows.md). *(tested: tests/test_flows.py)*
+- **`sc sign ...`** passes through to the local signing engine
+  (`signing/sign.py`): list the signature blanks a built document
+  offers, list available signature marks, apply a mark and attest the
+  resulting bytes, and re-verify a recorded signing event. Signing is a
+  separate step from building, and the artifact it produces is what the
+  attestation covers (ADR-0036). The real promises live in
+  [signing.md](signing.md). *(tested: signing/tests/test_signing.py)*
 - **`sc docuseal ...`** passes through to the e-signature client
   (`docuseal-client/client.py`): send for signature, poll, fetch the signed
   originals and audit log. The real promises live in
