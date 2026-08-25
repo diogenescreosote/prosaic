@@ -45,18 +45,32 @@ apparatus.
    file, and no guard may be written whose correct operation requires
    it.
 
-2. **Attestation is over a specific artifact, byte-for-byte.** The unit
-   of attestation is the exact file sent for filing or service — the
-   PDF, and optionally a rasterized rendering of it alongside, which is
-   immune to PDF-internal churn and is what a human would actually
-   compare. Digests are computed over those bytes. Both SHA-256 and
-   SHA3-256 are recorded: SHA-256 because `shasum -a 256` is available
-   to any verifier without installing anything, SHA3-256 for longevity.
+2. **Scope: documents this system signs, and nothing else.** An
+   attestation is produced only by the local signing step, and says
+   only what that step can honestly say — that a named signature was
+   applied to these exact bytes with intent to be bound. It is not a
+   record of what was filed, served, or submitted, and no attestation
+   is generated for a document the local signer did not sign.
 
-3. **Attested artifacts must be retained.** An attestation whose
+   Excluded, deliberately: proposed orders and other forms carrying no
+   signature of the signer's; documents signed through a remote
+   service, which issues its own completion certificate and audit trail
+   — a second, competing local record of the same signing event is
+   worse than one record; and wet-signed paper, where the physical
+   original is its own evidence.
+
+3. **Attestation is over a specific artifact, byte-for-byte.** The unit
+   is the exact file the signing step produced — the PDF, and
+   optionally a rasterized rendering alongside, which is immune to
+   PDF-internal churn and is what a human would actually compare.
+   Digests are computed over those bytes. Both SHA-256 and SHA3-256 are
+   recorded: SHA-256 because `shasum -a 256` is available to any
+   verifier without installing anything, SHA3-256 for longevity.
+
+   **The attested artifact must be retained.** An attestation whose
    subject has been deleted asserts nothing. Retention of the exact
-   attested bytes is part of the attestation, not an optional
-   companion to it.
+   attested bytes is part of the attestation, not an optional companion
+   to it. Because the scope is narrow, so is this obligation.
 
 4. **Signing is an event, not a property of a source.** The build
    produces unsigned output and never applies a signature as a side
@@ -66,13 +80,19 @@ apparatus.
    entry. Rebuilding a source neither reproduces nor re-signs a signed
    artifact, and does not need to.
 
-5. **The on-page stamp is an index, not a commitment.** Where an
-   identifier is printed, it encodes a **random nonce generated at
-   signing time** — never a digest of the containing file, which is
-   self-referential and cannot be computed. The log maps nonce to full
-   digests. Nobody verifies the stamp; it is how a human finds the log
-   entry, so truncation is a legibility decision rather than a security
-   one.
+5. **The on-page stamp is an index, not a commitment, and it is
+   applied at signing time.** It encodes a **random nonce generated
+   when the document is signed** — never a digest of the containing
+   file, which is self-referential and cannot be computed, and not a
+   value the build could know. The signing step composes the signature
+   mark and the stamp in one pass, then hashes the result. The log maps
+   nonce to full digests. Nobody verifies the stamp; it is how a human
+   finds the log entry, so truncation is a legibility decision rather
+   than a security one.
+
+   It follows that **unsigned output carries no stamp.** A stamp
+   asserts that a log entry exists, so stamping a draft would be a
+   small falsehood with no benefit.
 
 6. **The log records the source commit for provenance only.** It
    locates the drafting state that produced the artifact. It is not
@@ -95,11 +115,18 @@ and would be trained away within a week. Decision 4 makes it
 unnecessary: a signature cannot appear on text nobody assented to,
 because no build ever applies one.
 
-**Wet-signed paper needs two digests.** Build to PDF, print, sign by
-hand, scan, and the scanned artifact has a different hash than the
-built one. The log must name both and state the relationship. Wholly
-programmatic signing avoids this by producing a single artifact, which
-is a further argument for it.
+**There is exactly one statement of assent, because there is exactly
+one thing being attested.** An earlier draft of this decision
+contemplated a second template for documents submitted but not signed
+("these are the bytes I filed"). Decision 2 removes the need: those
+documents produce no attestation at all. One scope, one sentence, one
+meaning.
+
+**Signing on paper stays outside the system rather than being modelled
+in it.** Build to PDF, print, sign by hand, scan, and the scan hashes
+differently from the build — a problem that only arises if paper
+signing is in scope. It is not. The wet original is its own evidence
+and needs no digest.
 
 **Verification requires no part of this system.** A third party checks
 an attestation with `shasum`, `gpg --verify`, and the OpenTimestamps
