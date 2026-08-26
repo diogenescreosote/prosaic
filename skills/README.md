@@ -71,3 +71,4 @@ depends on a particular harness.
 | [drafting-conventions](drafting-conventions/SKILL.md) | Pagination and signature-block discipline: what the renderer enforces, what the drafter judges |
 | [run-flow](run-flow/SKILL.md) | Run or write a files-first flow: agent/judge/gate graphs for drafting loops and review passes |
 | [new-matter](new-matter/SKILL.md) | Scaffold a matter directory: layout, git, hooks, contracts, backup |
+| [redact](redact/SKILL.md) | Redact a filing from a declared schedule, then prove the output before anyone sees it |
