@@ -304,6 +304,68 @@ def test_declsignblock_never_splits_across_pages(tmp_path, n_paragraphs):
         "signature block stranded on a page with no substantive text")
 
 
+def _write_heading_over_signature(path: Path, n_paragraphs: int) -> None:
+    """A document whose LAST heading introduces a paragraph that is itself
+    the head of a heading+lead-in+signature keep-group -- the shape that
+    used to strand the heading above a run of blank numbered lines."""
+    fm = "\n".join([
+        "---",
+        'notreal: "test-generated sweep source"',
+        'filer_name: "Jane Roe"',
+        "filer_address_lines:",
+        '  - "123 Main Street"',
+        '  - "Springfield, CA 90000"',
+        'filer_phone: "(555) 555-0100"',
+        'filer_email: "jane.roe@example.com"',
+        'filer_role: "Respondent, In Pro Per"',
+        'court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"',
+        'court_county: "COUNTY OF EXAMPLE"',
+        'petitioner: "JOHN SMITH"',
+        'respondent: "JANE ROE"',
+        'case_number: "24CV00000"',
+        'paper_title: "STIPULATION AND ORDER"',
+        "---",
+    ])
+    para = ("This filler paragraph exists only to walk the final heading "
+            "across the page boundary; its length is two rendered lines "
+            "on the grid.")
+    body = "\n\n".join(f"{i + 1}. {para}" for i in range(n_paragraphs))
+    tail = (
+        "\n\n**Last Heading.**\n\n"
+        "TKDURATION This closing paragraph runs to several rendered lines so "
+        "that it is not itself a short lead-in block, and it is followed by a "
+        "short lead-in and a signature block, which together form the "
+        "keep-group that the heading must not be separated from.\n\n"
+        "IT IS SO STIPULATED.\n\n"
+        "\\signblock{dated}{JANE ROE}{Respondent, In Pro Per}\n")
+    path.write_text(fm + "\n\n" + body + tail, encoding="utf-8")
+
+
+@pytest.mark.parametrize("n_paragraphs", [6, 7, 8, 9, 10, 11, 12, 13])
+def test_heading_never_stranded_above_a_signature_keep_group(tmp_path,
+                                                             n_paragraphs):
+    """Sweep a heading across the page boundary while the paragraph under
+    it heads a signature keep-group. The heading and the first line of its
+    content must share a page: placing the heading and then letting the
+    group break away leaves the heading above blank numbered lines, which
+    reads as a rendering mistake in a filed pleading."""
+    src = tmp_path / f"headgrp_{n_paragraphs}.md"
+    out = tmp_path / f"headgrp_{n_paragraphs}.pdf"
+    _write_heading_over_signature(src, n_paragraphs)
+    proc = subprocess.run(
+        [sys.executable, str(MD_PLEADING), str(src), str(out)],
+        capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr[-1000:]
+    pages = scenario.pdf_text(out).split("\f")
+    head_pages = [k for k, p in enumerate(pages) if "Last Heading" in p]
+    body_pages = [k for k, p in enumerate(pages) if "TKDURATION" in p]
+    assert len(head_pages) == 1, "heading rendered more than once"
+    assert len(body_pages) == 1, "heading content rendered more than once"
+    assert head_pages[0] == body_pages[0], (
+        "heading stranded on page %d while its content rendered on page %d"
+        % (head_pages[0] + 1, body_pages[0] + 1))
+
+
 def test_declsignblock_signed_fills_date_and_signature(built, tmp_path):
     src = built / "src" / "Declaration of Jane Roe.md"
     out = tmp_path / "signed.pdf"
