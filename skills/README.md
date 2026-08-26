@@ -60,6 +60,7 @@ depends on a particular harness.
 |---|---|
 | [estate-plan](estate-plan/SKILL.md) | Draft, execute, and cryptographically bind a California estate plan from the estate pack |
 | [proof](proof/SKILL.md) | Remote online notarization via Proof: send, poll, and fetch the notarized original |
+| [deploy](deploy/SKILL.md) | Assemble a working deployment: engine, form module, local glue, dependencies, and a verification that each layer resolved |
 | [docuseal](docuseal/SKILL.md) | Send a document for e-signature via DocuSeal and bring the signed original + audit log back |
 | [crypto-attest](crypto-attest/SKILL.md) | Sign, verify, hash, manifest, and timestamp matter documents against a paper-anchored key |
 | [build-envelope](build-envelope/SKILL.md) | Build a filing packet (pleading PDF/DOCX, exhibits, cover forms) from a matter's markdown sources |
