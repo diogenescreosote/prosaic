@@ -3785,6 +3785,25 @@ class PleadingPDF:
                             if total + prev_lines <= self.lines_per_page:
                                 start -= 1
                                 total += prev_lines
+                    # Then keep walking back over LEAD blocks. The single
+                    # step above pulls in one closing paragraph, which is
+                    # often longer than the short-lead cap; what sits above
+                    # THAT is frequently the section label introducing it
+                    # ("4. Duration."). A bold label on its own line is a
+                    # PARAGRAPH to the parser, not a heading block, so the
+                    # heading keep-with-next rule never sees it and it was
+                    # left stranded above a run of blank numbered lines
+                    # while the group it introduces broke to a fresh page.
+                    while start > 0:
+                        prev = self.blocks[start - 1]
+                        if (prev.kind in self._SIG_KINDS
+                                or not self._is_lead_block(prev)):
+                            break
+                        prev_lines = self._block_grid_lines(prev)
+                        if total + prev_lines > self.lines_per_page:
+                            break
+                        start -= 1
+                        total += prev_lines
                     groups[start] = total
                     i = j + 1
                     continue
