@@ -162,8 +162,9 @@ carelessly.
 - **Treating providers** -- the therapist, the psychiatrist, the
   hospital, the clinic. Identity, contact details, dates of contact and
   everything they learned or opined are in scope.
-- **Court-appointed neutrals** -- the custody evaluator, the forensic
-  examiner, minor's counsel, a mediator. **Not** treating providers.
+- **Court-appointed neutrals** -- the court's appointed evaluator, the
+  forensic examiner, counsel for a minor, a mediator. **Not** treating
+  providers.
   Their identity is a matter of public record in the case and carries no
   privilege. Do not redact their names, and do not redact the fact of
   their appointment or the existence of their evaluation. What they

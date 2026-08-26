@@ -1,7 +1,7 @@
 """Checking a checkbox must not write /V on a shared parent node.
 
-JC forms group unrelated fields under one parent (FL-300's Li1 holds the
-TO-name text field beside the party checkboxes). PDF children inherit a
+JC forms group unrelated fields under one parent (one such form's Li1
+holds a name text field beside a group of checkboxes). PDF children inherit a
 missing /V from their parent, so a /V='/1' written on the group node made
 every untouched sibling text field display '1'. The /V belongs on the
 nearest node with its own /T -- the field itself.
