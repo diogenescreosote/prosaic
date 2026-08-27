@@ -583,3 +583,40 @@ def test_normalise_name_is_exact_not_approximate():
     # signature lands on the wrong person's line.
     assert n("John Doe") != n("John Roe")
     assert n("John Doe") != n("John Q. Doe")
+
+
+def test_a_failed_attestation_leaves_nothing_behind(tmp_path, monkeypatch):
+    """A stamped PDF with no record is the artifact ADR-0036 forbids.
+
+    gpg failing --- no TTY for the passphrase prompt is the common case ---
+    happens after the signed file has been written and the event directory
+    started. Left alone that yields a document which looks signed, carries
+    a reference resolving to nothing, and outlives the error: the next run
+    mints a different nonce and the orphan stays to be found and believed.
+    """
+    def boom(statement, gpg_key):
+        raise SignerError("gpg: signing failed: Inappropriate ioctl for device")
+
+    monkeypatch.setattr(audit, "_clearsign", boom)
+    pdf = build_pleading(
+        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
+    )
+    monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
+    specimen(tmp_path).rename(tmp_path / "john_doe.png")
+
+    out = tmp_path / "staging" / "signed.pdf"
+    audit_root = tmp_path / "audit_log"
+    with pytest.raises(SignerError, match="ioctl"):
+        get_signer("local").request(
+            SignRequest(
+                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
+                audit_root=audit_root, output=out, timestamp=False,
+            )
+        )
+
+    assert not out.exists(), "the signed artifact must not survive"
+    events = list((audit_root / "signatures" / "local").glob("*")) \
+        if (audit_root / "signatures" / "local").is_dir() else []
+    assert events == [], f"half-built attestation left behind: {events}"
+    # and the unsigned build is untouched
+    assert pdf.is_file()

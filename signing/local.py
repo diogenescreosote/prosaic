@@ -155,17 +155,26 @@ class LocalSigner(Signer):
                     if (s.belongs_to or "(unattributed)") == owner)
             print(f"  left blank for {owner}: {n} field(s)")
 
-        directory, att = audit.write(
-            audit_root=req.audit_root,
-            backend=self.name,
-            pdf=out,
-            reference=reference,
-            signer_name=req.signer_name,
-            signer_key=req.signer_key,
-            gpg_key=req.gpg_key,
-            when=when,
-            timestamp=req.timestamp,
-        )
+        # If the attestation cannot be completed, the signed artifact must
+        # not survive. A stamped PDF with no record is precisely what
+        # ADR-0036 exists to prevent: it looks signed, carries a reference
+        # that resolves to nothing, and the next run mints a different
+        # nonce, leaving the orphan behind to be found later and believed.
+        try:
+            directory, att = audit.write(
+                audit_root=req.audit_root,
+                backend=self.name,
+                pdf=out,
+                reference=reference,
+                signer_name=req.signer_name,
+                signer_key=req.signer_key,
+                gpg_key=req.gpg_key,
+                when=when,
+                timestamp=req.timestamp,
+            )
+        except Exception:
+            out.unlink(missing_ok=True)
+            raise
         return SignResult(
             outcome=Outcome.COMPLETED,
             signed_pdf=out,
