@@ -205,13 +205,19 @@ def test_multipage_overflow_preserves_every_sentence(tmp_path):
 def test_negative_control_bogus_map_is_loudly_reported(tmp_path):
     bogus = form_fill.REGISTRY_DIR / "_negcontrol.yaml"
     bogus.write_text(
-        "form: _negcontrol\nblank: mc030.pdf\ntechnology: acroform\n"
+        "form: _negcontrol\nblank: mc040.pdf\ntechnology: overlay\n"
         "fields:\n  ghost:\n    map: NoSuchWidget999\n    doc: negative control\n"
         "agent_guide: negative control\n")
     try:
         res = form_fill.fill("_negcontrol", tmp_path / "x.pdf", meta={},
                              data={"ghost": "value"})
-        assert any("not found" in w and "drift" in w for w in res.warnings), (
+        # Technology-agnostic on purpose. The AcroForm path words this as
+        # "not found — revision drift?" and the overlay path as "needs a
+        # rect, or a map naming a widget in <blank> — form revision
+        # drift?". What must hold either way is that the field is named
+        # and the drift is called drift; since ADR-0037 the overlay
+        # wording is the one that will survive.
+        assert any("drift" in w and "ghost" in w for w in res.warnings), (
             "a field mapped to a nonexistent widget produced no drift warning — "
             "the revision alarm is decorative")
     finally:

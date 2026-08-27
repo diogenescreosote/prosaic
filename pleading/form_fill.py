@@ -180,7 +180,49 @@ def load_descriptor(form_id: str) -> dict:
     for key in ("form", "blank", "fields"):
         if key not in desc:
             raise ValueError(f"{path}: descriptor missing required key '{key}'")
+    _require_overlay(form_id, desc, path)
     return desc
+
+
+# Judicial Council forms this repository still fills through AcroForm,
+# each one predating ADR-0037 and each one a defect to be retired. The
+# list may only ever shrink: a form absent from it that is not `overlay`
+# is a hard error, so no new descriptor can be authored the old way.
+LEGACY_ACROFORM_FORMS = frozenset({
+    "civ110", "efs020", "mc025", "mc030", "mc050",
+    "subp001", "subp002", "subp010", "subp025",
+    "fl323", "fl327", "fl330", "fl335",
+})
+
+
+def _require_overlay(form_id: str, desc: dict, path: Path) -> None:
+    """Overlay is the only permitted fill technology (ADR-0037).
+
+    How an AcroForm fill renders is a property of the viewer, not of the
+    file, so what a court receives is not knowable from here. Overlay
+    draws every value as page content and flattens, which is why it also
+    survives the page-level merges used to assemble a packet.
+    """
+    tech = str(desc.get("technology") or "acroform").strip().lower()
+    if tech == "overlay":
+        return
+    known = {form_id.lower(), str(desc.get("form") or "").strip().lower()}
+    if known & LEGACY_ACROFORM_FORMS:
+        print(
+            f"WARNING: {form_id}: technology: {tech} --- AcroForm filling is "
+            "prohibited (ADR-0037) and this form has not been migrated to "
+            "overlay yet. What it renders depends on the viewer.",
+            file=sys.stderr,
+        )
+        return
+    raise ValueError(
+        f"{path}: technology: {tech} is not permitted. Judicial Council "
+        "forms are filled by drawing text onto the page and flattening "
+        "(technology: overlay, ADR-0037); AcroForm values are never "
+        "written, because how they render is a property of the viewer "
+        "rather than of the file. Author this descriptor as overlay and "
+        "check it with `sc form preview`."
+    )
 
 
 def blank_path(desc: dict) -> Path:

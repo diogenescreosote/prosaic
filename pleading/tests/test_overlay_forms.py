@@ -14,6 +14,8 @@ from __future__ import annotations
 import sys
 from pathlib import Path
 
+import pytest
+
 PLEADING = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLEADING))
 
@@ -171,14 +173,18 @@ def test_esign_taxonomy_and_parties_are_validated(tmp_path):
 def test_module_repo_forms_are_discovered(tmp_path, monkeypatch):
     """ADR-0034: a checkout under modules/<name>/ mirroring the repo
     layout contributes descriptors and blanks, at lower precedence than
-    local/ and higher than the built-ins."""
+    local/ and higher than the built-ins.
+
+    Uses an overlay form as the template: since ADR-0037 a non-overlay
+    descriptor outside the legacy list is refused at load, so an
+    AcroForm form cannot serve as an incidental fixture."""
     import shutil
 
     mod = tmp_path / "modules" / "example-forms" / "pleading" / "forms"
     (mod / "registry").mkdir(parents=True)
-    desc = form_fill.load_descriptor("mc030")
-    src = form_fill._registry_path("mc030")
-    text = src.read_text().replace("form: mc030", "form: zz998")
+    desc = form_fill.load_descriptor("mc040")
+    src = form_fill._registry_path("mc040")
+    text = src.read_text().replace("form: mc040", "form: zz998")
     (mod / "registry" / "zz998.yaml").write_text(text)
     shutil.copy(form_fill.blank_path(desc), mod / desc["blank"])
 
@@ -186,3 +192,54 @@ def test_module_repo_forms_are_discovered(tmp_path, monkeypatch):
     assert "zz998" in form_fill.list_forms()
     loaded = form_fill.load_descriptor("zz998")
     assert form_fill.blank_path(loaded).exists()
+
+
+# --- ADR-0037: AcroForm filling is prohibited ------------------------------
+
+
+def test_a_new_non_overlay_descriptor_is_refused(tmp_path):
+    """No new form may be authored the AcroForm way.
+
+    The rule has to bite at load, not at review: an agent copying the
+    shape of an older descriptor would otherwise reproduce a fill whose
+    rendering is a property of the reader rather than of the file.
+    """
+    import yaml
+    desc = yaml.safe_load(
+        "form: zz999\nblank: zz999.pdf\ntechnology: acroform\nfields: {}\n"
+    )
+    with pytest.raises(ValueError, match="not permitted"):
+        form_fill._require_overlay("zz999", desc, tmp_path / "zz999.yaml")
+
+
+def test_a_listed_legacy_form_warns_but_still_loads(capsys, tmp_path):
+    import yaml
+    desc = yaml.safe_load(
+        "form: mc050\nblank: mc050.pdf\ntechnology: acroform\nfields: {}\n"
+    )
+    form_fill._require_overlay("mc050", desc, tmp_path / "mc050.yaml")
+    assert "ADR-0037" in capsys.readouterr().err
+
+
+def test_overlay_passes_without_complaint(capsys, tmp_path):
+    import yaml
+    desc = yaml.safe_load(
+        "form: zz999\nblank: zz999.pdf\ntechnology: overlay\nfields: {}\n"
+    )
+    form_fill._require_overlay("zz999", desc, tmp_path / "zz999.yaml")
+    assert capsys.readouterr().err == ""
+
+
+def test_the_legacy_list_only_shrinks():
+    """A canary on the list itself.
+
+    The list is debt, enumerated so it stays visible. This pins its
+    current contents so that adding to it is a deliberate act someone has
+    to justify, rather than the path of least resistance when a new form
+    is awkward to overlay.
+    """
+    assert form_fill.LEGACY_ACROFORM_FORMS <= {
+        "civ110", "efs020", "mc025", "mc030", "mc050",
+        "subp001", "subp002", "subp010", "subp025",
+        "fl323", "fl327", "fl330", "fl335",
+    }
