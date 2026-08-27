@@ -37,6 +37,9 @@ columns, in any order, matched case-insensitively:
 `Status`  one of:
             conformed        bears the clerk's filing stamp
             efiled           e-filing confirmation copy from the portal
+            signed_order     the court's own order: a judicial officer's
+                             signature and date on the face, no clerk
+                             stamp. Not a substitute
             as-served        unstamped copy as served by a party  [SUBSTITUTE]
             portal           downloaded from a case portal, unstamped [SUBSTITUTE]
             counsel-copy     copy supplied by counsel, unstamped     [SUBSTITUTE]
@@ -54,6 +57,10 @@ CHECKS
   the ones a reader must not mistake for the record
 - rows marked `conformed`/`efiled` are spot-checked for filing-stamp text; a
   missing stamp is reported as a contradiction to resolve, not an error
+- rows marked `signed_order` are spot-checked for a judicial signature
+  line instead, on the same terms. The check finds the form's printed
+  label, not the signature itself: whether someone actually signed is a
+  question for the human who records the row
 - `not-in-hand` rows are listed as outstanding retrievals
 
 Exit 1 on a structural failure (missing row, missing file, unknown status).
@@ -80,7 +87,21 @@ except ImportError:
 
 SUBSTITUTE = {"as-served", "portal", "counsel-copy", "unverified"}
 FILED = {"conformed", "efiled"}
-KNOWN = SUBSTITUTE | FILED | {"not-in-hand"}
+# A signed order is the court's own document and no substitute for
+# anything, but it carries no clerk's filing stamp --- orders are signed,
+# not stamped. Held apart from FILED so the stamp spot-check does not
+# demand something that was never going to be there, which previously
+# forced such orders to be labelled `unverified` and counted among the
+# substitutes: wrong, and wrong in a way that understates the record.
+SIGNED_ORDER = {"signed_order"}
+AUTHENTIC = FILED | SIGNED_ORDER
+KNOWN = SUBSTITUTE | AUTHENTIC | {"not-in-hand"}
+
+SIGNATURE_LINE = re.compile(
+    r"(JUDICIAL\s+OFFICER|JUDGE\s+OF\s+THE\s+SUPERIOR\s+COURT|"
+    r"COMMISSIONER|JUDGE\s+PRO\s+TEM|REFEREE)",
+    re.I,
+)
 
 STAMP = re.compile(
     r"(ELECTRONICALLY\s+FILED|E-?FILED|Clerk of the Court|FILED\s*\n|"
@@ -170,17 +191,22 @@ def main() -> int:
     outstanding = [r for r in rows if r["status"] == "not-in-hand"]
 
     contradictions: list[str] = []
+    unsigned_orders: list[str] = []
     if fitz is not None:
         for r in rows:
-            if r["status"] not in FILED or r["file"] not in on_disk:
+            if r["status"] not in AUTHENTIC or r["file"] not in on_disk:
                 continue
             try:
                 doc = fitz.open(pdir / r["file"])
                 head = "\n".join(doc[i].get_text() for i in range(min(3, len(doc))))
             except Exception:
                 continue
-            if head.strip() and not STAMP.search(head):
+            if not head.strip():
+                continue
+            if r["status"] in FILED and not STAMP.search(head):
                 contradictions.append(r["file"])
+            elif r["status"] in SIGNED_ORDER and not SIGNATURE_LINE.search(head):
+                unsigned_orders.append(r["file"])
 
     result = {
         "errors": errors,
@@ -192,6 +218,7 @@ def main() -> int:
         "not_in_hand": [{k: r.get(k, "") for k in ("file", "source")}
                         for r in outstanding],
         "claims_filed_but_no_stamp_found": contradictions,
+        "claims_signed_order_but_no_signature_line": unsigned_orders,
         "pdfs_on_disk": len(on_disk),
         "manifest_rows": len(rows),
     }
@@ -222,6 +249,11 @@ def main() -> int:
             print("\n  Declared filed, but no filing-stamp text found "
                   "(resolve, do not ignore):")
             for f in contradictions:
+                print(f"    {f}")
+        if unsigned_orders:
+            print("\n  Declared a signed order, but no judicial signature "
+                  "line found (resolve, do not ignore):")
+            for f in unsigned_orders:
                 print(f"    {f}")
         if not (missing_row or missing_file or bad_status or errors):
             print("\n  MANIFEST OK: every PDF is accounted for.")
