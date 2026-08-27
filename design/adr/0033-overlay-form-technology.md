@@ -59,6 +59,13 @@ box — which value-level tests cannot see.
 MC-040 is the pilot; existing acroform/xfa descriptors are unchanged
 and migrate opportunistically.
 
+> **Superseded August 26, 2026 by
+> [ADR-0037](0037-no-acroform-filling.md).** Overlay is no longer
+> opt-in and migration is no longer opportunistic: AcroForm filling
+> is prohibited, a non-overlay descriptor outside a named legacy
+> list is a hard error, and that list may only shrink. The reasoning
+> above stands; only the disposition changed.
+
 ## Consequences
 
 - Overlay outputs carry no live form fields: nothing downstream can

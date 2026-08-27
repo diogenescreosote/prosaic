@@ -57,6 +57,7 @@ project accretes decisions instead of middleware.
 - [0034](adr/0034-module-repos-as-submodules.md) Module repos: commit-pinned submodules under modules/
 - [0035](adr/0035-front-matter-defaults.md) Front-matter defaults: box config, shadowed by matter config
 - [0036](adr/0036-attest-artifacts-not-builds.md) Attest artifacts byte-for-byte; no build reproducibility
+- [0037](adr/0037-no-acroform-filling.md) AcroForm filling prohibited; overlay is the only form technology
 
 Also:
 
