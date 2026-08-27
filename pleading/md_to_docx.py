@@ -809,7 +809,7 @@ def build_caption(doc: Document, meta: dict) -> None:
     for line in [meta["filer_name"],
                  *meta["filer_address_lines"],
                  meta["filer_phone"],
-                 meta["filer_email"]]:
+                 meta.get("filer_email", "")]:
         add_para(doc, typographic_subs(str(line)), spacing=CL)
     add_para(doc, typographic_subs(meta["filer_role"]).upper(), spacing=CL)
     add_blank(doc)
@@ -1180,6 +1180,19 @@ def main() -> None:
 
     raw = input_path.read_text(encoding="utf-8")
     meta, body = parse_front_matter(raw)
+    # Deployment- and matter-level front-matter defaults (ADR-0035):
+    # local/config.yaml < matter.yaml < the source's own front matter.
+    # Applied here as well as in md_pleading, because a default the PDF
+    # honours and the DOCX does not means one source rendering as two
+    # different documents --- and the DOCX is what goes out for
+    # signature. Found when a source stopped setting filer_email,
+    # relying on the deployment default: the PDF was right and the DOCX
+    # raised KeyError.
+    import form_fill as _ff
+    import jc_common as _jc
+    _defaults = _jc.front_matter_defaults(_ff.find_case_dir(input_path))
+    if _defaults:
+        meta = {**_defaults, **meta}
     variant = effective_variant(meta, body, args.variant)
     if args.variant is None and variant == "public":
         print(
