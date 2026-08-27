@@ -1,0 +1,532 @@
+form: fw001
+title: Request to Waive Court Fees
+blank: fw001.pdf
+domain: ca/general
+revision: 2026-03
+technology: overlay          # ADR-0037: draw + flatten; never AcroForm values
+
+agent_guide: >-
+  FW-001 Request to Waive Court Fees (Gov. Code §§ 68632-68633, Cal.
+  Rules of Court 3.51, 8.26, 8.818). Two pages, and which page-2 items
+  are required depends entirely on the ground checked at item 5:
+
+    5a  receiving public benefits  -> page 2 is NOT filled out at all
+    5b  household income at or below the limit -> items 8, 9 and 10 only
+    5c  cannot pay for necessities AND court fees -> the ENTIRE page 2
+
+  The form says so in terms at the top of page 2, and the commonest
+  defect is filling the wrong subset. Set `ground_5a`, `ground_5b` or
+  `ground_5c` and fill accordingly.
+
+  **Item 9 is broader than it looks.** It asks for everyone in the home
+  "who depend in whole or in part on you for support, **or on whom you
+  depend in whole or in part for support**." A filer housed rent-free by
+  a friend is within the second clause on its face. Leaving item 9 empty
+  in that situation is a position, not an oversight, and needs an
+  attachment saying so --- see `overflow_attachment`.
+
+  Money amounts: write them WITHOUT a dollar sign; the form prints its
+  own `$`. Item 8b, 9b, the 8b+9b total, and item 11's total are not
+  computed here --- pass the arithmetic you intend, and check it.
+
+  This form is filed CONFIDENTIAL. It is not served on the other party
+  (Cal. Rules of Court 3.54(a)), so it takes no proof of service.
+
+  The companion FW-003 (Order on Court Fee Waiver) is completed by the
+  court, not the filer.
+
+fields:
+  # ---- caption: FW-001 carries its own, not the pleading caption -------
+  court_county:
+    map: "FW-001[0].Page1[0].RightCaption[0].CourtInfo[0]"
+    page: 1
+    doc: "'Superior Court of California, County of ___' plus street address"
+    auto: court_county
+  case_number:
+    map: "FW-001[0].Page1[0].RightCaption[0].CaseNumber[0]"
+    page: 1
+    auto: case_number
+    doc: "Case number"
+  case_name:
+    map: "FW-001[0].Page1[0].RightCaption[0].CaseName[0]"
+    page: 1
+    auto: short_title
+    doc: "Case name, e.g. 'Roe v. Doe'"
+
+  # ---- item 1: who is asking ------------------------------------------
+  applicant_name:
+    map: "FW-001[0].Page1[0].List1[0].item1[0].PetitionerName1[0]"
+    page: 1
+    auto: filer_name_bare
+    doc: "Item 1: your name"
+  applicant_street:
+    map: "FW-001[0].Page1[0].List1[0].item1[0].PetitionerStrAddress[0]"
+    page: 1
+    auto: filer_street
+    doc: "Item 1: street address"
+  applicant_city:
+    map: "FW-001[0].Page1[0].List1[0].item1[0].PetitionerCity[0]"
+    page: 1
+    auto: filer_city
+  applicant_state:
+    map: "FW-001[0].Page1[0].List1[0].item1[0].PetitionerState[0]"
+    page: 1
+    auto: filer_state
+  applicant_zip:
+    map: "FW-001[0].Page1[0].List1[0].item1[0].PetitionerZip[0]"
+    page: 1
+    auto: filer_zip
+  applicant_phone:
+    map: "FW-001[0].Page1[0].List1[0].item1[0].PetitionerTel[0]"
+    page: 1
+    auto: phone
+
+  # ---- item 2: your job -----------------------------------------------
+  job_title:
+    map: "FW-001[0].Page1[0].List2[0].item2[0].PetitionerJobTitle[0]"
+    page: 1
+    doc: >-
+      Item 2: job title. Write the truth for an unemployed applicant ---
+      'Unemployed since <date>' --- rather than leaving it blank, which
+      reads as an omission.
+    default: ""
+  employer_name:
+    map: "FW-001[0].Page1[0].List2[0].item2[0].PetitionerEmployerName[0]"
+    page: 1
+    doc: "Item 2: employer's name"
+    default: ""
+  employer_address:
+    map: "FW-001[0].Page1[0].List2[0].item2[0].PetitionerEmployerAdd[0]"
+    page: 1
+    doc: "Item 2: employer's address"
+    default: ""
+
+  # ---- item 3: lawyer, if any -----------------------------------------
+  lawyer_info:
+    map: "FW-001[0].Page1[0].List3[0].PetitionerLawyerInfo[0]"
+    page: 1
+    doc: "Item 3: your lawyer's name, firm and address. Blank if self-represented."
+    default: ""
+  lawyer_sig:
+    map: "FW-001[0].Page1[0].List3[0].Lib[0].PetLawyerSigLine[0]"
+    page: 1
+    doc: "Item 3.b: the lawyer signs. ALWAYS BLANK here."
+    default: ""
+
+  # ---- item 6: previous waiver in this case ---------------------------
+  # (checkboxes only; the attachment goes on MC-025)
+
+  # ---- signature block ------------------------------------------------
+  sig_date:
+    map: "FW-001[0].Page1[0].Sign[0].SigDate[0]"
+    page: 1
+    doc: "Date beside the signature. LEAVE BLANK for signing time."
+    default: ""
+  print_name:
+    map: "FW-001[0].Page1[0].Sign[0].PetitionerName[0]"
+    page: 1
+    auto: filer_name_bare
+    doc: "(TYPE OR PRINT NAME) under the signature line"
+
+  # ---- page 2 caption --------------------------------------------------
+  p2_name:
+    map: "FW-001[0].Page2[0].pXCaption[0].PetitionerName1[0]"
+    page: 2
+    auto: filer_name_bare
+  p2_case_number:
+    map: "FW-001[0].Page2[0].pXCaption[0].CaseNumber[0]"
+    page: 2
+    auto: case_number
+
+  # ---- item 8: your gross monthly income -------------------------------
+  income_source_1:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeSource1[0]"
+    page: 2
+    doc: "Item 8.a(1): source of income"
+    default: ""
+  income_amount_1:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeAmount1[0]"
+    page: 2
+    doc: "Item 8.a(1): amount, no dollar sign"
+    default: ""
+  income_source_2:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeSource2[0]"
+    page: 2
+    default: ""
+  income_amount_2:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeAmount2[0]"
+    page: 2
+    default: ""
+  income_source_3:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeSource3[0]"
+    page: 2
+    default: ""
+  income_amount_3:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeAmount3[0]"
+    page: 2
+    default: ""
+  income_source_4:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeSource4[0]"
+    page: 2
+    default: ""
+  income_amount_4:
+    map: "FW-001[0].Page2[0].List8[0].Lia[0].IncomeAmount4[0]"
+    page: 2
+    default: ""
+  income_total:
+    map: "FW-001[0].Page2[0].List8[0].Lib[0].TotalIncome[0]"
+    page: 2
+    doc: "Item 8.b: your total monthly income. Not computed --- check it."
+    default: ""
+
+  # ---- item 9: household income ---------------------------------------
+  # See agent_guide: this covers people you depend on, not only people
+  # who depend on you.
+  household_name_1:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeName1[0]"
+    page: 2
+    default: ""
+  household_age_1:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeAge1[0]"
+    page: 2
+    default: ""
+  household_rel_1:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeRel1[0]"
+    page: 2
+    default: ""
+  household_amount_1:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeAmount1[0]"
+    page: 2
+    default: ""
+  household_name_2:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeName2[0]"
+    page: 2
+    default: ""
+  household_age_2:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeAge2[0]"
+    page: 2
+    default: ""
+  household_rel_2:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeRel2[0]"
+    page: 2
+    default: ""
+  household_amount_2:
+    map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeAmount2[0]"
+    page: 2
+    default: ""
+  household_total:
+    map: "FW-001[0].Page2[0].List9[0].Lib[0].HouseholdTotalncome[0]"
+    page: 2
+    doc: "Item 9.b (note the form's own typo in the widget name)"
+    default: ""
+  all_income_total:
+    map: "FW-001[0].Page2[0].List9[0].Lib[0].TotalAllIncome[0]"
+    page: 2
+    doc: "8.b plus 9.b. Not computed --- check it."
+    default: ""
+
+  # ---- item 10: money and property ------------------------------------
+  cash:
+    map: "FW-001[0].Page2[0].List10[0].Lia[0].Cash[0]"
+    page: 2
+    doc: "Item 10.a: cash"
+    default: ""
+  account_name_1:
+    map: "FW-001[0].Page2[0].List10[0].Lib[0].FinanialAccountName1[0]"
+    page: 2
+    doc: "Item 10.b: bank/financial account (form's own widget typo)"
+    default: ""
+  account_amount_1:
+    map: "FW-001[0].Page2[0].List10[0].Lib[0].FinancialAccountAmount1[0]"
+    page: 2
+    default: ""
+  account_name_2:
+    map: "FW-001[0].Page2[0].List10[0].Lib[0].FinanialAccountName2[0]"
+    page: 2
+    default: ""
+  account_amount_2:
+    map: "FW-001[0].Page2[0].List10[0].Lib[0].FinancialAccountAmount2[0]"
+    page: 2
+    default: ""
+  vehicle_1:
+    map: "FW-001[0].Page2[0].List10[0].Lic[0].VehicleMakeYr1[0]"
+    page: 2
+    doc: "Item 10.c: vehicle make and year"
+    default: ""
+  vehicle_value_1:
+    map: "FW-001[0].Page2[0].List10[0].Lic[0].VehicleFairMarketVal1[0]"
+    page: 2
+    default: ""
+  vehicle_owed_1:
+    map: "FW-001[0].Page2[0].List10[0].Lic[0].VehicleAmountOwed1[0]"
+    page: 2
+    default: ""
+  real_estate_1:
+    map: "FW-001[0].Page2[0].List10[0].Lid[0].RealEstateAdd1[0]"
+    page: 2
+    doc: "Item 10.d: real estate address"
+    default: ""
+  real_estate_value_1:
+    map: "FW-001[0].Page2[0].List10[0].Lid[0].RealEstateFairMarketVal1[0]"
+    page: 2
+    default: ""
+  real_estate_owed_1:
+    map: "FW-001[0].Page2[0].List10[0].Lid[0].RealEstateAmountOwed1[0]"
+    page: 2
+    default: ""
+  other_property_1:
+    map: "FW-001[0].Page2[0].List10[0].Lie[0].OtherPropertyDesc1[0]"
+    page: 2
+    doc: "Item 10.e: other property of value"
+    default: ""
+  other_property_value_1:
+    map: "FW-001[0].Page2[0].List10[0].Lie[0].OtherPropertyFairMarketVal1[0]"
+    page: 2
+    default: ""
+  other_property_owed_1:
+    map: "FW-001[0].Page2[0].List10[0].Lie[0].OtherPropertyAmountOwed1[0]"
+    page: 2
+    default: ""
+  other_property_2:
+    map: "FW-001[0].Page2[0].List10[0].Lie[0].OtherPropertyDesc2[0]"
+    page: 2
+    default: ""
+  other_property_value_2:
+    map: "FW-001[0].Page2[0].List10[0].Lie[0].OtherPropertyFairMarketVal2[0]"
+    page: 2
+    default: ""
+  other_property_owed_2:
+    map: "FW-001[0].Page2[0].List10[0].Lie[0].OtherPropertyAmountOwed2[0]"
+    page: 2
+    default: ""
+
+  # ---- item 11: deductions and monthly expenses ------------------------
+  payroll_deduct_1:
+    map: "FW-001[0].Page2[0].List11[0].Lia[0].PayrollDeduct1[0]"
+    page: 2
+    doc: "Item 11.a: payroll deduction description"
+    default: ""
+  payroll_amount_1:
+    map: "FW-001[0].Page2[0].List11[0].Lia[0].PayrollAmt1[0]"
+    page: 2
+    default: ""
+  expense_housing:
+    map: "FW-001[0].Page2[0].List11[0].Lib[0].ExpenseHousing[0]"
+    page: 2
+    doc: "Item 11.b: rent or house payment and maintenance"
+    default: ""
+  expense_food:
+    map: "FW-001[0].Page2[0].List11[0].Lic[0].ExpenseFoodSupplies[0]"
+    page: 2
+    doc: "Item 11.c: food and household supplies"
+    default: ""
+  expense_utilities:
+    map: "FW-001[0].Page2[0].List11[0].Lid[0].ExpenseUtilitiesPhone[0]"
+    page: 2
+    doc: "Item 11.d: utilities and telephone"
+    default: ""
+  expense_clothing:
+    map: "FW-001[0].Page2[0].List11[0].Lie[0].ExpenseClothes[0]"
+    page: 2
+    default: ""
+  expense_laundry:
+    map: "FW-001[0].Page2[0].List11[0].Lif[0].ExpenseLaundry[0]"
+    page: 2
+    default: ""
+  expense_medical:
+    map: "FW-001[0].Page2[0].List11[0].Lig[0].ExpenseMedicalDental[0]"
+    page: 2
+    default: ""
+  expense_insurance:
+    map: "FW-001[0].Page2[0].List11[0].Lih[0].ExpenseInsurance[0]"
+    page: 2
+    default: ""
+  expense_school:
+    map: "FW-001[0].Page2[0].List11[0].Lii[0].ExpenseSchoolChildCare[0]"
+    page: 2
+    default: ""
+  expense_support:
+    map: "FW-001[0].Page2[0].List11[0].Lij[0].ExpenseSupport[0]"
+    page: 2
+    doc: "Item 11.j: child/spousal support actually paid"
+    default: ""
+  expense_transportation:
+    map: "FW-001[0].Page2[0].List11[0].Lik[0].ExpenseTransportation[0]"
+    page: 2
+    doc: "Item 11.k: transportation, gas, auto repair and insurance"
+    default: ""
+  installment_to_1:
+    map: "FW-001[0].Page2[0].List11[0].Lil[0].InstallmentPaymentTo1[0]"
+    page: 2
+    doc: "Item 11.l: installment payments --- paid to"
+    default: ""
+  installment_amount_1:
+    map: "FW-001[0].Page2[0].List11[0].Lil[0].InstallmentPaymentAmount1[0]"
+    page: 2
+    default: ""
+  installment_to_2:
+    map: "FW-001[0].Page2[0].List11[0].Lil[0].InstallmentPaymentTo2[0]"
+    page: 2
+    default: ""
+  installment_amount_2:
+    map: "FW-001[0].Page2[0].List11[0].Lil[0].InstallmentPaymentAmount2[0]"
+    page: 2
+    default: ""
+  installment_to_3:
+    map: "FW-001[0].Page2[0].List11[0].Lil[0].InstallmentPaymentTo3[0]"
+    page: 2
+    default: ""
+  installment_amount_3:
+    map: "FW-001[0].Page2[0].List11[0].Lil[0].InstallmentPaymentAmount3[0]"
+    page: 2
+    default: ""
+  wage_withholding:
+    map: "FW-001[0].Page2[0].List11[0].Lim[0].EarningsWithholding[0]"
+    page: 2
+    doc: "Item 11.m: amounts taken from pay by court order or wage assignment"
+    default: ""
+  other_expense_1:
+    map: "FW-001[0].Page2[0].List11[0].Lin[0].OtherExpense1[0]"
+    page: 2
+    doc: "Item 11.n: any other expense, described"
+    default: ""
+  other_expense_amount_1:
+    map: "FW-001[0].Page2[0].List11[0].Lin[0].OtherExpenseAmount1[0]"
+    page: 2
+    default: ""
+  other_expense_2:
+    map: "FW-001[0].Page2[0].List11[0].Lin[0].OtherExpense2[0]"
+    page: 2
+    default: ""
+  other_expense_amount_2:
+    map: "FW-001[0].Page2[0].List11[0].Lin[0].OtherExpenseAmount2[0]"
+    page: 2
+    default: ""
+  other_expense_3:
+    map: "FW-001[0].Page2[0].List11[0].Lin[0].OtherExpense3[0]"
+    page: 2
+    default: ""
+  other_expense_amount_3:
+    map: "FW-001[0].Page2[0].List11[0].Lin[0].OtherExpenseAmount3[0]"
+    page: 2
+    default: ""
+  expense_total:
+    map: "FW-001[0].Page2[0].List11[0].Total[0].Totalmonthlyexpenses[0]"
+    page: 2
+    doc: "Item 11's total. Not computed --- check it."
+    default: ""
+
+checkboxes:
+  # ---- item 3.a: has the lawyer been paid? ----------------------------
+  lawyer_advance_fees_yes:
+    map: "FW-001[0].Page1[0].List3[0].Lia[0].PetLawyerAdvanceFeesY[0]"
+    on_value: "/1"
+    doc: "Item 3.a: lawyer HAS advanced fees or costs --- Yes"
+  lawyer_advance_fees_no:
+    map: "FW-001[0].Page1[0].List3[0].Lia[0].PetLawyerAdvanceFeesY[1]"
+    on_value: "/1"
+    doc: "Item 3.a: No. Exactly one of this pair, and only if item 3 names a lawyer."
+
+  # ---- item 4: which fees ---------------------------------------------
+  waive_superior_court_fees:
+    map: "FW-001[0].Page1[0].List4[0].item4[0].WaiveSuperiorCrtFee[0]"
+    on_value: "/1"
+    doc: "Item 4: superior court fees and costs. The usual choice."
+  waive_appellate_fees:
+    map: "FW-001[0].Page1[0].List4[0].item4[0].WaiveReviewCrtFee[0]"
+    on_value: "/1"
+    doc: "Item 4: Court of Appeal or Supreme Court fees (rules 8.26, 8.818)"
+
+  # ---- item 5: the ground. See agent_guide: this decides page 2. ------
+  ground_5a:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitReceived[0]"
+    on_value: "/1"
+    doc: >-
+      Item 5.a: receiving public benefits. Check this AND the specific
+      programme(s) below. Page 2 is then not filled out at all.
+  benefit_snap:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitSNAP[0]"
+    on_value: "/1"
+    doc: "Item 5.a: Food Stamps / SNAP / CalFresh"
+  benefit_ssi:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitSSI[0]"
+    on_value: "/1"
+    doc: "Item 5.a: Supp. Sec. Income (SSI)"
+  benefit_ssp:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitSSP[0]"
+    on_value: "/1"
+    doc: "Item 5.a: State Supp. Payments (SSP)"
+  benefit_medical:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitMediCal[0]"
+    on_value: "/1"
+    doc: "Item 5.a: Medi-Cal"
+  benefit_county_ga:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitCtyGA[0]"
+    on_value: "/1"
+    doc: "Item 5.a: County Relief / General Assistance / General Relief"
+  benefit_ihss:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitIHHS[0]"
+    on_value: "/1"
+    doc: "Item 5.a: IHSS (form's own widget typo: IHHS)"
+  benefit_calworks:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitCalWORKSTANF[0]"
+    on_value: "/1"
+    doc: "Item 5.a: CalWORKS or Tribal TANF"
+  benefit_capi:
+    map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitCAPI11[0]"
+    on_value: "/1"
+    doc: "Item 5.a: CAPI"
+  ground_5b:
+    map: "FW-001[0].Page1[0].List5[0].Lib[0].GrossMonthIncomeLess[0]"
+    on_value: "/1"
+    doc: >-
+      Item 5.b: gross monthly household income at or below the limit in
+      the table on the form. Fills items 8, 9 and 10 only. Note this is
+      HOUSEHOLD income --- item 8.b plus item 9.b.
+  ground_5c:
+    map: "FW-001[0].Page1[0].List5[0].Lic[0].IncomeInsufficientRequest[0]"
+    on_value: "/1"
+    doc: >-
+      Item 5.c: income insufficient to pay for common household
+      necessities AND court fees. The discretionary ground, and the only
+      one that lets the applicant explain illiquid assets. Requires the
+      ENTIRE page 2.
+  relief_waiver:
+    map: "FW-001[0].Page1[0].List5[0].Lic[0].FeeRequestDef[0]"
+    on_value: "/1"
+    doc: "Item 5.c: asking for a fee WAIVER"
+  relief_deferral:
+    map: "FW-001[0].Page1[0].List5[0].Lic[0].FeeRequestDef[1]"
+    on_value: "/1"
+    doc: "Item 5.c: asking that fees be DEFERRED instead"
+  relief_lower_payment:
+    map: "FW-001[0].Page1[0].List5[0].Lic[0].FeeRequestDef[2]"
+    on_value: "/1"
+    doc: "Item 5.c: asking to pay a LOWER amount"
+
+  # ---- item 6: previous request in this case --------------------------
+  previous_request:
+    map: "FW-001[0].Page1[0].List6[0].item6[0].PrevWaiveRequest[0]"
+    on_value: "/1"
+    doc: "Item 6: a fee waiver has been requested in this case before"
+  previous_request_attached:
+    map: "FW-001[0].Page1[0].List6[0].item6[0].PrevWaiveRequestAtt[0]"
+    on_value: "/1"
+    doc: "Item 6: details are on the attached MC-025"
+
+  # ---- page 2 ---------------------------------------------------------
+  income_fluctuates:
+    map: "FW-001[0].Page2[0].List7[0].item7[0].IncomeFluctuates[0]"
+    on_value: "/1"
+    doc: >-
+      Item 7: income varies month to month, so page 2 is completed on a
+      12-month average. Check it when the figures are averages ---
+      unchecked, the form reads as a claim about this month.
+  overflow_attachment:
+    map: "FW-001[0].Page2[0].Note[0].Overflow[0]"
+    on_value: "/1"
+    doc: >-
+      Bottom of page 2: more information is on an attached sheet. Check
+      it whenever any item needs explaining rather than merely stating
+      --- an unexplained blank at item 9, or an asset whose stated value
+      overstates what it is worth.
