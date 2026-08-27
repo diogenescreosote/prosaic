@@ -36,6 +36,7 @@ import importlib.util
 import json
 import os
 import re
+import shutil
 import subprocess
 import sys
 from dataclasses import asdict, dataclass
@@ -221,7 +222,15 @@ def write(
     statement = directory / "statement.txt"
     statement.write_text(render_statement(att), encoding="utf-8")
 
-    signed = _clearsign(statement, gpg_key)
+    try:
+        signed = _clearsign(statement, gpg_key)
+    except SignerError:
+        # Leave no half-built record. The retained copy and the statement
+        # were written before the signature was attempted; without the
+        # signature they assert nothing, and a directory that looks like
+        # an attestation but contains none is worse than no directory.
+        shutil.rmtree(directory, ignore_errors=True)
+        raise
     if signed is not None:
         att.signature_file = signed.name
         if timestamp:
