@@ -79,8 +79,12 @@ nothing else. Working copies, marked-up drafts and proposed redactions
 live elsewhere — `assets/redaction_markups/` or similar — never here.
 
 Every document is declared in `pleadings/MANIFEST.md` with a status:
-`conformed`, `efiled`, or one of the substitutes (`as-served`, `portal`,
-`counsel-copy`, `unverified`) and `not-in-hand`. Check it:
+`conformed`, `efiled`, `signed_order`, or one of the substitutes
+(`as-served`, `portal`, `counsel-copy`, `unverified`) and `not-in-hand`.
+`signed_order` is for the court's own order --- a judicial officer's
+signature and date on the face, and no clerk's stamp, because orders are
+signed rather than stamped; it is not a substitute, and it says nothing
+about provenance. Check it:
 
 ```bash
 python3 <slopcannon>/pleading/pleadings_manifest.py <matter>
