@@ -51,7 +51,11 @@ fields:
     map: "FW-001[0].Page1[0].RightCaption[0].CaseName[0]"
     page: 1
     auto: short_title
-    doc: "Case name, e.g. 'Roe v. Doe'"
+    fit: shrink_wrap
+    doc: >-
+      Case name, e.g. 'Roe v. Doe'. shrink_wrap because a realistic long
+      caption overflows this narrow box even at shrink's minimum size
+      (caught by the adversarial caption test).
 
   # ---- item 1: who is asking ------------------------------------------
   applicant_name:
@@ -418,9 +422,12 @@ fields:
 
 checkboxes:
   # ---- item 3.a: has the lawyer been paid? ----------------------------
+  # Radio pair sharing a field family; the on-states are NOT both /1 ---
+  # the blank assigns /2 to the Yes widget and /1 to the No widget
+  # (read from button_states(), not assumed).
   lawyer_advance_fees_yes:
     map: "FW-001[0].Page1[0].List3[0].Lia[0].PetLawyerAdvanceFeesY[0]"
-    on_value: "/1"
+    on_value: "/2"
     doc: "Item 3.a: lawyer HAS advanced fees or costs --- Yes"
   lawyer_advance_fees_no:
     map: "FW-001[0].Page1[0].List3[0].Lia[0].PetLawyerAdvanceFeesY[1]"
@@ -430,11 +437,11 @@ checkboxes:
   # ---- item 4: which fees ---------------------------------------------
   waive_superior_court_fees:
     map: "FW-001[0].Page1[0].List4[0].item4[0].WaiveSuperiorCrtFee[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 4: superior court fees and costs. The usual choice."
   waive_appellate_fees:
     map: "FW-001[0].Page1[0].List4[0].item4[0].WaiveReviewCrtFee[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 4: Court of Appeal or Supreme Court fees (rules 8.26, 8.818)"
 
   # ---- item 5: the ground. See agent_guide: this decides page 2. ------
@@ -446,46 +453,46 @@ checkboxes:
       programme(s) below. Page 2 is then not filled out at all.
   benefit_snap:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitSNAP[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: Food Stamps / SNAP / CalFresh"
   benefit_ssi:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitSSI[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: Supp. Sec. Income (SSI)"
   benefit_ssp:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitSSP[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: State Supp. Payments (SSP)"
   benefit_medical:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitMediCal[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: Medi-Cal"
   benefit_county_ga:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitCtyGA[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: County Relief / General Assistance / General Relief"
   benefit_ihss:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitIHHS[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: IHSS (form's own widget typo: IHHS)"
   benefit_calworks:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitCalWORKSTANF[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: CalWORKS or Tribal TANF"
   benefit_capi:
     map: "FW-001[0].Page1[0].List5[0].Lia[0].PublicBenefitCAPI11[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 5.a: CAPI"
   ground_5b:
     map: "FW-001[0].Page1[0].List5[0].Lib[0].GrossMonthIncomeLess[0]"
-    on_value: "/1"
+    on_value: "/2"
     doc: >-
       Item 5.b: gross monthly household income at or below the limit in
       the table on the form. Fills items 8, 9 and 10 only. Note this is
       HOUSEHOLD income --- item 8.b plus item 9.b.
   ground_5c:
     map: "FW-001[0].Page1[0].List5[0].Lic[0].IncomeInsufficientRequest[0]"
-    on_value: "/1"
+    on_value: "/3"
     doc: >-
       Item 5.c: income insufficient to pay for common household
       necessities AND court fees. The discretionary ground, and the only
@@ -497,27 +504,27 @@ checkboxes:
     doc: "Item 5.c: asking for a fee WAIVER"
   relief_deferral:
     map: "FW-001[0].Page1[0].List5[0].Lic[0].FeeRequestDef[1]"
-    on_value: "/1"
+    on_value: "/2"
     doc: "Item 5.c: asking that fees be DEFERRED instead"
   relief_lower_payment:
     map: "FW-001[0].Page1[0].List5[0].Lic[0].FeeRequestDef[2]"
-    on_value: "/1"
+    on_value: "/3"
     doc: "Item 5.c: asking to pay a LOWER amount"
 
   # ---- item 6: previous request in this case --------------------------
   previous_request:
     map: "FW-001[0].Page1[0].List6[0].item6[0].PrevWaiveRequest[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 6: a fee waiver has been requested in this case before"
   previous_request_attached:
     map: "FW-001[0].Page1[0].List6[0].item6[0].PrevWaiveRequestAtt[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: "Item 6: details are on the attached MC-025"
 
   # ---- page 2 ---------------------------------------------------------
   income_fluctuates:
     map: "FW-001[0].Page2[0].List7[0].item7[0].IncomeFluctuates[0]"
-    on_value: "/1"
+    on_value: "/Yes"
     doc: >-
       Item 7: income varies month to month, so page 2 is completed on a
       12-month average. Check it when the figures are averages ---
