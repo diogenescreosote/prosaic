@@ -1,8 +1,8 @@
 {
   "name": "gmail",
-  "description": "Exports Gmail threads involving configured addresses/domains as court-usable print-view PDFs.",
+  "description": "Exports Gmail threads involving configured addresses/domains as court-usable print-view PDFs, and downloads each thread's attachments beside the PDF.",
   "entry": "pull.js",
   "configKey": "connectors.gmail",
   "auth": "OAuth (node auth.js; token in ~/.config/prosaic/gmail/)",
-  "output": "assets/gmail/YYYYMMDD_<subject>.pdf"
+  "output": "assets/gmail/YYYYMMDD_<subject>.pdf + assets/gmail/attachments/<pdf stem>/<file>"
 }
