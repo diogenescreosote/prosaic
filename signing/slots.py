@@ -100,11 +100,16 @@ _JUDICIAL_REACH_PT = 72.0
 # "(TYPE OR PRINT NAME)" is deliberately absent: it labels a blank that
 # wants the name in ordinary type, and drawing a cursive mark there would
 # put a second signature where a legible name belongs.
+# Ordered longest-first and matched with rect dedup below: some Judicial
+# Council blanks print the bare word "SIGNATURE" --- no parentheses, no
+# OF-phrase --- and the bare word is a substring of every longer label,
+# so an undeduped search would emit two slots for one line.
 _JC_SIGNATURE_LABELS = (
     "(SIGNATURE OF ATTORNEY OR PARTY WITHOUT ATTORNEY)",
     "(SIGNATURE OF DECLARANT)",
     "(SIGNATURE OF PARTY)",
     "(SIGNATURE)",
+    "SIGNATURE",
 )
 
 
@@ -267,8 +272,12 @@ def jc_signature_lines(pdf: Path) -> list[Slot]:
     found: list[Slot] = []
     with fitz.open(pdf) as doc:
         for pno, page in enumerate(doc):
+            claimed: list[fitz.Rect] = []
             for label in _JC_SIGNATURE_LABELS:
                 for rect in page.search_for(label):
+                    if any(rect.intersects(c) for c in claimed):
+                        continue  # substring of a longer label already taken
+                    claimed.append(fitz.Rect(rect))
                     height = 12.0
                     found.append(
                         Slot(

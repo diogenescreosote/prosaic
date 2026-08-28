@@ -620,3 +620,20 @@ def test_a_failed_attestation_leaves_nothing_behind(tmp_path, monkeypatch):
     assert events == [], f"half-built attestation left behind: {events}"
     # and the unsigned build is untouched
     assert pdf.is_file()
+
+
+def test_bare_signature_label_found_once_not_twice(tmp_path):
+    """Some JC blanks print the bare word "SIGNATURE"; others print the
+    parenthesised long labels. Bare SIGNATURE is a substring of every
+    long label, so without rect dedup one line would yield two slots and
+    the mark would be drawn twice."""
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 300), "SIGNATURE", fontsize=8)
+    page.insert_text((72, 500), "(SIGNATURE OF DECLARANT)", fontsize=8)
+    pdf = tmp_path / "labels.pdf"
+    doc.save(str(pdf))
+    slots = slots_mod.jc_signature_lines(pdf)
+    assert len(slots) == 2, [s.anchor for s in slots]
+    anchors = sorted(s.anchor for s in slots)
+    assert anchors == ["(SIGNATURE OF DECLARANT)", "SIGNATURE"]
