@@ -21,11 +21,28 @@
 // Output: <matter>/assets/gmail/YYYYMMDD_<subject>.pdf per thread;
 // "NEW <abs path>" lines on stdout; progress on stderr.
 //
+// Attachments: the print-view PDF can only *list* a thread's attachments
+// by name, and a name is not the document — a notice whose whole value
+// is the dates inside it is invisible to triage until the file itself is
+// on disk. So each exported thread's real attachments (not inline images,
+// which are already embedded in the rendered PDF) are downloaded beside
+// the thread PDF, under
+//   <out_dir>/attachments/<thread pdf stem>/<sanitized original name>
+// each announced with its own "NEW <abs path>" line so triage sees them.
+// Files over 25MB are skipped with a SKIPPED line on stderr. A file
+// already at its target path with the expected size is not re-downloaded,
+// so re-exporting a grown thread only fetches what is new.
+//
 // Incrementality / dedup: a durable ledger in .state/gmail.json records
 // every thread this connector has exported, keyed by Gmail thread id:
 //
 //   { "threads": { "<threadId>": {
-//        historyId, messageCount, filename, exportedAt } } }
+//        historyId, messageCount, filename, exportedAt,
+//        attachments: [{ name, size }] } } }
+//
+// Note: threads exported before attachment support (or absorbed from a
+// pre-ledger pull) get their attachments on their next re-export — when
+// the thread grows, or under --force.
 //
 // Each run lists matching threads (cheap; the list stub carries a
 // per-thread historyId that changes whenever the thread changes) and:
@@ -68,6 +85,10 @@ const CREDENTIALS_PATH = path.join(CREDS_DIR, 'credentials.json');
 const OAUTH_KEYS_PATH = path.join(CREDS_DIR, 'oauth-keys.json');
 const GMAIL_LOGO_URL =
   'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/logo_gmail_server_1x.png';
+
+// Attachments over this size are listed in the PDF but not downloaded.
+// Gmail's own send limit is 25MB, so nothing legitimate exceeds it.
+const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
 
 function snakeCase(str) {
   return str
@@ -259,10 +280,92 @@ function getAttachments(part) {
     ) ||
     part.headers?.some((h) => h.name.toLowerCase() === 'content-id');
   if (part.filename && part.body?.size > 0 && !isInline)
-    atts.push({ name: part.filename, size: part.body.size });
+    atts.push({
+      name: part.filename,
+      size: part.body.size,
+      attachmentId: part.body.attachmentId,
+    });
   if (part.parts)
     for (const sub of part.parts) atts.push(...getAttachments(sub));
   return atts;
+}
+
+// A saved attachment keeps its own name, sanitized the way subjects are
+// (lowercase, runs of non-alphanumerics to _), with the extension
+// preserved. Unlike snakeCase this does NOT strip a leading "re:" — that
+// rule is about reply subjects, and a filename is not a subject.
+function safeAttachmentName(filename) {
+  const m = filename.match(/^(.*?)(\.[A-Za-z0-9]{1,8})?$/);
+  const stem =
+    (m[1] || '')
+      .toLowerCase()
+      .replace(/[^a-z0-9]+/g, '_')
+      .replace(/^_|_$/g, '')
+      .substring(0, 80) || 'attachment';
+  return stem + (m[2] || '').toLowerCase();
+}
+
+// Download a thread's real attachments into
+// <outDir>/attachments/<pdf stem>/. Returns [{name, size}] of what is
+// present afterwards, for the ledger. Collision suffixes (_2, _3…) are
+// deterministic — messages arrive in thread order and parts are walked
+// depth-first — so a re-export resolves each attachment to the same path
+// and the exists-with-expected-size check below can skip the download.
+async function saveThreadAttachments(gmail, messages, pdfFilename, outDir) {
+  const entries = [];
+  for (const msg of messages) {
+    for (const att of getAttachments(msg.payload)) {
+      if (att.attachmentId) entries.push({ messageId: msg.id, ...att });
+    }
+  }
+  if (!entries.length) return [];
+
+  const dir = path.join(
+    outDir,
+    'attachments',
+    pdfFilename.replace(/\.pdf$/, '')
+  );
+  fs.mkdirSync(dir, { recursive: true });
+
+  const taken = new Set();
+  const saved = [];
+  for (const att of entries) {
+    if (att.size > MAX_ATTACHMENT_BYTES) {
+      console.error(
+        `  SKIPPED ${att.name} (${fmtSize(att.size)} exceeds ` +
+          `${fmtSize(MAX_ATTACHMENT_BYTES)} cap)`
+      );
+      continue;
+    }
+    let name = safeAttachmentName(att.name);
+    if (taken.has(name)) {
+      const m = name.match(/^(.*?)(\.[a-z0-9]+)?$/);
+      let i = 2;
+      while (taken.has(`${m[1]}_${i}${m[2] || ''}`)) i++;
+      name = `${m[1]}_${i}${m[2] || ''}`;
+    }
+    taken.add(name);
+
+    const dest = path.join(dir, name);
+    if (fs.existsSync(dest) && fs.statSync(dest).size === att.size) {
+      saved.push({ name, size: att.size });
+      continue;
+    }
+    try {
+      const res = await gmail.users.messages.attachments.get({
+        userId: 'me',
+        messageId: att.messageId,
+        id: att.attachmentId,
+      });
+      const buf = Buffer.from(res.data.data, 'base64url');
+      fs.writeFileSync(dest, buf);
+      saved.push({ name, size: buf.length });
+      console.log(`NEW ${dest}`);
+    } catch (err) {
+      console.error(`  warning: attachment ${att.name}: ${err.message}`);
+    }
+  }
+  return saved;
 }
 
 function parseSender(from) {
@@ -703,6 +806,12 @@ async function main() {
         exported++;
         console.error('ok');
         console.log(`NEW ${pdfPath}`);
+        const attachments = await saveThreadAttachments(
+          gmail,
+          res.data.messages,
+          meta.filename,
+          outDir
+        );
         // Record incrementally so a crash mid-batch never re-exports
         // what already succeeded (connector contract).
         state.threads[meta.threadId] = {
@@ -710,6 +819,7 @@ async function main() {
           messageCount: meta.messageCount,
           filename: meta.filename,
           exportedAt: new Date().toISOString(),
+          attachments,
         };
         saveState(matterDir, 'gmail', state);
       } catch (err) {
