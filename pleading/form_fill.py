@@ -753,11 +753,21 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
             continue
         mapped = spec.get("map")
         if overlay_mode:
-            hit_rect = widget_rects.get(mapped or "")
-            if hit_rect is None:
-                result.warnings.append(f"checkbox {name}: '{mapped}' not found — revision drift?")
+            # Like overlay text fields, a checkbox may carry a
+            # hand-authored ``rect:`` — required when two widgets share
+            # one qualified name (e.g. a radio pair), since a name
+            # lookup can only ever reach the first.
+            rect = spec.get("rect")
+            page_idx = int(spec.get("page", 1)) - 1
+            if not rect and mapped:
+                hit_rect = widget_rects.get(mapped)
+                if hit_rect is not None:
+                    page_idx, rect = hit_rect
+            if not rect:
+                result.warnings.append(
+                    f"checkbox {name}: needs a rect, or a map naming a "
+                    f"widget in {blank.name} — form revision drift?")
                 continue
-            page_idx, rect = hit_rect
             overlay_ops.setdefault(page_idx, []).append({"rect": rect, "mark": True})
             continue
         hit = widgets.get(mapped or "")
@@ -775,6 +785,12 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         writer.update_page_form_field_values(writer.pages[page_idx], values)
 
     if overlay_mode:
+        # Chrome widgets must go BEFORE the bake: LiveCycle-era buttons
+        # carry no /AP stream and bake to nothing, but AEM-era blanks
+        # (2020+) give Print/Save/Clear buttons and privacy banners real
+        # appearance streams, which the bake would ink permanently into
+        # the filing.
+        _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
         writer = _bake_widgets(writer)
         _strip_all_form_machinery(writer)
     else:

@@ -129,7 +129,10 @@ def test_descriptor_matches_blank(form_id):
 
     widgets = {}
     for _page, name, obj in form_fill.iter_widgets(PdfReader(str(blank))):
-        widgets[name] = obj
+        # setdefault, matching fill(): when two widgets share a
+        # qualified name (radio pairs), the FIRST one is the one a
+        # map: reaches, so it is the one the on_value must match.
+        widgets.setdefault(name, obj)
         widgets.setdefault(name.split(".")[-1], obj)
 
     missing = []
@@ -140,6 +143,11 @@ def test_descriptor_matches_blank(form_id):
         if spec.get("map") and spec["map"] not in widgets:
             missing.append(f"field {name} -> {spec['map']}")
     for name, spec in (desc.get("checkboxes") or {}).items():
+        if not spec.get("map"):
+            # Hand-authored geometry (e.g. a radio pair whose widgets
+            # share one qualified name): a rect is the whole contract.
+            assert spec.get("rect"), f"{form_id}.{name}: checkbox without map or rect"
+            continue
         obj = widgets.get(spec.get("map", ""))
         if obj is None:
             missing.append(f"checkbox {name} -> {spec.get('map')}")
