@@ -124,6 +124,49 @@ def test_parse_bill_rows() -> None:
     ]
 
 
+# --- billExportHref ------------------------------------------------------
+
+# An invoice detail page offers the portal's PDF export; a funds-request
+# detail page offers no export control at all (and guessing the export
+# URL blind returns an error page rendered as a PDF).
+INVOICE_DETAIL = """
+<div class="payable-detail">
+  <a href="/bills/111222333.pdf" class="payable-detail__export-link">
+    View Full Invoice (PDF)</a>
+  <a href="/pay/111222333" class="btn">Pay Now</a>
+</div>
+"""
+
+FUNDS_REQUEST_DETAIL = """
+<div class="payable-detail">
+  <h1>Funds Request: #R-00042</h1>
+  <a href="/bills" class="header__back-button">back</a>
+</div>
+"""
+
+BARE_PDF_LINK = '<a href="/bills/98765.pdf">export</a>'
+
+
+@pytest.mark.parametrize(
+    "html,expected",
+    [
+        (INVOICE_DETAIL, "/bills/111222333.pdf"),
+        (FUNDS_REQUEST_DETAIL, None),
+        # A page shaped differently but still linking the export is
+        # honored — the class name is the portal's, not a guarantee.
+        (BARE_PDF_LINK, "/bills/98765.pdf"),
+    ],
+)
+def test_bill_export_href(html, expected) -> None:
+    got = json.loads(
+        _node(
+            "JSON.stringify(require('./pull.js')"
+            f".billExportHref({json.dumps(html)}))"
+        )
+    )
+    assert got == expected
+
+
 def test_requiring_the_connector_runs_nothing() -> None:
     """pull.js is importable for its helpers without starting a pull —
     no browser launch, no config read, no output."""

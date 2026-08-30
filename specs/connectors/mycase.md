@@ -35,16 +35,19 @@ is equipped to make it.
    `.state/mycase.json`, `NEW` lines on stdout only, nonzero exit on
    failure. *(untested)*
 6. **Billing is opt-in, destination-direct, and platform-exported.**
-   With `billing: <dir>` configured, every invoice and funds request
-   on the portal's Billing tab is fetched via the platform's own PDF
-   export (`/bills/<id>.pdf`) — never a scrape of the rendered page —
-   directly into `<dir>` (matter-relative). Billing PDFs are
-   born-digital and authoritatively named, so no triage decision is
-   involved; without the key, billing is not touched. Names are dated
-   snake_case built from the listing's detail line
-   (`2026-07-28_invoice_13742.pdf`,
-   `2025-09-15_funds_request_r00228.pdf`), falling back to the portal
-   bill id when the line is unparseable. *(tested:
+   With `billing: <dir>` configured, every bill on the portal's
+   Billing tab whose detail page offers the platform's own PDF export
+   (`/bills/<id>.pdf`, the "view full invoice" control) is fetched via
+   that export — never a scrape of the rendered page — directly into
+   `<dir>` (matter-relative). Billing PDFs are born-digital and
+   authoritatively named, so no triage decision is involved; without
+   the key, billing is not touched. A bill offering no export (funds
+   requests have none — guessing the export URL blind returns an
+   error page rendered *as a PDF*, which must never be saved as if it
+   were the bill) is noted on stderr and recorded, not treated as a
+   failure. Names are dated snake_case built from the listing's
+   detail line (`2026-07-28_invoice_13742.pdf`), falling back to the
+   portal bill id when the line is unparseable. *(tested:
    tests/test_connectors_mycase.py)*
 7. **A bill is re-exported when its listed status changes** — a
    payment posting or a balance forwarding changes the PDF's face —

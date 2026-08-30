@@ -273,18 +273,43 @@ function billFileName(detail, id) {
   return `${date}_bill_${id}`;
 }
 
+// The detail page's export control:
+//   <a class="payable-detail__export-link" href="/bills/<id>.pdf">
+// Invoices carry it; funds requests render no export control at all —
+// the portal has no PDF for them, and guessing /bills/<id>.pdf blind
+// returns an error page rendered *as a PDF*, which must never be saved
+// as if it were the bill.
+function billExportHref(html) {
+  const $ = cheerio.load(html);
+  const explicit = $('a.payable-detail__export-link').first().attr('href');
+  if (explicit) return explicit;
+  let fallback = null;
+  $('a[href]').each((_, a) => {
+    const href = $(a).attr('href') || '';
+    if (!fallback && /^\/bills\/\d+\.pdf$/.test(href)) fallback = href;
+  });
+  return fallback;
+}
+
 // Fetch one bill's PDF export in its own tab (same isolation rationale
 // as downloadDoc: a direct download aborts navigation by design).
+// Returns null when the bill's detail page offers no export.
 async function downloadBillPdf(browser, portalUrl, bill, tmpDir) {
-  const before = new Set(fs.readdirSync(tmpDir));
   const page = await browser.newPage();
   try {
     await allowDownloadsTo(page, tmpDir);
     await page
-      .goto(`${portalUrl}/bills/${bill.id}.pdf`, {
+      .goto(`${portalUrl}/bills/${bill.id}`, {
         waitUntil: 'networkidle2',
         timeout: 60000,
       })
+      .catch(() => {});
+    await sleep(1500);
+    const href = billExportHref(await page.content());
+    if (!href) return null;
+    const before = new Set(fs.readdirSync(tmpDir));
+    await page
+      .goto(`${portalUrl}${href}`, { waitUntil: 'networkidle2', timeout: 60000 })
       .catch(() => {});
     try {
       return await waitForDownload(tmpDir, before, 60000);
@@ -327,6 +352,23 @@ async function pullBilling(browser, page, cfg, matterDir, manifest, tmpDir) {
       console.error(`[mycase] SKIP bill ${bill.id} (${bill.detail}): ${e.message}`);
       failCount++;
       continue; // not recorded — retried next run
+    }
+    if (dl === null) {
+      // Not a failure: the portal genuinely has no PDF for this bill
+      // (funds requests). Recorded so it isn't revisited until its
+      // listed status changes.
+      console.error(
+        `[mycase] bill ${bill.id} (${bill.detail}) offers no PDF export; noted`
+      );
+      manifest.bills[bill.id] = {
+        detail: bill.detail,
+        amount: bill.amount,
+        status: bill.status,
+        exported: false,
+        noted: new Date().toISOString(),
+      };
+      saveState(matterDir, 'mycase', manifest);
+      continue;
     }
     await sleep(400);
     const hash = sha256(dl);
@@ -481,7 +523,7 @@ async function main() {
   }
 }
 
-module.exports = { parseBillRows, billFileName };
+module.exports = { parseBillRows, billFileName, billExportHref };
 
 if (require.main === module) {
   main().catch((err) => {
