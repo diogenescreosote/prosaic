@@ -14,7 +14,7 @@ is equipped to make it.
 
 ## Promises
 
-1. **Staging, not destination.** Everything lands under
+1. **Staging, not destination.** Every document lands under
    `inbox/mycase/`, mirroring the portal's folder structure as a
    routing hint. The connector never decides whether a document is a
    pleading, a lawyer draft, or an asset — a wrong guess filed into
@@ -34,6 +34,23 @@ is equipped to make it.
 5. **Contract compliance**: keychain credentials, state in
    `.state/mycase.json`, `NEW` lines on stdout only, nonzero exit on
    failure. *(untested)*
+6. **Billing is opt-in, destination-direct, and platform-exported.**
+   With `billing: <dir>` configured, every invoice and funds request
+   on the portal's Billing tab is fetched via the platform's own PDF
+   export (`/bills/<id>.pdf`) — never a scrape of the rendered page —
+   directly into `<dir>` (matter-relative). Billing PDFs are
+   born-digital and authoritatively named, so no triage decision is
+   involved; without the key, billing is not touched. Names are dated
+   snake_case built from the listing's detail line
+   (`2026-07-28_invoice_13742.pdf`,
+   `2025-09-15_funds_request_r00228.pdf`), falling back to the portal
+   bill id when the line is unparseable. *(tested:
+   tests/test_connectors_mycase.py)*
+7. **A bill is re-exported when its listed status changes** — a
+   payment posting or a balance forwarding changes the PDF's face —
+   tracked in the manifest by bill id + content hash. Same bytes
+   refresh the manifest only; new bytes get a fresh versioned name and
+   never overwrite a previously fetched file. *(untested)*
 
 ## Non-obvious constraints
 

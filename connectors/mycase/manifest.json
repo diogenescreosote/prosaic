@@ -1,8 +1,8 @@
 {
   "name": "mycase",
-  "description": "Syncs documents from a MyCase client portal into staging, renamed to dated snake_case, manifest-tracked by document id + content hash.",
+  "description": "Syncs documents from a MyCase client portal into staging, renamed to dated snake_case, manifest-tracked by document id + content hash; with billing: configured, also pulls invoice/funds-request PDF exports to that destination.",
   "entry": "pull.js",
   "configKey": "connectors.mycase",
   "auth": "macOS Keychain generic password (default service: prosaic.mycase)",
-  "output": "inbox/mycase/<portal-folder>/<name>.pdf (staging; triage routes onward)"
+  "output": "inbox/mycase/<portal-folder>/<name>.pdf (staging; triage routes onward); <billing dir>/<date>_invoice_<n>.pdf"
 }

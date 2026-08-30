@@ -11,9 +11,14 @@
 //     portal_url: https://your-firm.mycase.com
 //     credential: prosaic.mycase   # security add-generic-password -s prosaic.mycase -a <email> -w
 //     staging: inbox/mycase                # default
+//     billing: invoices                    # optional: pull invoice/funds-request
+//                                          # PDFs into this dir (matter-relative);
+//                                          # absent = billing not pulled
 //
-// State:  <matter>/.state/mycase.json — {docs: {<docId>: {name, updated, sha256, localName}}}
-// Output: downloads new/updated docs to staging, prints "NEW <abs path>"
+// State:  <matter>/.state/mycase.json — {docs: {<docId>: {name, updated, sha256, localName}},
+//                                        bills: {<billId>: {detail, amount, status, sha256, localName}}}
+// Output: downloads new/updated docs to staging (and, when configured,
+//         billing PDFs to their destination), prints "NEW <abs path>"
 //         per file on stdout (consumed by matter_sync.sh for triage).
 
 // Suppress DEP0040 punycode warning from googleapis/puppeteer dep chains.
@@ -24,6 +29,7 @@ process.emitWarning = function (warning, ...args) {
   return _emitWarning.call(process, warning, ...args);
 };
 
+const cheerio = require('cheerio');
 const crypto = require('crypto');
 const fs = require('fs');
 const os = require('os');
@@ -208,6 +214,160 @@ async function downloadDoc(browser, doc, tmpDir) {
   }
 }
 
+// --- billing ----------------------------------------------------------
+//
+// The portal's Billing tab (/bills) lists every invoice and funds
+// request as an <li class="payable"> row linking to /bills/<id>, and
+// each has a first-class PDF export at /bills/<id>.pdf — the platform's
+// own export, not a scrape of the rendered page. Billing PDFs are
+// born-digital and authoritatively named, so (unlike documents) they
+// go straight to their configured destination rather than staging.
+
+// Parse the /bills listing. Each row shows an amount
+// (".list-row__header"), a detail line like "Jul 28, 2026 - Inv. #13742"
+// or "Sep 15, 2025 - #R-00228" (".list-row__header-detail"), and a
+// status — "Overdue" (".list-row__alert-text") or "Paid ..."/
+// "Forwarded to #..." (".payable-row__payment").
+function parseBillRows(html) {
+  const $ = cheerio.load(html);
+  const rows = [];
+  $('li.payable').each((_, li) => {
+    const a = $(li).find('a[href^="/bills/"]').first();
+    const m = (a.attr('href') || '').match(/^\/bills\/(\d+)/);
+    if (!m) return;
+    rows.push({
+      id: m[1],
+      amount: $(li).find('.list-row__header').first().text().trim(),
+      detail: $(li).find('.list-row__header-detail').first().text().trim(),
+      status: $(li)
+        .find('.list-row__alert-text, .payable-row__payment')
+        .first()
+        .text()
+        .trim(),
+    });
+  });
+  return rows;
+}
+
+const BILL_MONTHS = {
+  jan: '01', feb: '02', mar: '03', apr: '04', may: '05', jun: '06',
+  jul: '07', aug: '08', sep: '09', oct: '10', nov: '11', dec: '12',
+};
+
+// "Jul 28, 2026 - Inv. #13742" -> "2026-07-28_invoice_13742"
+// "Sep 15, 2025 - #R-00228"    -> "2025-09-15_funds_request_r00228"
+// Unparseable detail lines fall back to the portal's bill id.
+function billFileName(detail, id) {
+  const m = (detail || '').match(
+    /^([A-Za-z]{3})[a-z]*\.?\s+(\d{1,2}),\s*(\d{4})\s*(?:-\s*(.*))?$/
+  );
+  const mm = m && BILL_MONTHS[m[1].toLowerCase()];
+  if (!mm) return `bill_${id}`;
+  const date = `${m[3]}-${mm}-${m[2].padStart(2, '0')}`;
+  const rest = m[4] || '';
+  const slug = (s) => s.toLowerCase().replace(/[^a-z0-9]+/g, '');
+  const inv = rest.match(/inv(?:oice)?\.?\s*#?\s*([\w-]+)/i);
+  if (inv) return `${date}_invoice_${slug(inv[1])}`;
+  const ref = rest.match(/#\s*([\w-]+)/);
+  if (ref) return `${date}_funds_request_${slug(ref[1])}`;
+  return `${date}_bill_${id}`;
+}
+
+// Fetch one bill's PDF export in its own tab (same isolation rationale
+// as downloadDoc: a direct download aborts navigation by design).
+async function downloadBillPdf(browser, portalUrl, bill, tmpDir) {
+  const before = new Set(fs.readdirSync(tmpDir));
+  const page = await browser.newPage();
+  try {
+    await allowDownloadsTo(page, tmpDir);
+    await page
+      .goto(`${portalUrl}/bills/${bill.id}.pdf`, {
+        waitUntil: 'networkidle2',
+        timeout: 60000,
+      })
+      .catch(() => {});
+    try {
+      return await waitForDownload(tmpDir, before, 60000);
+    } catch {
+      await dumpDebug(page, `mycase_no_bill_pdf_${bill.id}`).catch(() => {});
+      throw new Error(`no PDF produced for bill ${bill.id} (${bill.detail})`);
+    }
+  } finally {
+    await page.close().catch(() => {});
+  }
+}
+
+// Pull every new or status-changed bill into cfg.billing. A bill whose
+// listed status changed (a payment posted, a balance forwarded) is
+// re-exported: the PDF's face changes with it. Same bytes = manifest
+// refresh only; new bytes never overwrite a previously fetched file.
+async function pullBilling(browser, page, cfg, matterDir, manifest, tmpDir) {
+  const destDir = path.resolve(matterDir, cfg.billing);
+  await page
+    .goto(`${cfg.portal_url}/bills`, { waitUntil: 'networkidle2', timeout: 60000 })
+    .catch(() => {});
+  await sleep(2000);
+  const rows = parseBillRows(await page.content());
+  if (!rows.length) {
+    await dumpDebug(page, 'mycase_no_bills');
+    throw new Error('billing is configured but /bills lists no bills');
+  }
+  console.error(`[mycase] portal lists ${rows.length} bills`);
+  manifest.bills = manifest.bills || {};
+  let newCount = 0;
+  let failCount = 0;
+  for (const bill of rows) {
+    const known = manifest.bills[bill.id];
+    if (known && known.status === bill.status && known.detail === bill.detail)
+      continue; // unchanged listing; content re-checked only on a change
+    let dl;
+    try {
+      dl = await downloadBillPdf(browser, cfg.portal_url, bill, tmpDir);
+    } catch (e) {
+      console.error(`[mycase] SKIP bill ${bill.id} (${bill.detail}): ${e.message}`);
+      failCount++;
+      continue; // not recorded — retried next run
+    }
+    await sleep(400);
+    const hash = sha256(dl);
+    if (known && known.sha256 === hash) {
+      manifest.bills[bill.id] = { ...known, ...bill };
+      fs.unlinkSync(dl);
+      saveState(matterDir, 'mycase', manifest);
+      continue; // status changed in the listing but same bytes
+    }
+    fs.mkdirSync(destDir, { recursive: true });
+    const base = billFileName(bill.detail, bill.id);
+    let localName = `${base}.pdf`;
+    let n = 2;
+    while (
+      fs.existsSync(path.join(destDir, localName)) &&
+      sha256(path.join(destDir, localName)) !== hash
+    ) {
+      localName = `${base}_${n++}.pdf`;
+    }
+    const dest = path.join(destDir, localName);
+    fs.copyFileSync(dl, dest);
+    fs.unlinkSync(dl);
+    manifest.bills[bill.id] = {
+      detail: bill.detail,
+      amount: bill.amount,
+      status: bill.status,
+      sha256: hash,
+      localName,
+      fetched: new Date().toISOString(),
+    };
+    newCount++;
+    console.log(`NEW ${dest}`);
+    // Incremental write so a mid-run crash doesn't forget completed work.
+    saveState(matterDir, 'mycase', manifest);
+  }
+  console.error(
+    `[mycase] billing done: ${newCount} new/updated bill(s), ${failCount} failed`
+  );
+  return { newCount, failCount };
+}
+
 async function main() {
   const matterDir = process.argv[2];
   if (!matterDir) {
@@ -232,6 +392,13 @@ async function main() {
     const page = await browser.newPage();
     await allowDownloadsTo(page, tmpDir);
     await ensureLoggedIn(page, cfg.portal_url, creds);
+    // Billing first: a handful of PDFs, independent of the (much
+    // longer) document crawl, so a crawl failure can't block invoices.
+    if (cfg.billing) {
+      const billing = await pullBilling(browser, page, cfg, matterDir, manifest, tmpDir);
+      newCount += billing.newCount;
+      failCount += billing.failCount;
+    }
     const docs = await listDocuments(page, cfg.portal_url);
     console.error(`[mycase] portal lists ${docs.length} documents`);
 
@@ -305,7 +472,7 @@ async function main() {
     }
     saveState(matterDir, 'mycase', manifest);
     console.error(
-      `[mycase] done: ${newCount} new/updated document(s), ${failCount} failed`
+      `[mycase] done: ${newCount} new/updated file(s), ${failCount} failed`
     );
     if (failCount) process.exitCode = 1;
   } finally {
@@ -314,7 +481,11 @@ async function main() {
   }
 }
 
-main().catch((err) => {
-  console.error('Fatal:', err.message);
-  process.exit(1);
-});
+module.exports = { parseBillRows, billFileName };
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Fatal:', err.message);
+    process.exit(1);
+  });
+}
