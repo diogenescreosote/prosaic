@@ -228,6 +228,11 @@ checkboxes:
 # Static gray under-rectangle at the page foot where the privacy
 # banner's widget sat --- page content the flatten cannot remove;
 # painted over (same LiveCycle-era quirk as MC-040).
+# AEM-era blank: Print/Save/Reset carry real /AP appearance streams, so
+# the overlay bake inks them permanently into the served and filed
+# proof. Matched on the leaf name, as fl300 does.
+chrome_fields: ["Print_bt[0]", "Save_bt[0]", "Reset_bt[0]"]
+
 whiteouts:
   - page: 1
     rect: [35, 2, 249, 27]
