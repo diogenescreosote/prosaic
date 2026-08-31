@@ -201,6 +201,22 @@ def test_pos_service_note_renders_in_red(tmp_path):
         "pos_service_note; none found in the content stream")
 
 
+def test_no_pushbutton_chrome_survives_the_fill(tmp_path):
+    """JC blanks ship Print/Save/Clear pushbuttons; none may reach a
+    filing — neither as live widgets nor baked into page content
+    (MC-040's buttons carry real /AP streams that the bake would ink)."""
+    out, _ = _fill(tmp_path)
+    reader = PdfReader(str(out))
+    for page in reader.pages:
+        for annot in page.get("/Annots") or []:
+            obj = annot.get_object()
+            assert str(obj.get("/FT") or "") != "/Btn" or not (
+                int(obj.get("/Ff") or 0) & (1 << 16)), "live pushbutton survived"
+        text = page.extract_text()
+        for phrase in ("Print this form", "Save this form", "Clear this form"):
+            assert phrase not in text, f"baked button text survived: {phrase}"
+
+
 def test_esign_taxonomy_and_parties_are_validated(tmp_path):
     desc = form_fill.load_descriptor("mc040")
     for name, spec in (desc.get("fields") or {}).items():

@@ -509,6 +509,66 @@ def _strip_named_widgets(writer: PdfWriter, names: set[str]) -> None:
             af[NameObject("/Fields")] = kept_fields
 
 
+PUSHBUTTON_FLAG = 1 << 16  # PDF 32000-1 12.7.4.2.1: /Ff bit 17
+
+
+def _inherited(obj, key):
+    """Walk /Parent links for an inheritable field attribute."""
+    seen = 0
+    while obj is not None and seen < 32:
+        if key in obj:
+            return obj[key]
+        parent = obj.get("/Parent")
+        obj = parent.get_object() if parent is not None else None
+        seen += 1
+    return None
+
+
+def _strip_pushbutton_widgets(writer: PdfWriter) -> None:
+    """Remove every pushbutton widget (Print/Save/Clear chrome) from
+    all pages, unconditionally.
+
+    Judicial Council blanks ship with viewer-convenience buttons, and
+    whether they survive into a filing has depended on the PDF
+    generation era: LiveCycle-era buttons usually carry no appearance
+    stream and bake to nothing, but some (MC-040's among them) and all
+    AEM-era (2020+) buttons carry real /AP streams that the overlay
+    bake inks permanently into the page. A pushbutton has no place on
+    a filed document under any circumstances, so no per-form
+    ``chrome_fields`` opt-in is required: anything with /FT /Btn and
+    the pushbutton flag set is stripped before the bake.
+    ``chrome_fields`` remains for non-button chrome (privacy banners).
+    """
+    doomed_names: set[str] = set()
+    for page in writer.pages:
+        if "/Annots" not in page:
+            continue
+        kept = ArrayObject()
+        for annot in page["/Annots"]:
+            obj = annot.get_object()
+            ft = _inherited(obj, "/FT")
+            ff = _inherited(obj, "/Ff")
+            if str(ft) == "/Btn" and int(ff or 0) & PUSHBUTTON_FLAG:
+                name = str(obj.get("/T") or "")
+                if name:
+                    doomed_names.add(name)
+                continue
+            kept.append(annot)
+        page[NameObject("/Annots")] = kept
+    if doomed_names:
+        catalog = writer._root_object  # type: ignore[attr-defined]
+        if "/AcroForm" in catalog:
+            af = catalog["/AcroForm"].get_object()
+            if "/Fields" in af:
+                kept_fields = ArrayObject()
+                for f in af["/Fields"]:
+                    obj = f.get_object()
+                    if str(obj.get("/T") or "") in doomed_names:
+                        continue
+                    kept_fields.append(f)
+                af[NameObject("/Fields")] = kept_fields
+
+
 def _strip_xfa(writer: PdfWriter) -> None:
     """Drop the XFA layer so viewers honor the AcroForm values we set.
 
@@ -791,12 +851,14 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         # appearance streams, which the bake would ink permanently into
         # the filing.
         _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
+        _strip_pushbutton_widgets(writer)
         writer = _bake_widgets(writer)
         _strip_all_form_machinery(writer)
     else:
         if desc.get("technology") == "xfa":
             _strip_xfa(writer)
         _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
+        _strip_pushbutton_widgets(writer)
         _set_need_appearances(writer)
 
     # Merge overlays. ``whiteouts:`` (descriptor-level) paints white
