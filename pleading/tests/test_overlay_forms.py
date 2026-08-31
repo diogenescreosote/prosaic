@@ -161,6 +161,33 @@ def test_geometry_preview_draws_clean(tmp_path):
     assert "GEOMETRY PREVIEW" in text
 
 
+def test_pos_service_note_renders_inside_its_rect_when_set(tmp_path):
+    note = ("Service was made electronically. See attached Proof of "
+            "Electronic Service (Judicial Council Form EFS-050), Cal. "
+            "Rules of Court, rule 2.251.")
+    out, _ = _fill(tmp_path, extra={"pos_service_note": note})
+    desc = form_fill.load_descriptor("mc040")
+    rect = desc["fields"]["pos_service_note"]["rect"]
+    x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
+    y0, y1 = min(rect[1], rect[3]), max(rect[1], rect[3])
+
+    reader = PdfReader(str(out))
+    runs = _runs(reader.pages[1])  # page 2
+    hits = [(t, x, y) for (t, x, y, _s) in runs if "electronically" in t]
+    assert hits, f"pos_service_note text not drawn on page 2: {runs}"
+    assert any(x0 - 1 <= x <= x1 and y0 - 1 <= y <= y1 + 1
+               for (_t, x, y) in hits), (
+        f"pos_service_note drawn outside its rect {rect}: {hits}")
+
+
+def test_pos_service_note_absent_by_default(tmp_path):
+    out, _ = _fill(tmp_path)
+    reader = PdfReader(str(out))
+    text = reader.pages[1].extract_text()
+    assert "electronically" not in text
+    assert "EFS-050" not in text
+
+
 def test_esign_taxonomy_and_parties_are_validated(tmp_path):
     desc = form_fill.load_descriptor("mc040")
     for name, spec in (desc.get("fields") or {}).items():

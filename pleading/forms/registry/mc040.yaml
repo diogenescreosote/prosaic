@@ -253,6 +253,24 @@ fields:
     default: ""
     fit: shrink_wrap
     esign: {type: text, party: server}
+  pos_service_note:
+    page: 2
+    # Hand-authored rect (no widget): the blank line under item 2's
+    # "residence or business address is (specify):" prompt, verified
+    # with `sc form preview mc040`. Same footprint as
+    # pos_declarant_address --- the two are mutually exclusive by
+    # design (a filer either fills the mail-declarant fields for
+    # actual mail service, or leaves that whole complex blank and uses
+    # this note to say why; never both).
+    rect: [51, 569, 573, 590]
+    doc: >-
+      Optional one-line explanation for why the Proof of Service by
+      Mail section (items 2-4) is blank --- e.g. because service was
+      made electronically and a separate proof (EFS-050) is attached.
+      Empty by default; a filer who actually serves by mail leaves
+      this blank and completes items 2-4 instead.
+    default: ""
+    fit: shrink_wrap
   pos_mail_date:
     map: "MC-040[0].Page2[0].List4[0].Lia[0].Date1[0]"
     page: 2
@@ -410,3 +428,14 @@ agent_guide: |
 
   ALWAYS left blank: sig_date, the signature lines, and the POS
   declarant fields per above.
+
+  SERVED BY A METHOD OTHER THAN MAIL (e.g. electronic service under
+  CRC 2.251): this page's Proof of Service is mail-only, so leave the
+  whole declarant complex blank as above AND set pos_service_note to a
+  short factual line saying so and pointing to the real proof, e.g.
+  "Service was made electronically. See attached Proof of Electronic
+  Service (Judicial Council Form EFS-050), Cal. Rules of Court, rule
+  2.251." Renders under item 2's "(specify):" prompt --- the same
+  footprint pos_declarant_address would use, so set only one of the
+  two. Leave pos_service_note at its default ("") for an ordinary mail
+  service filing.
