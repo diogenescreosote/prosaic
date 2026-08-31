@@ -78,6 +78,37 @@ PDFs without `--allow-draft`. `notreal:` remains for hypotheticals
 and simulations whose banner should say what they are. Never build
 `--final` on your own initiative — releasing is the human's act.
 
+## Filename carries status, once a document leaves `out/`
+
+A build in `out/` is unsigned by definition --- it is what the source
+renders to, and it is regenerated on every build. The moment a human
+signs one, the signed artifact is a different thing from its build and
+must never be confusable with it.
+
+**Signed but not yet filed: suffix `_SIGNED_UNFILED`.**
+
+```
+out/<envelope>/notice_of_motion.pdf          the build. unsigned, regenerable
+staging/.../notice_of_motion_SIGNED_UNFILED.pdf   signed. not yet filed
+pleadings/2026-08-26_notice_of_motion.pdf    filed. the suffix is gone
+```
+
+**Filing drops the suffix.** A document in `pleadings/` is the court's
+copy by definition, so `_SIGNED_UNFILED` on a file there is a
+contradiction; the rename is part of docketing it, alongside its
+MANIFEST row. Serving does not drop the suffix --- served-and-unfiled
+is still unfiled.
+
+The reason is the same one behind the DRAFT banner and `notreal:`: a
+PDF carries no reliable sign of its own status, three versions of one
+document look identical in a file listing, and the one that gets
+attached to an email is whichever the human grabbed. The suffix makes
+the wrong grab visible.
+
+Corollary for `_AS_SERVED` and similar markers: they describe
+provenance, not release state, and stack after the status suffix when
+both apply.
+
 ## Source ranking, when conventions conflict
 
 Statutes / Rules of Court / local rules (validity — enforceable)
