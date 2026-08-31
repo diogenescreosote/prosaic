@@ -21,6 +21,53 @@ Judicial Council form POS-050/EFS-050, registered here as form id
   (CRC 2.251(c)(3)) — but whether THIS recipient must accept it is a
   question for the human, not this skill.
 
+## One send, one proof --- and superseded sends get none
+
+Two rules, and they decide how many proofs exist before you write any.
+
+**Each email is its own service event.** A proof declares one set of
+documents, served on named people, on one date: the form has a single
+`On (date)` and no field for a time. So two emails are two proofs even
+when they go out the same day, to the same people, minutes apart. Do
+not merge them because the date field would look the same --- the
+merged proof would be attesting to a service that never happened as
+described, and it is signed under penalty of perjury.
+
+**A send that was superseded gets no proof at all.** When a document
+goes out and a corrected version of the same document follows, only
+the corrected send is proved. The erroneous copy is not mentioned in
+any proof, and the superseded document simply does not appear in the
+earlier send's proof.
+
+The practical shape, for a morning that went:
+
+```
+09:00  email 1 --> FORM-A, FORM-B, FORM-C, FORM-D
+09:30  email 2 --> FORM-A (corrected), FORM-B (corrected)
+```
+
+is **two** proofs, not one and not four documents' worth:
+
+```
+proof for email 1, On (date): that day
+  FORM-C and FORM-D only
+  --- FORM-A and FORM-B are omitted: superseded 30 minutes later
+
+proof for email 2, On (date): that day
+  FORM-A and FORM-B, the corrected versions
+```
+
+Both proofs carry the same date. That is correct and is not a defect.
+
+**Courtesy attachments are not served documents.** A blank form sent
+for the other side's convenience is not your pleading and does not
+belong in `efs050_documents`.
+
+Name the sources for the date, and for the send when a date carries
+more than one:
+`<served_stem>.efs050.<YYYY-MM-DD>.md`, adding a suffix when two sends
+share a day.
+
 ## Canonical name and path
 
 The proof source lives **beside the served document's source, in the
