@@ -268,9 +268,12 @@ fields:
       Mail section (items 2-4) is blank --- e.g. because service was
       made electronically and a separate proof (EFS-050) is attached.
       Empty by default; a filer who actually serves by mail leaves
-      this blank and completes items 2-4 instead.
+      this blank and completes items 2-4 instead. Renders in red
+      (color, below) so it reads as an added annotation, not part of
+      the Judicial Council form's own printed text.
     default: ""
     fit: shrink_wrap
+    color: [1, 0, 0]
   pos_mail_date:
     map: "MC-040[0].Page2[0].List4[0].Lia[0].Date1[0]"
     page: 2

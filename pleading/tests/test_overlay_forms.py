@@ -188,6 +188,19 @@ def test_pos_service_note_absent_by_default(tmp_path):
     assert "EFS-050" not in text
 
 
+def test_pos_service_note_renders_in_red(tmp_path):
+    """The note is an added annotation, not the JC form's own printed
+    text — it must render in a non-black fill color (red, per the
+    registry) so it visibly reads as such."""
+    out, _ = _fill(tmp_path, extra={"pos_service_note": "Service was made electronically."})
+    reader = PdfReader(str(out))
+    page2 = reader.pages[1]
+    contents = page2.get_contents().get_data().decode("latin-1")
+    assert "1 0 0 rg" in contents, (
+        "expected a red (1 0 0 rg) fill-color operator on page 2 for "
+        "pos_service_note; none found in the content stream")
+
+
 def test_esign_taxonomy_and_parties_are_validated(tmp_path):
     desc = form_fill.load_descriptor("mc040")
     for name, spec in (desc.get("fields") or {}).items():

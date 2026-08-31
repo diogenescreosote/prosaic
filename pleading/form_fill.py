@@ -833,6 +833,8 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
                 fitted, spec = op["fit"], op["spec"]
                 font = str(spec.get("font") or DEFAULT_FONT)
                 c.setFont(font, fitted.font_size)
+                color = spec.get("color")
+                c.setFillColorRGB(*color) if color else c.setFillColorRGB(0, 0, 0)
                 x = min(rect[0], rect[2]) + 2
                 if len(fitted.lines) == 1:
                     # Single line: vertically center in the box, the way
