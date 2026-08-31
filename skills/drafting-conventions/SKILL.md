@@ -69,6 +69,50 @@ pull orphan lines forward to justify a heading.
   should be hard to mis-mate: identify the document, date, and
   signer near (never inside) the statutory wording.
 
+## Say what the instrument does; never banner what it doesn't
+
+Good legal writing goes directly to the point. Just as good code does
+not rely on comments, good legal writing does not depend on
+qualifications: if a request needs a disclaimer to be read correctly,
+rewrite the request.
+
+**Never open an instrument with a paragraph disclaiming what is NOT
+sought, NOT asserted, or NOT intended.** A disclaimer banner defines
+the document by its negative space, and the other side gets to
+interpret the negative. The canonical failure: a records subpoena
+headed "NO CLINICAL CONTENT IS SOUGHT" whose first request was audit
+trails *of clinical charts* — arguably all of it was clinical content,
+and the custodian's objection was drafted for them, in the demand's own
+words, covering everything.
+
+When a carve-out is legally necessary — a third party's privilege, a
+statutory exclusion — it is **one operative sentence**, phrased as a
+command or a scope line, placed where it operates:
+
+```
+# WRONG — a thematic banner above the requests
+NO CLINICAL CONTENT IS SOUGHT. No request below seeks the content
+of any psychotherapy note, progress note, or other record of the
+substance of any therapy session. If a responsive record...
+
+# RIGHT — a command inside the instructions
+If a responsive record contains the substance of a therapy session
+in which [third party] participated, redact that substance and
+produce the remainder, including all dates, headers, senders,
+recipients, and system information.
+
+# RIGHT — a scope line
+Records of sessions in which [third party] participated are outside
+the scope of this subpoena.
+```
+
+The same instinct governs letters and declarations: cut "to be clear,
+I am not..." framings unless the negative statement is itself the
+point (a non-reconsideration sentence heading off a CCP § 1008
+objection is the point; a reflexive hedge is not). Each disclaimer
+kept must earn its place by doing legal work a well-drafted
+affirmative sentence cannot.
+
 ## Release discipline (enforced)
 
 Every build is DRAFT-bannered by default; `--final` (or
