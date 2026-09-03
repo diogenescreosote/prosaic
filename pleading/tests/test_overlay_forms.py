@@ -217,6 +217,65 @@ def test_no_pushbutton_chrome_survives_the_fill(tmp_path):
             assert phrase not in text, f"baked button text survived: {phrase}"
 
 
+def test_label_pushbuttons_survive_the_fill_as_page_content(tmp_path):
+    """The chrome strip must not eat cross-reference labels. FL-300
+    draws its blue "Attachment 9." / "FL-305" labels as pushbutton
+    widgets; strip-everything deleted them and left sentences pointing
+    at blank gaps. A pushbutton is chrome only by Print/Save/Reset/
+    Warning name or by tell-tale appearance text; anything else keeps
+    its appearance through the bake."""
+    from pypdf.generic import (
+        DictionaryObject, NameObject, NumberObject, ArrayObject,
+        TextStringObject, StreamObject,
+    )
+    from pypdf import PdfWriter
+
+    src = form_fill.blank_path(form_fill.load_descriptor("mc040"))
+    reader = PdfReader(str(src))
+    writer = PdfWriter(clone_from=reader)
+    page = writer.pages[0]
+
+    def pushbutton(name, label):
+        ap = StreamObject()
+        ap[NameObject("/Type")] = NameObject("/XObject")
+        ap[NameObject("/Subtype")] = NameObject("/Form")
+        ap[NameObject("/BBox")] = ArrayObject(
+            [NumberObject(0), NumberObject(0), NumberObject(80), NumberObject(12)])
+        ap[NameObject("/Resources")] = DictionaryObject({
+            NameObject("/Font"): DictionaryObject({
+                NameObject("/Helv"): DictionaryObject({
+                    NameObject("/Type"): NameObject("/Font"),
+                    NameObject("/Subtype"): NameObject("/Type1"),
+                    NameObject("/BaseFont"): NameObject("/Helvetica"),
+                })})})
+        ap.set_data(f"BT /Helv 9 Tf 1 6 Td ({label}) Tj ET".encode())
+        ap_ref = writer._add_object(ap)
+        w = DictionaryObject()
+        w[NameObject("/Type")] = NameObject("/Annot")
+        w[NameObject("/Subtype")] = NameObject("/Widget")
+        w[NameObject("/FT")] = NameObject("/Btn")
+        w[NameObject("/Ff")] = NumberObject(1 << 16)
+        w[NameObject("/T")] = TextStringObject(name)
+        w[NameObject("/Rect")] = ArrayObject(
+            [NumberObject(400), NumberObject(700),
+             NumberObject(480), NumberObject(712)])
+        w[NameObject("/AP")] = DictionaryObject({NameObject("/N"): ap_ref})
+        w[NameObject("/P")] = page.indirect_reference
+        wref = writer._add_object(w)
+        page[NameObject("/Annots")].append(wref)
+
+    pushbutton("att9x[0]", "Attachment 9.")
+    pushbutton("Print[0]", "Print this form")
+
+    form_fill._strip_pushbutton_widgets(writer)
+    kept = [str(a.get_object().get("/T") or "")
+            for a in page["/Annots"]
+            if str(a.get_object().get("/FT") or "") == "/Btn"
+            and int(a.get_object().get("/Ff") or 0) & (1 << 16)]
+    assert "att9x[0]" in kept, "label pushbutton was stripped"
+    assert "Print[0]" not in kept, "chrome pushbutton survived"
+
+
 def test_esign_taxonomy_and_parties_are_validated(tmp_path):
     desc = form_fill.load_descriptor("mc040")
     for name, spec in (desc.get("fields") or {}).items():
