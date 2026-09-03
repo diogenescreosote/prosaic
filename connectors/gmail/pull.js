@@ -391,7 +391,12 @@ function parseSender(from) {
 
 const QUOTED_HIDDEN_HTML = '<div><font size="1" color="#888888">[Quoted text hidden]</font></div>';
 
-function stripQuotedHtml(html) {
+// keepAll: the message is itself a FORWARD (subject Fw:/Fwd:) --- its
+// body IS the forwarded material, including any Outlook From:/Sent:
+// header blocks and interior reply chains, none of which duplicates
+// other thread content. Strip nothing.
+function stripQuotedHtml(html, keepAll) {
+  if (keepAll) return html;
   const $ = cheerio.load(html, { xmlMode: false, decodeEntities: false });
 
   // Gmail web replies. A FORWARD's body also lives inside gmail_quote,
@@ -485,7 +490,8 @@ function stripQuotedHtml(html) {
   return result;
 }
 
-function stripQuotedText(text) {
+function stripQuotedText(text, keepAll) {
+  if (keepAll) return text;
   const lines = text.split('\n');
   const out = [];
   let inQuote = false;
@@ -508,7 +514,7 @@ function stripQuotedText(text) {
   return out.join('\n');
 }
 
-function renderBody(body) {
+function renderBody(body, keepAll) {
   if (body.html) {
     let clean = body.html
       .replace(/<html[^>]*>/gi, '')
@@ -516,10 +522,10 @@ function renderBody(body) {
       .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
       .replace(/<body[^>]*>/gi, '')
       .replace(/<\/body>/gi, '');
-    clean = stripQuotedHtml(clean);
+    clean = stripQuotedHtml(clean, keepAll);
     return clean;
   }
-  const stripped = stripQuotedText(body.text);
+  const stripped = stripQuotedText(body.text, keepAll);
   return `<div dir="ltr">${esc(stripped).replace(/\n/g, '<br>')}</div>`;
 }
 
@@ -539,6 +545,12 @@ async function renderThread(gmail, subject, messages, userEmail) {
     const cc = getHeader(h, 'Cc');
     const dateStr = getHeader(h, 'Date');
     const { name: senderName, email: senderEmail } = parseSender(from);
+    // A forwarded message's body IS forwarded material: Gmail wraps it
+    // in gmail_quote (handled below), but Outlook forwards are plain
+    // From:/Sent: blocks the reply-strippers would truncate. Subject
+    // is the reliable tell.
+    const msgSubject = getHeader(h, 'Subject') || subject || '';
+    const isForward = /^\s*(fwd?|fw)\s*:/i.test(msgSubject);
 
     const body = decodeBody(msg.payload);
     if (body.html) {
@@ -563,7 +575,7 @@ async function renderThread(gmail, subject, messages, userEmail) {
 <tr><td colspan="2">
   <table width="100%" cellpadding="12" cellspacing="0" border="0">
   <tbody><tr><td>
-    <div style="overflow: hidden;"><font size="-1">${renderBody(body)}</font></div>
+    <div style="overflow: hidden;"><font size="-1">${renderBody(body, isForward)}</font></div>
   </td></tr></tbody>
   </table>
 </td></tr>
