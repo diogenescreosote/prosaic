@@ -24,8 +24,10 @@
 // Attachments: the print-view PDF can only *list* a thread's attachments
 // by name, and a name is not the document — a notice whose whole value
 // is the dates inside it is invisible to triage until the file itself is
-// on disk. So each exported thread's real attachments (not inline images,
-// which are already embedded in the rendered PDF) are downloaded beside
+// on disk. So each exported thread's real attachments (everything with a
+// filename whose bytes are not embedded in the rendered PDF; MIME
+// headers like Content-ID / inline disposition are NOT trusted, because
+// mailers stamp them on real documents) are downloaded beside
 // the thread PDF, under
 //   <out_dir>/attachments/<thread pdf stem>/<sanitized original name>
 // each announced with its own "NEW <abs path>" line so triage sees them.
@@ -240,10 +242,15 @@ function collectInlineImages(part) {
   return images;
 }
 
+// Returns { html, embeddedCids }: embeddedCids is the set of content-ids
+// actually substituted into the rendered HTML. Anything NOT in that set is
+// not in the PDF, however its MIME headers label it, and must therefore be
+// treated as a real attachment by getAttachments below.
 async function resolveInlineImages(gmail, messageId, html, payload) {
   const images = collectInlineImages(payload);
+  const embeddedCids = new Set();
   const cidRefs = [...html.matchAll(/src=["']cid:([^"']+)["']/gi)];
-  if (cidRefs.length === 0) return html;
+  if (cidRefs.length === 0) return { html, embeddedCids };
 
   for (const match of cidRefs) {
     const cid = match[1];
@@ -267,26 +274,33 @@ async function resolveInlineImages(gmail, messageId, html, payload) {
       new RegExp(`src=["']cid:${cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'gi'),
       `src="data:${img.mimeType};base64,${b64}"`
     );
+    embeddedCids.add(cid);
   }
-  return html;
+  return { html, embeddedCids };
 }
 
-function getAttachments(part) {
+// A part is an attachment when it has a filename and its bytes did NOT
+// land in the rendered HTML. Judging by Content-ID / inline disposition
+// alone loses real documents: Outlook and Apple Mail stamp genuine PDF
+// attachments with Content-ID headers and inline dispositions, and the
+// old header-based rule silently dropped them (observed in production on
+// a court clerk's transmittal and a batch of phone-app scans).
+function getAttachments(part, embeddedCids) {
   const atts = [];
   if (!part) return atts;
-  const isInline =
-    part.headers?.some(
-      (h) => h.name.toLowerCase() === 'content-disposition' && h.value.startsWith('inline')
-    ) ||
-    part.headers?.some((h) => h.name.toLowerCase() === 'content-id');
-  if (part.filename && part.body?.size > 0 && !isInline)
+  const cidHeader = part.headers?.find(
+    (h) => h.name.toLowerCase() === 'content-id'
+  );
+  const cid = cidHeader ? cidHeader.value.replace(/^<|>$/g, '') : null;
+  const embedded = cid != null && embeddedCids != null && embeddedCids.has(cid);
+  if (part.filename && part.body?.size > 0 && !embedded)
     atts.push({
       name: part.filename,
       size: part.body.size,
       attachmentId: part.body.attachmentId,
     });
   if (part.parts)
-    for (const sub of part.parts) atts.push(...getAttachments(sub));
+    for (const sub of part.parts) atts.push(...getAttachments(sub, embeddedCids));
   return atts;
 }
 
@@ -311,10 +325,11 @@ function safeAttachmentName(filename) {
 // deterministic — messages arrive in thread order and parts are walked
 // depth-first — so a re-export resolves each attachment to the same path
 // and the exists-with-expected-size check below can skip the download.
-async function saveThreadAttachments(gmail, messages, pdfFilename, outDir) {
+async function saveThreadAttachments(gmail, messages, pdfFilename, outDir, embeddedByMsg) {
   const entries = [];
   for (const msg of messages) {
-    for (const att of getAttachments(msg.payload)) {
+    const embedded = embeddedByMsg ? embeddedByMsg.get(msg.id) : null;
+    for (const att of getAttachments(msg.payload, embedded)) {
       if (att.attachmentId) entries.push({ messageId: msg.id, ...att });
     }
   }
@@ -379,28 +394,46 @@ const QUOTED_HIDDEN_HTML = '<div><font size="1" color="#888888">[Quoted text hid
 function stripQuotedHtml(html) {
   const $ = cheerio.load(html, { xmlMode: false, decodeEntities: false });
 
-  // Gmail web replies
-  $('div.gmail_quote').replaceWith(QUOTED_HIDDEN_HTML);
-  $('div.gmail_attr').remove();
-  $('div.gmail_extra').replaceWith(QUOTED_HIDDEN_HTML);
+  // Gmail web replies. A FORWARD's body also lives inside gmail_quote,
+  // and unlike a reply quote (which duplicates an earlier message of the
+  // same thread) forwarded content exists nowhere else in the export ---
+  // hiding it destroys the only copy. Keep any quote block that opens as
+  // a forwarded message, including its gmail_attr header block
+  // (From/Date/Subject/To of the original sender is evidence).
+  const FWD = /-{5,}\s*Forwarded message\s*-{5,}/;
+  // True when el sits inside a forwarded-message block that is being
+  // kept; no stripping rule may fire in there --- the forward's interior
+  // ("On ... wrote:" lines included) is unique content, not duplication.
+  function insideForward(el) {
+    const q = $(el).closest('div.gmail_quote');
+    return q.length > 0 && FWD.test(q.text());
+  }
+  $('div.gmail_quote').each(function () {
+    if (FWD.test($(this).text())) return;
+    if (insideForward(this)) return;
+    $(this).replaceWith(QUOTED_HIDDEN_HTML);
+  });
+  $('div.gmail_attr').each(function () {
+    if (FWD.test($(this).text())) return;
+    $(this).remove();
+  });
+  $('div.gmail_extra').each(function () {
+    if (FWD.test($(this).text())) return;
+    $(this).replaceWith(QUOTED_HIDDEN_HTML);
+  });
 
   // Actual reply-style blockquotes. Do not hide all blockquotes globally:
   // some messages use blockquote purely for indentation/formatting rather than
   // quoted reply content. Reply HTML commonly marks quoted sections with
   // type="cite" (Apple Mail, Thunderbird, etc.).
-  $('blockquote[type="cite"]').replaceWith(QUOTED_HIDDEN_HTML);
-
-  // Gmail forwarded messages: "---------- Forwarded message ---------"
-  $('*').each(function () {
-    const t = $(this).text().trim();
-    if (/^-{5,}\s*Forwarded message\s*-{5,}$/.test(t)) {
-      $(this).nextAll().remove();
-      $(this).replaceWith(QUOTED_HIDDEN_HTML);
-    }
+  $('blockquote[type="cite"]').each(function () {
+    if (insideForward(this)) return;
+    $(this).replaceWith(QUOTED_HIDDEN_HTML);
   });
 
   // Outlook-style replies: <hr> or horizontal rule followed by From/Sent/To block
   $('hr').each(function () {
+    if (insideForward(this)) return;
     const next = $(this).next();
     const nextText = next.text().trim();
     if (/^From:/.test(nextText) || next.find('b').first().text().trim() === 'From:') {
@@ -411,12 +444,14 @@ function stripQuotedHtml(html) {
 
   // Outlook divRplyFwdMsg pattern
   $('[id*="divRplyFwdMsg"], [id*="appendonsend"]').each(function () {
+    if (insideForward(this)) return;
     $(this).nextAll().remove();
     $(this).replaceWith(QUOTED_HIDDEN_HTML);
   });
 
   // "On [date] ... wrote:" followed by quoted content
   $('div, span, p').each(function () {
+    if (insideForward(this)) return;
     const t = $(this).text().trim();
     if (/^On\s.+wrote:$/.test(t)) {
       $(this).nextAll().remove();
@@ -426,6 +461,7 @@ function stripQuotedHtml(html) {
 
   // Apple Mail inline reply: "On [date], at [time], [name] wrote:"
   $('div, span, p').each(function () {
+    if (insideForward(this)) return;
     const t = $(this).text().trim();
     if (/^On\s.+,\s+at\s+.+,\s+.+wrote:$/.test(t)) {
       $(this).nextAll().remove();
@@ -435,6 +471,7 @@ function stripQuotedHtml(html) {
 
   // Generic: any element containing only "> " prefixed lines (plain-text quotes in HTML)
   $('div, p, pre').each(function () {
+    if (insideForward(this)) return;
     const lines = $(this).text().split('\n');
     if (lines.length > 2 && lines.every((l) => l.trim() === '' || l.startsWith('>'))) {
       $(this).replaceWith(QUOTED_HIDDEN_HTML);
@@ -490,6 +527,10 @@ async function renderThread(gmail, subject, messages, userEmail) {
   const msgCount = messages.length;
   const sender = parseSender(userEmail);
 
+  // Which content-ids each message actually embedded in the rendered
+  // HTML; everything else with a filename is a real attachment.
+  const embeddedByMsg = new Map();
+
   let msgHtml = '';
   for (const msg of messages) {
     const h = msg.payload.headers;
@@ -501,9 +542,11 @@ async function renderThread(gmail, subject, messages, userEmail) {
 
     const body = decodeBody(msg.payload);
     if (body.html) {
-      body.html = await resolveInlineImages(gmail, msg.id, body.html, msg.payload);
+      const resolved = await resolveInlineImages(gmail, msg.id, body.html, msg.payload);
+      body.html = resolved.html;
+      embeddedByMsg.set(msg.id, resolved.embeddedCids);
     }
-    const atts = getAttachments(msg.payload);
+    const atts = getAttachments(msg.payload, embeddedByMsg.get(msg.id));
 
     msgHtml += `<hr>
 <table width="100%" cellpadding="0" cellspacing="0" border="0" class="message">
@@ -558,7 +601,7 @@ ${
 </tbody></table>`;
   }
 
-  return `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "https://www.w3.org/TR/html4/strict.dtd">
+  const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "https://www.w3.org/TR/html4/strict.dtd">
 <html lang="en"><head>
 <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
 <style type="text/css">
@@ -589,6 +632,7 @@ pre{white-space:pre;white-space:-moz-pre-wrap;white-space:-o-pre-wrap;white-spac
 ${msgHtml}
 </div></div>
 </body></html>`;
+  return { html, embeddedByMsg };
 }
 
 let _browser = null;
@@ -798,10 +842,10 @@ async function main() {
             }
           }
         }
-        const html = await renderThread(gmail, meta.subject, res.data.messages, userDisplayEmail);
+        const rendered = await renderThread(gmail, meta.subject, res.data.messages, userDisplayEmail);
         const htmlPath = path.join(tmpDir, `${meta.threadId}.html`);
         const pdfPath = path.join(outDir, meta.filename);
-        fs.writeFileSync(htmlPath, html);
+        fs.writeFileSync(htmlPath, rendered.html);
         await htmlToPdf(htmlPath, pdfPath);
         exported++;
         console.error('ok');
@@ -810,7 +854,8 @@ async function main() {
           gmail,
           res.data.messages,
           meta.filename,
-          outDir
+          outDir,
+          rendered.embeddedByMsg
         );
         // Record incrementally so a crash mid-batch never re-exports
         // what already succeeded (connector contract).
