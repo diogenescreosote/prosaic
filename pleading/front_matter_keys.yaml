@@ -69,6 +69,7 @@ document:
   - plain                    # deprecated spelling of no_caption; warns
   - notreal                  # unfiled/unsent marker; prints as a red banner
   - esign                    # false = wet ink, no fields anywhere; 'tags' = embedded text tags (free web UI); absent = sidecar .fields.json, clean text layer
+  - sign_date                # bake the signer's execution date into signature blocks as page content on --final ('today' or ISO date); Preview/wet-ink path only (eFile drops typed date annotations); NOT for DocuSeal (date is a placed field); judge blocks untouched
 
 # Letters (doctype: letter) address a recipient rather than a court.
 letter:

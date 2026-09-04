@@ -194,6 +194,33 @@ and Dropbox Sign field types, so a descriptor's e-sign map can drive
 `sc docuseal` (or any platform) without translation loss. Parties are
 abstract roles declared in `esign_parties:`, in signing order.
 
+## Two signing paths, and the date trap
+
+A signed pleading takes one of two routes, and they want opposite
+things from the build:
+
+- **DocuSeal (remote, audit-trailed).** Build `--final` with no
+  `sign_date`. The signature-block macros emit e-sign field tags into
+  the `<pdf>.fields.json` sidecar (or embedded tags in `esign: tags`
+  mode); `sc docuseal send` places DocuSeal's own signature *and date*
+  fields there, and DocuSeal fills both when the signer acts. The date
+  is a placed field the platform owns — never bake it.
+
+- **Preview / wet ink (local).** Build `--final` with `sign_date:`
+  (`today` or an ISO date) in the source. The macros then draw the
+  signer's execution date as **page content** ("Executed this 3rd day
+  of September, 2026, at …"), leaving only the signature rule blank for
+  an ink mark. This exists because e-filing portals (Odyssey/eFileCA)
+  re-flatten every upload and **drop typed FreeText annotations while
+  keeping ink signatures** — a date hand-typed onto a blank rule in
+  Preview vanishes at the clerk while the signature survives, yielding
+  an undated declaration. Baking the date as content makes it
+  unlosable. `sign_date` fires only on `--final` (a draft must never
+  look executed) and never touches a judge block (the court dates its
+  own signature). If you must annotate a date in Preview anyway,
+  flatten before upload (`File → Print → Save as PDF`) so it becomes
+  content.
+
 **Geometry preview** — the visual sanity check that must precede
 trusting any new adapter: `sc form preview <id> -o preview.pdf` renders
 the blank with a translucent labeled box over every place the

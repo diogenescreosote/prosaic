@@ -222,3 +222,56 @@ def test_default_mode_writes_sidecar_and_keeps_text_layer_clean(tmp_path):
         assert 0 < f["y_top"] < sidecar["page_height"]
         assert f["w"] > 0 and f["h"] > 0 and f["page"] >= 1
 
+
+
+def _build_final(tmp_path, body, extra_meta=""):
+    """Like build() but with --final, for sign_date baking."""
+    src = tmp_path / "doc.md"
+    front = FRONT.format(body=body)
+    if extra_meta:
+        front = front.replace("---\n", f"---\n{extra_meta}\n", 1)
+    src.write_text(front)
+    return subprocess.run(
+        [sys.executable, str(PLEADING_DIR / "md_pleading.py"),
+         "--final", str(src), str(tmp_path / "doc.pdf")],
+        capture_output=True, text=True, cwd=tmp_path,
+    )
+
+
+def test_sign_date_bakes_execution_date_on_final_only(tmp_path):
+    """sign_date front matter bakes the signer's date as page content on
+    --final (the Preview/eFile path: a typed date annotation is dropped by
+    portal flattening, baked content is not). A draft build must stay
+    blank so an unexecuted draft never looks signed."""
+    body = "\\signblock{decl}{ANDREW CONE}{Berkeley, California}"
+    meta = "sign_date: '2026-09-03'"
+
+    draft = build(tmp_path, body, meta)
+    assert draft.returncode == 0, draft.stderr
+    assert "day of _________________" in text_of(tmp_path), "draft baked a date"
+
+    final = _build_final(tmp_path, body, meta)
+    assert final.returncode == 0, final.stderr
+    baked = " ".join(text_of(tmp_path).split())
+    assert "Executed this 3rd day of September, 2026, at Berkeley, California." in baked
+    # the signature RULE stays blank -- only the date is baked
+    assert "_______________" in text_of(tmp_path)
+
+
+def test_sign_date_today_resolves(tmp_path):
+    import datetime
+    body = "\\signblock{dated}{ANDREW CONE}{Respondent}"
+    final = _build_final(tmp_path, body, "sign_date: today")
+    assert final.returncode == 0, final.stderr
+    y = datetime.date.today().year
+    assert f", {y}" in text_of(tmp_path)
+    assert "Dated:" in text_of(tmp_path)
+
+
+def test_sign_date_never_touches_judge_block(tmp_path):
+    """The court dates its own signature; sign_date must not fill a judge
+    block even on --final."""
+    final = _build_final(tmp_path, "\\signblock{judge}{HON. MEGAN AMARAL}",
+                         "sign_date: today")
+    assert final.returncode == 0, final.stderr
+    assert "Dated: _________________" in text_of(tmp_path)

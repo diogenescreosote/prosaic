@@ -4757,6 +4757,24 @@ def main() -> None:
                 f"is ready; do that first, then rebuild --final."
             )
         meta["_final"] = True
+
+    # sign_date (front matter): bake the signer's execution date into
+    # signature blocks as PAGE CONTENT on a --final build, leaving the
+    # signature rule itself blank. This is the Preview/wet-ink path:
+    # eFile portals (Odyssey/eFileCA) re-flatten uploads and drop typed
+    # (FreeText) annotations while keeping ink signatures, so a date
+    # hand-typed onto a blank rule vanishes at the clerk while the
+    # signature survives. Baking the date as content makes it
+    # unlosable. Judge blocks are never touched (the court dates its
+    # own signature). NOT for the DocuSeal path -- there the date is a
+    # placed field DocuSeal fills, so a DocuSeal-signed source omits
+    # sign_date and keeps its e-sign date tag. Only on --final (a draft
+    # must not look executed); an explicit --sign/--date still wins.
+    if sign_date is None and meta.get("_final") and meta.get("sign_date"):
+        raw = str(meta["sign_date"]).strip()
+        sign_date = (datetime.date.today()
+                     if raw.lower() in ("today", "final", "true")
+                     else datetime.date.fromisoformat(raw))
     warn_unknown_front_matter_keys(meta, input_path.name)
     require_attachment_has_no_caption(meta, input_path.name)
     require_cover_sheet_only_has_cover_sheet(meta, input_path.name)
