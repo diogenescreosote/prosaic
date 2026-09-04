@@ -25,10 +25,14 @@ Signature placement is automatic: prosaic builds write the field
 geometry to `<pdf>.fields.json` (sent as API field areas; the PDF's
 text layer stays clean), or embed classic `{{...}}` text tags when
 the source says `esign: tags` — the mode the free web UI needs
-(ADR-0027). Roles number in document order; give `--to` in the same
-order the signature areas appear and every field lands placed. A
-PDF with neither sends with a warning and the signer places fields
-by hand. `esign: false` sources (wills, negotiable notes) are
+(ADR-0027). Both `\signblock` bodies AND a `cover_sheet:` form's
+signature/date lines flow into the sidecar, so a filled JC/local form
+(FL-300, MC-040, FL-014, …) signs through DocuSeal with no
+hand-placement. `--to` order is the document's signature order; field
+roles are reconciled onto the roster at send, so a single-signer
+roster attaches every field to the one signer without fuss. A PDF with
+neither sidecar nor tags sends with a warning and the signer places
+fields by hand. `esign: false` sources (wills, negotiable notes) are
 wet-ink instruments — never send them at all.
 
 For flows beyond send/status/fetch (templates, bulk sends, webhooks,
@@ -64,6 +68,30 @@ the send validates the roster size against the document's declared
 fields (sidecar or tags) and refuses a mismatch. Judicial signature lines
 (\signblock{judge}) are wet-ink spaces: never tagged, never part of
 a roster, never e-signed.
+
+**Several documents, one ceremony.** `send` takes MORE THAN ONE PDF:
+they become one submission of several documents, signed in a single
+session and fetched back as SEPARATE signed files — the case where a
+clerk wants each document filed on its own. Build each `--final`, then:
+
+```
+<prosaic>/cli/sc docuseal send \
+  "out/rfo/fl300.pdf" "out/rfo/declaration.pdf" "out/rfo/mpa.pdf" \
+  --to "Andrew Cone <andrew@example.com>"
+```
+
+Roles are unified across all the documents (distinct field roles in
+first-appearance order map onto the roster in order), so a bundle
+signed by one person just works, and a two-signer bundle attaches each
+party's fields correctly.
+
+**The signed files name themselves.** `fetch` prints one
+`SIGNED: <path>` line per document (path relative to the working
+directory) and `AUDIT: <path>` for the certificate. Read those lines
+to know exactly what to hand back, route, or re-file — never re-derive
+the paths. Choose `--out` (e.g. `--out staging/<date>_signed`) so the
+`SIGNED:` paths point where you want the files; a bare `fetch` writes
+into the current directory.
 
 - `send` writes `<pdf>.docuseal.json` beside the document — commit it
   (`config` or `docket` per the matter's conventions) so the
