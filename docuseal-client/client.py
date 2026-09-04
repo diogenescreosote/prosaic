@@ -294,18 +294,32 @@ def tagged_role_count(pdf: Path) -> int | None:
     return len(roles) if roles else None
 
 
+def _distinct_roles_in_order(field_lists: list[list[dict]]) -> list[str]:
+    """Distinct field roles across all documents, in first-appearance
+    order. That order is the document/signature order, which is how the
+    roster (--to / envelope) is read, so role N maps to submitter N."""
+    seen: list[str] = []
+    for fields in field_lists:
+        for f in fields:
+            r = f.get("role") or "Signer"
+            if r not in seen:
+                seen.append(r)
+    return seen
+
+
 def cmd_send(args: argparse.Namespace) -> int:
-    pdf = Path(args.pdf)
-    if not pdf.exists():
-        raise SystemExit(f"no such file: {pdf}")
-    banner = draft_banner_of(pdf)
-    if banner and not args.allow_draft:
-        raise SystemExit(
-            f"refusing to send a draft: this PDF is stamped "
-            f"{banner!r}. Rebuild with --final for the version that "
-            f"goes into the world, or pass --allow-draft to "
-            f"deliberately circulate the draft."
-        )
+    pdfs = [Path(p) for p in args.pdf]
+    for pdf in pdfs:
+        if not pdf.exists():
+            raise SystemExit(f"no such file: {pdf}")
+        banner = draft_banner_of(pdf)
+        if banner and not args.allow_draft:
+            raise SystemExit(
+                f"refusing to send a draft: {pdf.name} is stamped "
+                f"{banner!r}. Rebuild with --final for the version that "
+                f"goes into the world, or pass --allow-draft to "
+                f"deliberately circulate the draft."
+            )
     configure_sdk()
 
     if args.envelope and args.to:
@@ -322,25 +336,55 @@ def cmd_send(args: argparse.Namespace) -> int:
     for i, sub in enumerate(submitters):
         sub["role"] = f"Signer {i + 1}" if len(submitters) > 1 else "Signer"
 
-    expected = tagged_role_count(pdf)
-    if expected is not None and expected != len(submitters):
-        raise SystemExit(
-            f"signer mismatch: the document's field tags expect {expected} "
-            f"signer(s), {len(submitters)} given. Signing order is the "
-            f"document's signature-block order; fix the roster (or the "
-            f"document) before sending."
-        )
+    # Fields per document, in send order. Each PDF keeps its own page
+    # numbers -- DocuSeal signs several documents in one submission, so
+    # no PDF merging or page-offset math is needed.
+    per_doc_fields = [
+        sidecar_api_fields(field_sidecar(pdf)) if field_sidecar(pdf) else []
+        for pdf in pdfs
+    ]
 
-    document: dict = {
-        "name": pdf.name,
-        "file": base64.b64encode(pdf.read_bytes()).decode(),
-    }
-    sidecar = field_sidecar(pdf)
-    if sidecar:
-        document["fields"] = sidecar_api_fields(sidecar)
+    # Reconcile field roles with the roster. A build sidecar names roles
+    # in signature order ("Signer 1"...); a form sidecar names them by
+    # party; a single-signer roster wants the bare "Signer". Remap the
+    # distinct field roles onto the submitter roles by order, so any of
+    # those role vocabularies attaches its fields to the right signer.
+    distinct = _distinct_roles_in_order(per_doc_fields)
+    if distinct and len(distinct) != len(submitters):
+        raise SystemExit(
+            f"signer mismatch: the documents' field tags expect "
+            f"{len(distinct)} signer(s), {len(submitters)} given. Signing "
+            f"order is the documents' signature-block order; fix the roster "
+            f"(or the documents) before sending."
+        )
+    role_map = {src: submitters[i]["role"] for i, src in enumerate(distinct)}
+    for fields in per_doc_fields:
+        for f in fields:
+            f["role"] = role_map.get(f.get("role", "Signer"), submitters[0]["role"])
+
+    # Fall back to embedded {{...}} tag counting only when NO document
+    # carried a sidecar (the legacy tags mode).
+    if not distinct:
+        for pdf in pdfs:
+            expected = tagged_role_count(pdf)
+            if expected is not None and expected != len(submitters):
+                raise SystemExit(
+                    f"signer mismatch in {pdf.name}: field tags expect "
+                    f"{expected} signer(s), {len(submitters)} given."
+                )
+
+    documents = []
+    for pdf, fields in zip(pdfs, per_doc_fields):
+        doc: dict = {
+            "name": pdf.name,
+            "file": base64.b64encode(pdf.read_bytes()).decode(),
+        }
+        if fields:
+            doc["fields"] = fields
+        documents.append(doc)
     payload = {
-        "name": args.name or pdf.stem,
-        "documents": [document],
+        "name": args.name or pdfs[0].stem,
+        "documents": documents,
         "submitters": submitters,
         "send_email": not args.no_email,
     }
@@ -354,19 +398,25 @@ def cmd_send(args: argparse.Namespace) -> int:
     )
     submission_id = entries[0].get("submission_id") or submission.get("id")
 
-    if not sidecar and shutil.which("pdftotext"):
-        text = subprocess.run(["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
-        if "{{" not in text:
+    if not distinct and shutil.which("pdftotext"):
+        untagged = [
+            pdf.name for pdf in pdfs
+            if "{{" not in subprocess.run(
+                ["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
+        ]
+        if untagged:
             print(
-                "WARNING: no field sidecar and no {{...}} tags in the "
-                "document; signers will have to place their own fields "
+                "WARNING: no field sidecar and no {{...}} tags in "
+                + ", ".join(untagged)
+                + "; signers will have to place their own fields "
                 "(prosaic builds write <pdf>.fields.json automatically)",
                 file=sys.stderr,
             )
 
     receipt = {
         "submission_id": submission_id,
-        "document": pdf.name,
+        "document": pdfs[0].name,
+        "documents": [pdf.name for pdf in pdfs],
         "api": api_base(),
         "submitters": [
             {
@@ -379,7 +429,7 @@ def cmd_send(args: argparse.Namespace) -> int:
             for e in entries
         ],
     }
-    receipt_path = pdf.with_name(pdf.name + ".docuseal.json")
+    receipt_path = pdfs[0].with_name(pdfs[0].name + ".docuseal.json")
     receipt_path.write_text(json.dumps(receipt, indent=2) + "\n")
     print(f"submission {submission_id} created; receipt: {receipt_path}")
     for e in receipt["submitters"]:
@@ -412,21 +462,35 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     doc_list = docs.get("documents") if isinstance(docs, dict) else docs
     if not doc_list:
         doc_list = sub.get("documents", [])
+    def rel(pth: Path) -> str:
+        try:
+            return str(pth.resolve().relative_to(Path.cwd()))
+        except ValueError:
+            return str(pth)
+
     got = 0
+    signed_paths: list[Path] = []
     for doc in doc_list:
         dest = out / doc["name"]
         download(doc["url"], dest)
-        print(f"fetched: {dest}")
+        signed_paths.append(dest)
         got += 1
     audit_url = sub.get("audit_log_url")
+    audit_dest = None
     if audit_url:
-        dest = out / f"submission-{args.submission_id}-audit-log.pdf"
-        download(audit_url, dest)
-        print(f"fetched: {dest}")
+        audit_dest = out / f"submission-{args.submission_id}-audit-log.pdf"
+        download(audit_url, audit_dest)
         got += 1
     if not got:
         print("completed submission exposed no documents", file=sys.stderr)
         return 1
+    # The signed documents, each on its own line, path first, so a
+    # human or a script can act on them without re-deriving where they
+    # landed. Audit certificate last, labelled.
+    for pth in signed_paths:
+        print(f"SIGNED: {rel(pth)}")
+    if audit_dest is not None:
+        print(f"AUDIT:  {rel(audit_dest)}")
     return 0
 
 
@@ -516,7 +580,10 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sp = sub.add_parser("send", help="create a submission from a PDF and email signers")
-    sp.add_argument("pdf")
+    sp.add_argument("pdf", nargs="+",
+                    help="one or more PDFs signed in ONE submission "
+                         "(each keeps its own sidecar; a shared roster "
+                         "signs them all)")
     sp.add_argument(
         "--envelope",
         help="take the signing roster from this envelope's signers: list in envelopes.yaml",

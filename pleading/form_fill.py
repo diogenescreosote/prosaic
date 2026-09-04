@@ -1044,6 +1044,69 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
 
 
 # ---------------------------------------------------------------------------
+# E-sign field geometry (for the build's <pdf>.fields.json sidecar)
+# ---------------------------------------------------------------------------
+
+def esign_fields(form_id: str, meta: Optional[dict] = None) -> list[dict]:
+    """Every ``esign:`` field on a form, as sidecar records the build can
+    merge into ``<pdf>.fields.json`` and ``sc docuseal`` can place.
+
+    Same rect resolution as a fill (explicit ``rect`` or ``map`` naming a
+    widget), converted to the sidecar's top-left-origin points. The role
+    is ``Signer <n>`` numbered by the field's party position in
+    ``esign_parties`` -- the same "Signer N" vocabulary the pleading
+    signblocks emit and the roster (``--to`` order) is read in, so a
+    form's signature fields attach to the right submitter with no
+    per-form wiring. A field whose party is not declared falls to
+    ``Signer 1``. Page-relative coordinates: the caller offsets pages
+    when the form is prepended as a cover sheet.
+    """
+    from reportlab.lib.pagesizes import letter as _letter
+    page_h = _letter[1]
+    desc = load_descriptor(form_id)
+    blank = blank_path(desc)
+    if not blank.exists():
+        raise FileNotFoundError(f"Blank form missing: {blank}")
+    reader = PdfReader(str(blank))
+    widget_rects: dict[str, tuple[int, list[float]]] = {}
+    for page_idx, name, obj in iter_widgets(reader):
+        rect = [float(v) for v in (obj.get("/Rect") or [0, 0, 0, 0])]
+        widget_rects.setdefault(name, (page_idx, rect))
+        widget_rects.setdefault(name.split(".")[-1], (page_idx, rect))
+
+    parties = [str(p) for p in (desc.get("esign_parties") or [])]
+    out: list[dict] = []
+    for name, spec in (desc.get("fields") or {}).items():
+        es = spec.get("esign") or {}
+        if not es:
+            continue
+        rect = spec.get("rect")
+        page_no = int(spec.get("page", 1)) - 1
+        if not rect and spec.get("map"):
+            hit = widget_rects.get(spec["map"])
+            if hit is not None:
+                page_no, rect = hit
+        if not rect:
+            continue
+        x0, y0, x1, y1 = rect
+        x, w = min(x0, x1), abs(x1 - x0)
+        top, h = max(y0, y1), abs(y1 - y0)
+        party = str(es.get("party") or "")
+        role_n = parties.index(party) + 1 if party in parties else 1
+        out.append({
+            "name": f"{name}",
+            "role": f"Signer {role_n}",
+            "type": str(es.get("type") or "text"),
+            "page": page_no + 1,
+            "x": round(x, 2),
+            "y_top": round(page_h - top, 2),
+            "w": round(w, 2),
+            "h": round(h, 2),
+        })
+    return out
+
+
+# ---------------------------------------------------------------------------
 # Geometry preview
 # ---------------------------------------------------------------------------
 

@@ -4912,13 +4912,26 @@ def main() -> None:
     # docuseal send`, kept OUT of the PDF so nothing invisible rides
     # the clipboard. Page numbers account for a prepended cover sheet.
     fields_path = output_path.with_name(output_path.name + ".fields.json")
-    esign_fields = list(getattr(pleading, "esign_fields", []) or [])
+    # Body signature blocks (\signblock) live on the pages AFTER any
+    # prepended cover form, so they shift down by the cover's page count.
+    body_fields = list(getattr(pleading, "esign_fields", []) or [])
+    cover_pages = (len(PdfReader(str(cover_path)).pages)
+                   if cover_sheet and cover_path else 0)
+    if cover_pages:
+        body_fields = [{**f, "page": f["page"] + cover_pages} for f in body_fields]
+    # The cover form's OWN e-sign fields (a JC/local form's signature and
+    # date lines) sit on the cover pages (1..cover_pages) -- no offset.
+    # Without these a filed form went to DocuSeal with its signature line
+    # unplaced; the signer had to draw the field by hand.
+    cover_fields: list = []
+    if cover_sheet:
+        import form_fill as _ff2
+        try:
+            cover_fields = _ff2.esign_fields(cover_sheet, meta)
+        except Exception:
+            cover_fields = []
+    esign_fields = cover_fields + body_fields
     if esign_fields:
-        offset = 0
-        if cover_sheet and cover_path:
-            offset = len(PdfReader(str(cover_path)).pages)
-        if offset:
-            esign_fields = [{**f, "page": f["page"] + offset} for f in esign_fields]
         fields_path.write_text(json.dumps({
             "page_width": PAGE_WIDTH,
             "page_height": PAGE_HEIGHT,
