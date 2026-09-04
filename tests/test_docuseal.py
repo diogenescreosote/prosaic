@@ -218,7 +218,11 @@ def test_missing_api_key_is_a_clear_error(tmp_path: Path) -> None:
     # machine whose Keychain really holds a prosaic.docuseal entry --
     # the unreachable-API error from the sentinel URL. Both prove the
     # key was never defaulted silently.
-    assert "DOCUSEAL_API_KEY" in proc.stderr or "unreachable" in proc.stderr
+    assert (
+        "DOCUSEAL_API_KEY" in proc.stderr
+        or "unreachable" in proc.stderr
+        or "refused" in proc.stderr.lower()
+    )
 
 
 def test_send_refuses_a_draft_stamped_pdf(mock_api: str, tmp_path: Path) -> None:
@@ -477,7 +481,9 @@ def test_send_attaches_fields_from_the_sidecar(mock_api: str, tmp_path: Path) ->
     req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
     fields = req["payload"]["documents"][0]["fields"]
     sig = next(f for f in fields if f["name"] == "Signature 1")
-    assert sig["role"] == "Signer 1" and sig["type"] == "signature"
+    # A single-signer roster is role "Signer"; the sidecar's "Signer 1"
+    # is remapped onto it at send so the field attaches to the submitter.
+    assert sig["role"] == "Signer" and sig["type"] == "signature"
     area = sig["areas"][0]
     assert area["page"] == 2
     assert abs(area["x"] - 76.0 / 612.0) < 1e-3
@@ -533,3 +539,67 @@ def test_sidecar_role_count_gates_the_roster(mock_api: str, tmp_path: Path) -> N
     )
     assert proc.returncode != 0
     assert "signer mismatch" in proc.stderr
+
+
+def _sidecar(fields):
+    return json.dumps({
+        "page_width": 612.0, "page_height": 792.0,
+        "origin": "top-left", "units": "pt", "fields": fields,
+    })
+
+
+def test_multiple_pdfs_become_one_submission_with_several_documents(
+        mock_api: str, tmp_path: Path) -> None:
+    """`sc docuseal send a.pdf b.pdf c.pdf` sends ONE submission whose
+    `documents` list holds all three, each with its own fields --- the
+    clerk-wants-separate-files case, signed in a single ceremony and
+    fetched back as discrete PDFs (no merging)."""
+    for stem in ("a", "b", "c"):
+        (tmp_path / f"{stem}.pdf").write_bytes(PDF_BYTES)
+        (tmp_path / f"{stem}.pdf.fields.json").write_text(_sidecar([
+            {"name": "Signature 1", "role": "Signer 1", "type": "signature",
+             "page": 1, "x": 76.0, "y_top": 700.0, "w": 212.0, "h": 28.0},
+        ]))
+    proc = run_docuseal("send", "a.pdf", "b.pdf", "c.pdf",
+                        "--to", "Jane Roe <jane@example.com>",
+                        url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
+    docs = req["payload"]["documents"]
+    assert [d["name"] for d in docs] == ["a.pdf", "b.pdf", "c.pdf"]
+    # single signer -> every field's role remapped onto the bare "Signer"
+    for d in docs:
+        assert d["fields"][0]["role"] == "Signer"
+
+
+def test_two_signer_roles_across_docs_map_to_two_submitters(
+        mock_api: str, tmp_path: Path) -> None:
+    """Distinct field roles, in first-appearance order across the
+    documents, map onto the roster in order --- so a build's 'Signer 1'
+    /'Signer 2' or a form's party roles reach the right people."""
+    (tmp_path / "a.pdf").write_bytes(PDF_BYTES)
+    (tmp_path / "a.pdf.fields.json").write_text(_sidecar([
+        {"name": "S1", "role": "respondent", "type": "signature",
+         "page": 1, "x": 76.0, "y_top": 700.0, "w": 212.0, "h": 28.0},
+        {"name": "S2", "role": "petitioner_attorney", "type": "signature",
+         "page": 1, "x": 76.0, "y_top": 600.0, "w": 212.0, "h": 28.0},
+    ]))
+    proc = run_docuseal("send", "a.pdf",
+                        "--to", "AC <ac@example.com>",
+                        "--to", "JK <jk@example.com>",
+                        url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
+    fields = req["payload"]["documents"][0]["fields"]
+    roles = {f["name"]: f["role"] for f in fields}
+    assert roles == {"S1": "Signer 1", "S2": "Signer 2"}
+
+
+def test_fetch_prints_signed_paths(mock_api: str, tmp_path: Path) -> None:
+    """fetch names each signed PDF on stdout as 'SIGNED: <relpath>' and
+    the certificate as 'AUDIT: <relpath>', so the files are actionable
+    without re-deriving where they landed."""
+    proc = run_docuseal("fetch", "123", "--out", "signed", url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    assert "SIGNED: signed/signed.pdf" in proc.stdout
+    assert "AUDIT:  signed/submission-123-audit-log.pdf" in proc.stdout

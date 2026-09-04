@@ -622,7 +622,12 @@ def main() -> None:
     sp.set_defaults(func=cmd_fetch)
 
     args = parser.parse_args()
-    start = Path(getattr(args, "matter_dir", None) or getattr(args, "pdf", None) or ".")
+    # `pdf` is a list under `send` (nargs="+"); use its first entry to
+    # locate the matter config. Other subcommands have no `pdf`.
+    pdf_arg = getattr(args, "pdf", None)
+    if isinstance(pdf_arg, list):
+        pdf_arg = pdf_arg[0] if pdf_arg else None
+    start = Path(getattr(args, "matter_dir", None) or pdf_arg or ".")
     load_matter_config(start)
     sys.exit(args.func(args))
 

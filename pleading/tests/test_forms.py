@@ -532,3 +532,19 @@ class TestSubp010RecordsAttachment:
         form_fill.fill("subp010", out, meta=dict(FIXTURE_META))
         assert self._attachment_box(out) == ["/1"]
 
+
+
+def test_esign_fields_export_geometry_for_the_sidecar():
+    """form_fill.esign_fields returns every esign field as a sidecar
+    record (top-left points, role 'Signer N' by party position), so the
+    build can place a form's signature/date lines in DocuSeal."""
+    import form_fill
+    fields = form_fill.esign_fields("mc040")
+    assert fields, "mc040 declares esign fields"
+    for f in fields:
+        assert set(f) >= {"name", "role", "type", "page", "x", "y_top", "w", "h"}
+        assert f["role"].startswith("Signer ")
+        assert f["type"] in form_fill.ESIGN_TYPES
+        assert f["page"] >= 1 and f["h"] > 0 and f["w"] > 0
+    # party position -> role number: mc040's first party is Signer 1
+    assert any(f["role"] == "Signer 1" for f in fields)
