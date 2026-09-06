@@ -74,8 +74,17 @@ what is stored, and can be produced again.
 8. **Incremental by thread ledger.** `.state/gmail.json` records every
    exported thread by account and Gmail thread id, with the
    `historyId`, message count and message ids it had when exported. A
-   thread whose `historyId` is unchanged is skipped from the list stub
-   alone — no metadata fetch, no render, no `NEW` — so a broad domain
+   routine run does not list the whole history: it lists only threads
+   with a message inside a `newer_than:` window sized from the last run
+   plus two days of slack (three-day floor), and a full listing runs on
+   the first run, on `--full`, or when the last full pass is a week old
+   (a full pass is what reconciles a message removed with nothing
+   added). Capture is incremental at the message level too: a changed
+   thread fetches only the Gmail ids the ledger has not already stored
+   in its mbox, so a grown thread costs one fetch, not one per message.
+   Together these keep a run at O(recent threads + new messages) rather
+   than O(history). A thread whose `historyId` is unchanged is skipped
+   from the list stub alone — no metadata fetch, no render, no `NEW` — so a broad domain
    filter does not re-examine the whole history every run. A thread
    whose *message set changed* — it grew, or a message was deleted and
    another threaded in beside it at the same count — is re-exported and

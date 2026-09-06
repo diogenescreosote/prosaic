@@ -4,7 +4,7 @@
 //
 // Usage:  node pull.js <matter_dir> [--dry-run] [--force]
 //                                   [--backfill-mbox [--limit N]]
-//                                   [--account <email>] [--concurrency N]
+//                                   [--account <email>] [--concurrency N] [--full]
 //
 // Config (matter.yaml, connectors.gmail; legacy envelopes.yaml
 // gmail_addresses: also read):
@@ -217,21 +217,55 @@ function addressDisplay(entry) {
   return bounds ? `${entry.address} (${bounds})` : entry.address;
 }
 
-async function searchThreads(gmail, addresses) {
-  const query = addresses.map(addressClause).join(' OR ');
+/**
+ * The listing query. With `newerThanDays`, only threads that received a
+ * message inside the window are listed — Gmail's newer_than: applies
+ * per message, and a thread is returned when any message matches — so
+ * a routine run touches O(recent threads), not the whole history.
+ */
+function listingQuery(addresses, { newerThanDays } = {}) {
+  const clauses = addresses.map(addressClause).join(' OR ');
+  return newerThanDays ? `(${clauses}) newer_than:${newerThanDays}d` : clauses;
+}
+
+async function searchThreads(gmail, addresses, opts = {}) {
+  const query = listingQuery(addresses, opts);
   const threads = [];
   let pageToken;
   do {
-    const res = await gmail.users.threads.list({
-      userId: 'me',
-      q: query,
-      maxResults: 100,
-      pageToken,
-    });
+    const res = await apiCall(
+      (o) => gmail.users.threads.list({ userId: 'me', q: query, maxResults: 100, pageToken }, o),
+      'threads.list'
+    );
     if (res.data.threads) threads.push(...res.data.threads);
     pageToken = res.data.nextPageToken;
   } while (pageToken);
   return threads;
+}
+
+//: How often to re-list the whole history. The incremental window
+//: catches every thread with a NEW message; what it cannot see is a
+//: message removed from a thread with nothing added, so a full pass
+//: runs periodically (or on --full) to reconcile message sets.
+const FULL_LIST_EVERY_DAYS = 7;
+const WINDOW_SLACK_DAYS = 2;
+const MIN_WINDOW_DAYS = 3;
+
+/**
+ * Decide how much of the mailbox this run lists. Pure: the ledger's
+ * lastRunAt / lastFullListAt stamps and the clock decide.
+ */
+function listingPlan(ledger, now = new Date(), { full = false } = {}) {
+  const day = 86400000;
+  if (full || !ledger.lastFullListAt) return { full: true };
+  const sinceFull = (now - Date.parse(ledger.lastFullListAt)) / day;
+  if (!(sinceFull < FULL_LIST_EVERY_DAYS)) return { full: true };
+  const last = ledger.lastRunAt ? Date.parse(ledger.lastRunAt) : Date.parse(ledger.lastFullListAt);
+  const sinceRun = Math.max(0, (now - last) / day);
+  return {
+    full: false,
+    newerThanDays: Math.max(MIN_WINDOW_DAYS, Math.ceil(sinceRun) + WINDOW_SLACK_DAYS),
+  };
 }
 
 // --- the ledger -------------------------------------------------------
@@ -324,7 +358,7 @@ function threadChanged(prev, meta, force = false) {
  * actually written; a re-fetch of an unchanged thread adds nothing,
  * because mbox.js dedups on Message-ID.
  */
-async function captureThread(gmail, threadId, mboxPath) {
+async function captureThread(gmail, threadId, mboxPath, { known = [] } = {}) {
   //: threads.get does not accept format=raw (only full, metadata,
   //: minimal); the raw RFC 822 bytes come from messages.get, one call
   //: per message. Ids come from the cheapest thread view.
@@ -333,7 +367,12 @@ async function captureThread(gmail, threadId, mboxPath) {
     `threads.get ${threadId}`
   );
   const stubs = (res.data.messages || []).filter(isNotDraft);
-  const messages = await mapLimit(stubs, MESSAGE_CONCURRENCY, async (stub) => {
+  //: Fetch only what the mbox does not already hold. `known` is the
+  //: ledger's record of Gmail ids stored for this thread; it is trusted
+  //: only while the mbox it describes exists.
+  const have = new Set(fs.existsSync(mboxPath) ? known : []);
+  const wanted = stubs.filter((stub) => !have.has(stub.id));
+  const messages = await mapLimit(wanted, MESSAGE_CONCURRENCY, async (stub) => {
     const msg = await apiCall(
       (opts) => gmail.users.messages.get({ userId: 'me', id: stub.id, format: 'raw' }, opts),
       `messages.get ${stub.id}`
@@ -348,8 +387,9 @@ async function captureThread(gmail, threadId, mboxPath) {
   return {
     mboxPath,
     added: result.added,
-    total: messages.length,
-    ids: messages.map((m) => m.id),
+    fetched: messages.length,
+    total: stubs.length,
+    ids: stubs.map((m) => m.id),
   };
 }
 
@@ -416,6 +456,19 @@ async function fetchThreadMeta(gmail, t) {
 }
 
 async function pullAccount(ctx, account) {
+  const runCtx = { ...ctx };
+  const exported = await pullAccountListed(runCtx, account);
+  if (!ctx.dryRun) {
+    const ledger = ledgerFor(ctx.state, creds.accountKey(account));
+    const now = new Date().toISOString();
+    ledger.lastRunAt = now;
+    if (runCtx.plan && runCtx.plan.full) ledger.lastFullListAt = now;
+    saveState(ctx.matterDir, 'gmail', ctx.state);
+  }
+  return exported;
+}
+
+async function pullAccountListed(ctx, account) {
   const { gmail, cfg, outDir, state, uniqueName, dryRun, force } = ctx;
   const key = creds.accountKey(account);
   const ledger = ledgerFor(state, key);
@@ -425,11 +478,18 @@ async function pullAccount(ctx, account) {
   const userEmail = profile.data.emailAddress;
   let identity = ledger.identity || userEmail;
 
+  const plan = listingPlan(ledger, new Date(), { full: ctx.full });
+  ctx.plan = plan;
   console.error(
-    `[${userEmail}] querying threads for: ` +
+    `[${userEmail}] ${plan.full ? 'full listing' : `incremental listing (newer_than:${plan.newerThanDays}d)`}` +
+      ` for: ` +
       cfg.addresses.map(addressDisplay).join(', ')
   );
-  const threadList = await searchThreads(gmail, cfg.addresses);
+  const threadList = await searchThreads(
+    gmail,
+    cfg.addresses,
+    plan.full ? {} : { newerThanDays: plan.newerThanDays }
+  );
   const seen = new Set();
   const uniqueThreads = threadList.filter((t) => {
     if (seen.has(t.id)) return false;
@@ -545,7 +605,9 @@ async function pullAccount(ctx, account) {
     process.stderr.write(`  ${meta.filename} ... `);
     try {
       const mboxPath = mboxlib.mboxPathFor(outDir, meta.filename);
-      await captureThread(gmail, meta.threadId, mboxPath);
+      await captureThread(gmail, meta.threadId, mboxPath, {
+        known: (meta.previous && meta.previous.messageIds) || [],
+      });
       const messages = render.loadThread(mboxPath);
 
       // The identity in the print view's header line: the mailbox, with
@@ -659,6 +721,7 @@ async function main() {
   const backfill = process.argv.includes('--backfill-mbox');
   const onlyAccount = flagValue('--account', null);
   const concurrency = Number(flagValue('--concurrency', 0)) || 0;
+  const full = process.argv.includes('--full');
   const limit = Number(flagValue('--limit', 0)) || 0;
 
   const matterDir = positionalArgs()[0] || process.cwd();
@@ -711,6 +774,7 @@ async function main() {
       return name;
     },
     concurrency,
+    full,
   };
 
   if (!render.QUOTED_MODES.includes(ctx.quoted)) {
@@ -749,6 +813,9 @@ module.exports = {
   threadChanged,
   isNotDraft,
   mapLimit,
+  listingQuery,
+  listingPlan,
+  searchThreads,
   snakeCase,
   addressClause,
   addressDisplay,

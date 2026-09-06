@@ -1004,3 +1004,99 @@ def test_capture_fetches_a_thread_s_messages_concurrently() -> None:
     )
     assert out["total"] == 5
     assert out["ids"] == ["m0", "m1", "m2", "m3", "m4"], "stored in thread order"
+
+
+# --- incremental listing ------------------------------------------------
+
+
+def test_listing_plan_lists_recent_threads_between_periodic_full_passes() -> None:
+    """A routine run lists only the window since the last run; the first run,
+    --full, and a stale full pass list the whole history."""
+    out = _json(
+        r"""
+        const { listingPlan, listingQuery } = require('./pull.js');
+        const day = 86400000; const now = new Date('2024-06-15T12:00:00Z');
+        const iso = (d) => new Date(now - d * day).toISOString();
+        console.log(JSON.stringify({
+          first: listingPlan({}, now),
+          forced: listingPlan({ lastFullListAt: iso(1), lastRunAt: iso(0.5) }, now, { full: true }),
+          stale: listingPlan({ lastFullListAt: iso(8), lastRunAt: iso(0.5) }, now),
+          routine: listingPlan({ lastFullListAt: iso(2), lastRunAt: iso(0.5) }, now),
+          gap: listingPlan({ lastFullListAt: iso(6), lastRunAt: iso(4.2) }, now),
+          q: listingQuery(['a@example.com', 'example.org'], { newerThanDays: 3 }),
+          qFull: listingQuery(['a@example.com']),
+        }));
+        """
+    )
+    assert out["first"] == {"full": True}
+    assert out["forced"] == {"full": True}
+    assert out["stale"] == {"full": True}
+    assert out["routine"] == {"full": False, "newerThanDays": 3}, "floor of three days"
+    assert out["gap"] == {"full": False, "newerThanDays": 7}, "ceil(4.2) + 2 days of slack"
+    a = "(from:a@example.com OR to:a@example.com)"
+    b = "(from:example.org OR to:example.org)"
+    assert out["q"] == f"({a} OR {b}) newer_than:3d"
+    assert out["qFull"] == "(from:a@example.com OR to:a@example.com)"
+
+
+def test_search_threads_pages_through_the_window() -> None:
+    out = _json(
+        r"""
+        const { searchThreads } = require('./pull.js');
+        const calls = [];
+        const gmail = { users: { threads: { list: async (p) => {
+          calls.push({ q: p.q, pageToken: p.pageToken || null });
+          return p.pageToken
+            ? { data: { threads: [{ id: 't3' }] } }
+            : { data: { threads: [{ id: 't1' }, { id: 't2' }], nextPageToken: 'p2' } };
+        } } } };
+        (async () => {
+          const found = await searchThreads(gmail, ['x@example.com'], { newerThanDays: 5 });
+          console.log(JSON.stringify({ ids: found.map((t) => t.id), calls }));
+        })();
+        """
+    )
+    assert out["ids"] == ["t1", "t2", "t3"]
+    assert all(c["q"].endswith("newer_than:5d") for c in out["calls"])
+    assert [c["pageToken"] for c in out["calls"]] == [None, "p2"]
+
+
+def test_capture_fetches_only_messages_the_mbox_lacks() -> None:
+    """A grown thread costs one fetch, not one per message it already stored."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js'); const mbox = require('./mbox.js');
+        const raw = (n) => Buffer.from(
+          'From: jane@example.com\r\nMessage-ID: <k' + n + '@example.com>\r\n\r\n' + n + '\r\n');
+        let live = [{ id: 'm1' }, { id: 'm2' }]; const fetched = [];
+        const gmail = { users: {
+          threads: { get: async () => ({ data: { messages: live } }) },
+          messages: { get: async (p) => { fetched.push(p.id);
+            return { data: { id: p.id, raw: raw(p.id).toString('base64url') } }; } },
+        } };
+        (async () => {
+          const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+          const mboxPath = path.join(dir, 't.mbox');
+          const first = await pull.captureThread(gmail, 't', mboxPath);
+          live = [...live, { id: 'm3' }];
+          const second = await pull.captureThread(gmail, 't', mboxPath, { known: first.ids });
+          fs.unlinkSync(mboxPath);
+          const rebuilt = await pull.captureThread(gmail, 't', mboxPath, { known: second.ids });
+          console.log(JSON.stringify({
+            fetched,
+            secondIds: second.ids,
+            secondTotal: second.total,
+            secondFetched: second.fetched,
+            stored: mbox.readMessages(mboxPath).length,
+            rebuiltFetched: rebuilt.fetched,
+          }));
+        })();
+        """
+    )
+    assert out["fetched"] == ["m1", "m2", "m3", "m1", "m2", "m3"], (
+        "second capture fetched only m3; a missing mbox refetches everything"
+    )
+    assert out["secondIds"] == ["m1", "m2", "m3"] and out["secondTotal"] == 3
+    assert out["secondFetched"] == 1
+    assert out["rebuiltFetched"] == 3 and out["stored"] == 3
