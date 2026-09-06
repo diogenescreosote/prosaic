@@ -873,7 +873,8 @@ def test_capture_passes_a_timeout_and_retries_a_transient_failure() -> None:
         r"""
         const fs = require('fs'); const os = require('os'); const path = require('path');
         const pull = require('./pull.js');
-        const raw = Buffer.from('From: jane@example.com\r\nMessage-ID: <t@example.com>\r\n\r\nhi\r\n');
+        const raw = Buffer.from(
+          'From: jane@example.com\r\nMessage-ID: <t@example.com>\r\n\r\nhi\r\n');
         let failures = 1; const opts = [];
         const gmail = { users: {
           threads: { get: async (p, o) => {
