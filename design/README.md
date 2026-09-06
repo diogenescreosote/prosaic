@@ -60,6 +60,7 @@ project accretes decisions instead of middleware.
 - [0037](adr/0037-no-acroform-filling.md) AcroForm filling prohibited; overlay is the only form technology
 - [0038](adr/0038-cli-first-mode-aware-builds.md) CLI-first builds: `sc` is the only build interface; freshness is mode-aware
 - [0039](adr/0039-routine-operations-are-harness-commands.md) Routine operations are harness commands run on small models; sessions start from `sc brief`
+- [0040](adr/0040-searchability-is-audited-not-assumed.md) Searchability is audited and repaired (`sc text audit|ensure`), never assumed; `sc find` exits 2 on any gap
 
 Also:
 
