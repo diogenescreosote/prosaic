@@ -76,12 +76,12 @@ Each step declares its own provider and effort so personas can run on different 
 
 **A caution on W5.** Pseudonymization reduces exposure; it does not by itself preserve privilege, and whether a given disclosure waives anything is a legal judgment, not a tooling property. The system's job is to make the boundary explicit, default to local, and leave an audit trail. I would not send drafts or privileged records to a second vendor, even for the opposing-counsel pass, until the sanitizer exists and you have decided the legal question.
 
-# 4. Sequence and decisions I need from you
+# 4. Sequence and decisions (resolved September 6, 2026)
 
 Order: W0, W1, W2 (watcher and honest sync first), W3, W4, W5-now, then W5-later. W1 and W2 are a week or two together; W3 and W4 a week or two each; W5-later is open-ended.
 
-1. Confirm `main` is production and `dev` is the working branch. `dev` is created and checked out at `~/code/prosaic_dev`; I did not scrub the leak-guard hits, so neither branch has pushed.
-2. Pick the default cheap model for routine commands and for triage (Haiku or Sonnet), and whether Fable stays the drafting default.
-3. Approve the knowledge-directory ADR direction before I migrate anything.
-4. Which persona, if any, may run on a second vendor before W5's sanitizer exists. My recommendation is none.
-5. A daily 30-minute slot for `/standup`. Your prompts cluster at 9 am, 4 pm and 9 pm.
+1. `main` is production; `dev` is the working branch, checked out at `~/code/prosaic_dev`. Decided.
+2. Fable stays the drafting default for initial drafts and major changes. Small, directed changes that a reviewing frontier model specifies are implemented on Opus. Routine commands and triage go to a cheap model. Decided.
+3. Knowledge-directory ADR direction approved; migration remains gated file by file. Decided.
+4. For the owner's own matters, every role may run on any model and any vendor now; no sanitizer gate applies. The privilege boundary in W5-later is built for deployments serving other people, not as a precondition here. Decided.
+5. `/standup` runs at 9 am daily by default. Decided.
