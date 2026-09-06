@@ -1,6 +1,6 @@
 ---
 title: "Prosaic v2: standby agents, adversarial review, and a faster loop"
-subtitle: "Proposal for discussion. Branch `dev`, checkout `~/code/prosaic_dev`. Nothing here is merged."
+subtitle: "Proposal and progress record. Branch `dev`, checkout `~/code/prosaic_dev`. W0 and W1 are built on `dev`; nothing is merged to `main`."
 date: "September 6, 2026"
 ---
 
@@ -113,3 +113,20 @@ Order: W0, W1, W2 (watcher and honest sync first), W3, W4, W5-now, then W5-later
 3. Knowledge-directory ADR direction approved; migration remains gated file by file. Decided.
 4. For the owner's own matters, every role may run on any model and any vendor now; no sanitizer gate applies. The privilege boundary in W5-later is built for deployments serving other people, not as a precondition here. Decided.
 5. `/standup` runs at 9 am daily by default. Decided.
+
+# 5. Progress (as of September 6, 2026, evening)
+
+**W0, done and pushed.** The leak-guard hits were scrubbed and the unpushed history reworded, so `main` and `dev` both push. The deployment's changes are ported upstream (ADR-0038, `sc build-doc`, the build manifest, read-coverage triage, revised skills), the two over-long skills are demoted under the cap, and the suite is green. `sc form check` exists as the descriptor gate: run against the live deployment with the candidate engine it passed all 27 forms (11 module, 4 local, 12 built-in) and surfaced one pre-existing preview crash on a local descriptor whose `yes`/`no` keys parse as YAML booleans; the engine now tolerates that and the check names it.
+
+**W1, done and pushed.** ADR-0039 records the decision. Four CLI commands: `sc brief` (the one-page session orientation), `sc open` (an envelope's built PDFs), `sc find` (ripgrep over every text file and sidecar, with every PDF lacking a text sidecar listed as unsearched), and `sc harness install` (writes the bundle with the checkout path resolved; `sc init` does the same). The bundle in `templates/matter/.claude` carries a SessionStart hook that runs the brief and seven slash commands: `/build`, `/build-doc`, `/open`, `/clean`, `/status` relay CLI output on Haiku 4.5 at low effort and never edit a source; `/commit` and `/find` run on Sonnet 5 at medium effort. `docs/harness.md` and eleven tests cover it. Full suite: 690 tests, green.
+
+**Not yet done.** No live matter has the bundle; installing it is a deployment step after the merge to `main` and the cherry-pick into the deployment. W2 through W5 are unstarted. The one-line fix to the local descriptor with boolean keys belongs in the deployment's `local/` layer.
+
+| Workstream | State | Commits on `dev` |
+|---|---|---|
+| W0 unblock and realign | done | leak scrub on `main`; 6 port commits; `sc form check` |
+| W1 fast path | done | ADR-0039; `sc brief/open/find/harness`; bundle; docs |
+| W2 standby supervisor | next | |
+| W3 pre-signature gate | planned | |
+| W4 / W4a knowledge graph and recall | planned | |
+| W5 backend choice, privilege boundary | planned | |
