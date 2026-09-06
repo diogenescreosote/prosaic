@@ -76,6 +76,26 @@ Each step declares its own provider and effort so personas can run on different 
 
 **A caution on W5.** Pseudonymization reduces exposure; it does not by itself preserve privilege, and whether a given disclosure waives anything is a legal judgment, not a tooling property. The system's job is to make the boundary explicit, default to local, and leave an audit trail. I would not send drafts or privileged records to a second vendor, even for the opposing-counsel pass, until the sanitizer exists and you have decided the legal question.
 
+# 3a. What it should save: an estimate
+
+These are list-price equivalents computed from the same month of transcripts, holding the work constant and changing only how it is run. They are estimates; the mechanisms are measured, the mix is assumed.
+
+| Lever | Assumption | Saving per month |
+|---|---|---|
+| Fresh sessions, session brief, subagents for bulk reading (W1, W2) | Context per call capped near 150k instead of a 380k median | about \$2,500 (41 %) |
+| Reviewer-directed small changes on Opus, Fable for drafts (decision 2) | Half of current Fable calls move to Opus | about \$900 (15 %) |
+| Cheap models and capped effort for triage and routine commands (W1, W2) | Sonnet or Haiku with turn and budget caps | about \$150 (2 %) |
+| Combined | Levers overlap, so less than the sum | about \$3,000 to \$3,300 (50 %), from \$6,150 to roughly \$3,000 |
+
+Thinking tokens are not a cost lever: all 3.8 M of them cost about \$125. Effort tuning is worth doing for latency, not for money.
+
+**Speedup.** Measured on this month's calls, median API latency rises with context: 5.6 s per call under 100k tokens, 9.5 s at 200k to 400k, 13.2 s above 600k. Prefill-dominated calls (under 400 output tokens) go from 3.8 s to 7.7 s across the same range. At the same context, Opus answers in roughly 70 % of Fable's time. So:
+
+- A typical drafting or research turn, about nine calls today, should run 35 % to 45 % faster from context alone, and about 2x faster where Opus takes the small directed changes.
+- A routine command (build, open, commit, clean) goes from a 39-second median to a few seconds, because the deterministic path makes no model call, or one short call on a cheap model. Call it 5x to 10x on those turns, which are about 40 % of all prompts by count.
+- Scheduled triage drops from about 4 to 5 minutes per run to roughly 2 on Sonnet with caps, and runs within a minute of a file landing instead of up to twelve hours later.
+- Overall, across the month's mix, roughly half the wall-clock time per unit of work, with the gains concentrated exactly where the slowness is most felt.
+
 **Standing constraint (added September 6, 2026).** The deployment's practice-area form adapters, the descriptors, blanks and specs in the private module mounted under `modules/`, and the overlay engine that drives them, must keep working through every workstream. Any change to the form engine, descriptor schema, registry, `sc form` or module discovery either fills the existing module descriptors unchanged, verified against the deployment before a merge to `main`, or ships a mechanical migration script and doc with the change. The descriptor contract is treated as a public API. Concretely: the module today holds eleven descriptors and one test, so the gate is a new `sc form check --all` that discovers every descriptor across built-in, `modules/` and `local/` layers, fills each with fixture data, flattens, and renders the geometry preview, run in the deployment against the candidate engine before any merge to `main`. Building that check is part of W0.
 
 # 4. Sequence and decisions (resolved September 6, 2026)
