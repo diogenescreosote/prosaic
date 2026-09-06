@@ -116,6 +116,35 @@ function snakeCase(str) {
     .substring(0, 80);
 }
 
+//: Per-request timeout and retry for the Gmail API. A raw fetch of a
+//: large message has hung indefinitely in practice (0% CPU, no error);
+//: googleapis forwards these options to gaxios, so a stalled socket
+//: becomes a retryable error instead of a stuck run.
+const API_TIMEOUT_MS = 60 * 1000;
+const API_ATTEMPTS = 3;
+
+async function apiCall(fn, label) {
+  let lastErr;
+  for (let attempt = 1; attempt <= API_ATTEMPTS; attempt++) {
+    try {
+      return await fn({ timeout: API_TIMEOUT_MS });
+    } catch (err) {
+      lastErr = err;
+      const status = err && err.code;
+      const transient =
+        !status ||
+        status === 'ETIMEDOUT' ||
+        status === 'ECONNRESET' ||
+        status === 429 ||
+        (Number(status) >= 500 && Number(status) < 600);
+      if (!transient || attempt === API_ATTEMPTS) break;
+      console.error(`  retry ${attempt}/${API_ATTEMPTS - 1} ${label}: ${err.message}`);
+      await sleep(1000 * attempt);
+    }
+  }
+  throw lastErr;
+}
+
 function sleep(ms) {
   return new Promise((resolve) => setTimeout(resolve, ms));
 }
@@ -250,19 +279,17 @@ async function captureThread(gmail, threadId, mboxPath) {
   //: threads.get does not accept format=raw (only full, metadata,
   //: minimal); the raw RFC 822 bytes come from messages.get, one call
   //: per message. Ids come from the cheapest thread view.
-  const res = await gmail.users.threads.get({
-    userId: 'me',
-    id: threadId,
-    format: 'minimal',
-  });
+  const res = await apiCall(
+    (opts) => gmail.users.threads.get({ userId: 'me', id: threadId, format: 'minimal' }, opts),
+    `threads.get ${threadId}`
+  );
   const stubs = res.data.messages || [];
   const messages = [];
   for (const stub of stubs) {
-    const msg = await gmail.users.messages.get({
-      userId: 'me',
-      id: stub.id,
-      format: 'raw',
-    });
+    const msg = await apiCall(
+      (opts) => gmail.users.messages.get({ userId: 'me', id: stub.id, format: 'raw' }, opts),
+      `messages.get ${stub.id}`
+    );
     messages.push({
       id: msg.data.id || stub.id,
       internalDate: msg.data.internalDate || stub.internalDate,

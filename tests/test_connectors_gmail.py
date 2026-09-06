@@ -865,3 +865,36 @@ def test_a_thread_that_changed_without_growing_is_re_exported() -> None:
         "legacyGrown": True,
         "forced": True,
     }
+
+
+def test_capture_passes_a_timeout_and_retries_a_transient_failure() -> None:
+    """A stalled socket must become a retry, not a hung run."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js');
+        const raw = Buffer.from('From: jane@example.com\r\nMessage-ID: <t@example.com>\r\n\r\nhi\r\n');
+        let failures = 1; const opts = [];
+        const gmail = { users: {
+          threads: { get: async (p, o) => {
+            opts.push(o); return { data: { messages: [{ id: 'm1' }] } };
+          } },
+          messages: { get: async (p, o) => {
+            opts.push(o);
+            if (failures-- > 0) {
+              const e = new Error('socket hang up'); e.code = 'ECONNRESET'; throw e;
+            }
+            return { data: { id: 'm1', raw: raw.toString('base64url') } };
+          } },
+        } };
+        (async () => {
+          const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+          const r = await pull.captureThread(gmail, 't', path.join(dir, 't.mbox'));
+          const timeouts = opts.every((o) => o && typeof o.timeout === 'number' && o.timeout > 0);
+          console.log(JSON.stringify({ total: r.total, calls: opts.length, timeouts }));
+        })();
+        """
+    )
+    assert out["total"] == 1
+    assert out["calls"] == 3, "threads.get, a failed messages.get, and the retry"
+    assert out["timeouts"], "every API call must carry a timeout"
