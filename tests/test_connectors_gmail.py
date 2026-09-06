@@ -848,8 +848,10 @@ def test_a_thread_that_changed_without_growing_is_re_exported() -> None:
           grown: threadChanged(prev, { messageCount: 2, messageIds: ['a', 'b'] }),
           shrunk: threadChanged({ messageCount: 2, messageIds: ['a', 'b'] },
                                 { messageCount: 1, messageIds: ['a'] }),
-          legacySame: threadChanged({ messageCount: 1 }, { messageCount: 1, messageIds: ['b'] }),
-          legacyGrown: threadChanged({ messageCount: 1 }, { messageCount: 2, messageIds: ['a', 'b'] }),
+          legacySame: threadChanged({ messageCount: 1 },
+                                    { messageCount: 1, messageIds: ['b'] }),
+          legacyGrown: threadChanged({ messageCount: 1 },
+                                     { messageCount: 2, messageIds: ['a', 'b'] }),
           forced: threadChanged(prev, { messageCount: 1, messageIds: ['a'] }, true),
         }));
         """
