@@ -1405,7 +1405,8 @@ def format_check(rows: list[CheckRow]) -> str:
         status = "ok" if r.ok else f"FAIL {r.error}"
         if r.ok and r.notes:
             status += f" ({r.notes})"
-        lines.append(f"{r.form_id:<10} {r.layer:<28} {r.technology:<9} {r.pages:>5} {warn:>9}  {status}")
+        lines.append(f"{r.form_id:<10} {r.layer:<28} {r.technology:<9} "
+                     f"{r.pages:>5} {warn:>9}  {status}")
     bad = [r for r in rows if not r.ok]
     lines.append(f"{len(rows)} forms, {len(rows) - len(bad)} ok, {len(bad)} failed"
                  f" (warn = empty-fill/full-fill descriptor warnings; layers from {LAYERS_ROOT})")
