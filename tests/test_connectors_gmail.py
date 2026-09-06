@@ -778,3 +778,54 @@ def test_a_flag_value_is_not_mistaken_for_the_matter_directory() -> None:
         """
     )
     assert json.loads(out) == ["/tmp/matter"]
+
+
+# --- capture -----------------------------------------------------------
+
+
+def test_capture_fetches_raw_bytes_per_message_not_per_thread() -> None:
+    """threads.get has no raw format; the bytes come from messages.get.
+
+    A fake client records every call so the test pins both the thread
+    view requested (minimal) and the per-message raw fetch, and the
+    appended mbox reads back the exact bytes.
+    """
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js'); const mbox = require('./mbox.js');
+        const raw = (n) => Buffer.from(
+          'From: Jane Roe <jane@example.com>\r\nTo: John Smith <john@example.com>\r\n' +
+          'Subject: capture ' + n + '\r\nMessage-ID: <cap-' + n + '@example.com>\r\n' +
+          'Date: Mon, 01 Jan 2024 10:0' + n + ':00 +0000\r\n\r\nbody ' + n + '\r\n');
+        const calls = [];
+        const stubs = [{ id: 'm1', internalDate: '1' }, { id: 'm2', internalDate: '2' }];
+        const gmail = { users: {
+          threads: { get: async (p) => {
+            calls.push(['threads.get', p.format]);
+            return { data: { messages: stubs } };
+          } },
+          messages: { get: async (p) => {
+            calls.push(['messages.get', p.format, p.id]);
+            const n = p.id === 'm1' ? 1 : 2;
+            const b64 = raw(n).toString('base64url');
+            return { data: { id: p.id, internalDate: String(n), raw: b64 } };
+          } },
+        } };
+        (async () => {
+          const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+          const mboxPath = path.join(dir, 'mbox', 't.mbox');
+          const result = await pull.captureThread(gmail, 'thread-1', mboxPath);
+          const stored = mbox.readMessages(mboxPath).map((b) => b.toString('binary'));
+          const same = stored.length === 2
+            && stored[0] === raw(1).toString('binary')
+            && stored[1] === raw(2).toString('binary');
+          console.log(JSON.stringify({ calls, added: result.added, total: result.total, same }));
+        })();
+        """
+    )
+    assert out["calls"][0] == ["threads.get", "minimal"]
+    assert out["calls"][1:] == [["messages.get", "raw", "m1"], ["messages.get", "raw", "m2"]]
+    assert out["added"] == ["m1", "m2"]
+    assert out["total"] == 2
+    assert out["same"], "the stored bytes must be the raw bytes, unchanged"

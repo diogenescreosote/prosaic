@@ -222,16 +222,28 @@ function claimedFilenames(state, outDir) {
  * because mbox.js dedups on Message-ID.
  */
 async function captureThread(gmail, threadId, mboxPath) {
+  //: threads.get does not accept format=raw (only full, metadata,
+  //: minimal); the raw RFC 822 bytes come from messages.get, one call
+  //: per message. Ids come from the cheapest thread view.
   const res = await gmail.users.threads.get({
     userId: 'me',
     id: threadId,
-    format: 'raw',
+    format: 'minimal',
   });
-  const messages = (res.data.messages || []).map((m) => ({
-    id: m.id,
-    internalDate: m.internalDate,
-    raw: Buffer.from(m.raw, 'base64url'),
-  }));
+  const stubs = res.data.messages || [];
+  const messages = [];
+  for (const stub of stubs) {
+    const msg = await gmail.users.messages.get({
+      userId: 'me',
+      id: stub.id,
+      format: 'raw',
+    });
+    messages.push({
+      id: msg.data.id || stub.id,
+      internalDate: msg.data.internalDate || stub.internalDate,
+      raw: Buffer.from(msg.data.raw, 'base64url'),
+    });
+  }
   const result = mboxlib.appendMessages(mboxPath, messages);
   return { mboxPath, added: result.added, total: messages.length };
 }
@@ -585,6 +597,7 @@ async function main() {
 }
 
 module.exports = {
+  captureThread,
   snakeCase,
   addressClause,
   addressDisplay,
