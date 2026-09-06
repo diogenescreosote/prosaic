@@ -1383,15 +1383,15 @@ def check_forms(form_ids: Optional[list[str]] = None,
             odd = [k for sect in ("fields", "checkboxes")
                    for k in (desc.get(sect) or {}) if not isinstance(k, str)]
             if odd:
-                row.notes = (f"{len(odd)} non-string key(s) {odd} --- quote them "
-                             "in the descriptor (YAML reads yes/no/on/off as booleans)")
+                row.notes = (f"{len(odd)} non-string key(s) {odd} --- quote them in "
+                             "the descriptor (YAML reads yes/no/on/off as booleans)")
             empty = fill(fid, out_dir / f"{fid}.empty.pdf", meta={}, data={})
             row.warnings_empty = len(empty.warnings)
             full = fill(fid, out_dir / f"{fid}.full.pdf", meta={}, data=_sample_data(desc))
             row.warnings_full = len(full.warnings)
             geometry_preview(fid, out_dir / f"{fid}.preview.pdf")
             row.pages = len(PdfReader(str(full.output_path)).pages)
-        except Exception as exc:  # noqa: BLE001 --- every failure is a row
+        except Exception as exc:  # every failure is a row, never an abort
             row.error = f"{type(exc).__name__}: {exc}"
         rows.append(row)
     return rows
