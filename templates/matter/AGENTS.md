@@ -28,10 +28,14 @@ If there is no workspace contract above this directory, copy
 
 | Need | Use |
 |---|---|
-| Build a filing envelope | `<prosaic>/cli/sc build <envelope>` |
-| Build one document | `<prosaic>/cli/sc build-doc src/<source>.md` |
+| Build a filing envelope | `/build <envelope>` (runs `<prosaic>/cli/sc build <envelope>` and relays; never edits a source) |
+| Open the built PDFs | `/open <envelope>` (`<prosaic>/cli/sc open <envelope>`) |
+| Where things stand | `/status`; every session starts with `<prosaic>/cli/sc brief .` |
+| Is X in the record? | `/find <term>` (`<prosaic>/cli/sc find <term>`: grep every text file and sidecar, list unsearched PDFs) first, then read the hits |
+| Commit typed work | `/commit <type(scope): subject>` (stages by explicit path) |
+| Build one document | `/build-doc src/<source>.md` (`<prosaic>/cli/sc build-doc …`) |
 | List envelopes | `<prosaic>/cli/sc list` |
-| Report stale build output | `<prosaic>/cli/sc clean .` |
+| Report stale build output | `/clean` (`<prosaic>/cli/sc clean .`; deleting is your own `--apply`) |
 | Fill a Judicial Council form | `<prosaic>/cli/sc form fill <id> …` (`sc form info <id>` first) |
 | OCR-supplement a PDF | `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>` |
 | Pull sources + triage now | `<prosaic>/cli/sc sync .` |
