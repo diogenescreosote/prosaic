@@ -149,6 +149,27 @@ agent CLI is named (ADR-0020). Its promises:
   working directory** (`build`/`list` run from the matter, like
   make); the CLI must keep which-is-which obvious in each
   subcommand's help, because agents script against it.
+- **`sc brief [matter]`** prints a one-page orientation from matter.yaml,
+  envelopes.yaml, the calendar headings of KNOWLEDGE.md, the top of
+  TODO.md, recent `docket` commits, sync and inbox state, and the routine
+  commands --- the SessionStart hook installed by the harness bundle runs
+  it, so a session begins from the brief rather than the knowledge file
+  (ADR-0039). *(tested: tests/test_harness_bundle)*
+- **`sc open <envelope|path…> [--variant V] [--print-only]`** opens an
+  envelope's built PDFs in the system viewer (newest variant plus the
+  envelope root when variants exist) and prints the paths; a missing
+  build is a clear error, not an empty viewer. *(tested)*
+- **`sc find <term…> [-F] [--per-file N]`** greps every text file and
+  sidecar in the matter (never out/, .state/, .git/) for each term,
+  prints hits grouped by file, and lists every PDF that has no text
+  sidecar as UNSEARCHED; exit 1 when no term hit. A document that was
+  not searched is reported, never silently skipped. *(tested)*
+- **`sc harness install [matter]`** installs or refreshes the coding-agent
+  harness bundle (`templates/matter/.claude`: the SessionStart hook and
+  the build, build-doc, open, clean, status, commit and find commands),
+  resolving the checkout placeholder to a real path; `sc init` does the
+  same at scaffold time. A matter's own settings.local.json is never
+  touched. *(tested)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without

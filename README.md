@@ -141,7 +141,7 @@ Run the test suite with `uv run pytest`.
   beside it, captioned from the same front matter, never merged into the
   document it accompanies.
 
-675 tests, with `ruff` and `mypy --strict` clean.
+690 tests, with `ruff` and `mypy --strict` clean.
 
 **Status:** 0.1.0. Young code: the engine and the six forms are tested
 against the statutes and the official blanks, but no filing produced by this
@@ -155,7 +155,7 @@ for the end-to-end tour.
 
 | | |
 |---|---|
-| Running it | [install.md](docs/install.md) · [matter-layout.md](docs/matter-layout.md) · [scheduling.md](docs/scheduling.md) · [backup.md](docs/backup.md) |
+| Running it | [install.md](docs/install.md) · [matter-layout.md](docs/matter-layout.md) · [harness.md](docs/harness.md) · [scheduling.md](docs/scheduling.md) · [backup.md](docs/backup.md) |
 | Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) |
 | Getting documents out | [forms.md](docs/forms.md) |
 | Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
