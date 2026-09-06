@@ -1,8 +1,8 @@
 {
   "name": "gmail",
-  "description": "Exports Gmail threads involving configured addresses/domains as court-usable print-view PDFs, and downloads each thread's attachments beside the PDF.",
+  "description": "Captures Gmail threads involving configured addresses/domains as raw mail (one mbox per thread, the record) and renders each to a court-usable print-view PDF with its attachments extracted.",
   "entry": "pull.js",
   "configKey": "connectors.gmail",
-  "auth": "OAuth (node auth.js; token in ~/.config/prosaic/gmail/)",
-  "output": "assets/gmail/YYYYMMDD_<subject>.pdf + assets/gmail/attachments/<pdf stem>/<file>"
+  "auth": "OAuth (node auth.js [--account <email>]; tokens in ~/.config/prosaic/gmail/)",
+  "output": "assets/gmail/mbox/<stem>.mbox (record) + assets/gmail/<stem>.pdf + assets/gmail/attachments/<stem>/<file>"
 }

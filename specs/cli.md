@@ -41,6 +41,16 @@ subcommand's real promises live in that component's spec.
   descriptor (ADR-0033). *(tested:
   pleading/tests/test_overlay_forms.test_geometry_preview_draws_clean,
   via the engine function the subcommand wraps)*
+- **`sc mail-render <mbox> [...]`** re-renders one stored gmail
+  thread from its mbox: the print-view PDF (`--pdf`), the intermediate
+  HTML (`--html`), the attachments extracted from its MIME parts
+  (`--attachments`), or a single message as `.eml` (`--eml n:path`),
+  with `--quoted show|hide` deciding whether quoted reply chains
+  appear. Capture and presentation are separate steps (ADR-0038), so
+  this reaches no mailbox and needs no token — a thread stored years
+  ago re-renders from the bytes alone, and the output is a pure
+  function of (mbox, options). *(tested:
+  tests/test_connectors_gmail.py)*
 - **`sc attest ...`** passes through to the attestation engine
   (`crypto/attest.py`): dual hashes, detached signatures, pinned-key
   verification, the signed manifest, timestamps. The real promises

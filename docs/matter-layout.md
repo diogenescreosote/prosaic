@@ -22,6 +22,8 @@ smith-v-smith/
 ├── assets/                # evidence, organized by topic
 │   ├── INDEX.md           # AUTHORITATIVE description of every asset
 │   ├── gmail/             # connector output: thread PDFs + CATALOG.md
+│   │   ├── mbox/          #   the raw messages — the record (ADR-0038)
+│   │   └── attachments/   #   parts extracted from them, per thread
 │   ├── audio/             # recordings + transcript sidecars
 │   └── <topic>/...        # correspondence/, court_filings/, exhibits/, …
 ├── pleadings/             # filed/court documents:
@@ -77,3 +79,9 @@ checkable state).
 Matters work well as git repositories (history = provenance), with
 `.state/`, `out/`, and bulky regenerable connector output (e.g.
 `assets/gmail/*.pdf`) in `.gitignore`. `sc init --git` sets this up.
+
+Note which side of that line the mail sits on. `assets/gmail/*.pdf` is
+a *rendering* and can be regenerated from `assets/gmail/mbox/` at any
+time (`sc mail-render`), so ignoring it costs nothing.
+`assets/gmail/mbox/` is the record and can be regenerated from nothing
+the matter holds — commit it.

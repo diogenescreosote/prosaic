@@ -1,56 +1,62 @@
 #!/usr/bin/env node
 //
-// gmail connector — export Gmail threads to PDF matching Gmail's print view.
+// gmail connector — capture threads as raw mail, render them as PDFs.
 //
 // Usage:  node pull.js <matter_dir> [--dry-run] [--force]
+//                                   [--backfill-mbox [--limit N]]
+//                                   [--account <email>]
 //
 // Config (matter.yaml, connectors.gmail; legacy envelopes.yaml
 // gmail_addresses: also read):
 //   gmail:
+//     accounts:             # optional; one OAuth token per mailbox
+//       - jane@example.com
+//       - service@example.com
 //     addresses:            # plain address, bare domain, or {address, after, before}
 //       - opposing@example.com
 //       - examplefirm.com
-//       - address: expartner@example.com
+//       - address: someone@example.com
 //         after: 2024/04/01
+//     quoted: show          # show (default) | hide, in the rendered PDF
 //
-// Credentials: OAuth client keys + token live in
-// $PROSAIC_GMAIL_CREDS_DIR (default ~/.config/prosaic/gmail/) as
-// oauth-keys.json + credentials.json. Run `node auth.js` once to
-// authorize (browser consent).
+// Credentials: OAuth client keys + one token per account live in
+// $PROSAIC_GMAIL_CREDS_DIR (default ~/.config/prosaic/gmail/); see
+// creds.js. Run `node auth.js [--account <email>]` once per mailbox.
 //
-// Output: <matter>/assets/gmail/YYYYMMDD_<subject>.pdf per thread;
-// "NEW <abs path>" lines on stdout; progress on stderr.
+// WHAT THIS WRITES (ADR-0038 — the raw message is the record):
 //
-// Attachments: the print-view PDF can only *list* a thread's attachments
-// by name, and a name is not the document — a notice whose whole value
-// is the dates inside it is invisible to triage until the file itself is
-// on disk. So each exported thread's real attachments (everything with a
-// filename whose bytes are not embedded in the rendered PDF; MIME
-// headers like Content-ID / inline disposition are NOT trusted, because
-// mailers stamp them on real documents) are downloaded beside
-// the thread PDF, under
-//   <out_dir>/attachments/<thread pdf stem>/<sanitized original name>
-// each announced with its own "NEW <abs path>" line so triage sees them.
-// Files over 25MB are skipped with a SKIPPED line on stderr. A file
-// already at its target path with the expected size is not re-downloaded,
-// so re-exporting a grown thread only fetches what is new.
+//   <matter>/assets/gmail/mbox/<stem>.mbox     the thread, verbatim
+//   <matter>/assets/gmail/<stem>.pdf           the print view, rendered
+//   <matter>/assets/gmail/attachments/<stem>/  parts extracted from it
 //
-// Incrementality / dedup: a durable ledger in .state/gmail.json records
-// every thread this connector has exported, keyed by Gmail thread id:
+// The mbox holds every captured message as the Gmail API returned it
+// for format=raw: RFC 822 bytes, headers, MIME structure, quoted
+// chains and attachment payloads, in mboxrd (see mbox.js). It is the
+// canonical record and is append-only. The PDF is a *rendering* of it
+// (render.js) and can be regenerated at any time, with different
+// options, without touching the network — which is the point: a
+// presentation that hides content is a poor evidentiary record, and
+// one whose source was never stored cannot be corrected.
 //
-//   { "threads": { "<threadId>": {
-//        historyId, messageCount, filename, exportedAt,
-//        attachments: [{ name, size }] } } }
+// stdout carries "NEW <abs path>" for the PDF and each attachment, and
+// nothing else. The mbox is deliberately NOT announced: it is the
+// source the announced PDF was rendered from, not a second document,
+// and a NEW line would put a duplicate row in the matter's catalog for
+// the same evidence.
 //
-// Note: threads exported before attachment support (or absorbed from a
-// pre-ledger pull) get their attachments on their next re-export — when
-// the thread grows, or under --force.
+// Incrementality: a durable ledger in .state/gmail.json, keyed by
+// account and then by Gmail thread id — thread ids are per-mailbox, so
+// two accounts watching the same correspondence cannot collide:
+//
+//   { "version": 2, "accounts": { "<account>": { "identity": ...,
+//       "threads": { "<threadId>": { historyId, messageCount, filename,
+//          mbox, exportedAt, attachments: [{name, size}] } } } } }
 //
 // Each run lists matching threads (cheap; the list stub carries a
 // per-thread historyId that changes whenever the thread changes) and:
 //   - skips a thread outright when its historyId matches the ledger
-//     (no metadata fetch, no render, no NEW) — so a broad domain filter
-//     doesn't re-examine the whole history every 12h;
+//     (no fetch, no render, no NEW) — so a broad domain filter doesn't
+//     re-examine the whole history every 12h;
 //   - re-exports a thread only when it has GROWN (a new message), so an
 //     updated thread is re-triaged, while a mere label/read-state change
 //     just refreshes the stored historyId;
@@ -58,8 +64,16 @@
 //     from before this ledger existed, absorbs those into the ledger
 //     without re-exporting (no mass re-triage).
 // Because a thread is remembered by id, downstream triage may move or
-// rename the exported PDF out of assets/gmail/ and it will NOT be
-// re-pulled. Pulls are idempotent (connector contract, docs/connectors.md).
+// rename the exported PDF and it will NOT be re-pulled. Pulls are
+// idempotent (connector contract, docs/connectors.md).
+//
+// --backfill-mbox is the one-time catch-up for threads exported before
+// the mbox existed: it fetches raw mail for ledger entries that have no
+// mbox yet, writes it, and stops. It renders nothing and prints no NEW
+// lines, so a matter's triage is not re-run for PDFs it already has.
+// --limit N bounds a run, per account (Gmail's per-user quota is
+// finite) and the ledger is written after each thread, so the next run
+// resumes where this one stopped.
 
 // Suppress the punycode deprecation warning (DEP0040) emitted from deep
 // inside googleapis' dependency chain (tr46/whatwg-url). Not fixable
@@ -73,24 +87,25 @@ process.emitWarning = function (warning, ...args) {
 };
 
 const fs = require('fs');
+const os = require('os');
 const path = require('path');
+
 const { connectorConfig, loadState, saveState } = require('../core/config');
 const { google } = require('googleapis');
-const puppeteer = require('puppeteer');
 
-const cheerio = require('cheerio');
+const creds = require('./creds');
+const mboxlib = require('./mbox');
+const render = require('./render');
 
-const CREDS_DIR =
-  process.env.PROSAIC_GMAIL_CREDS_DIR ||
-  path.join(require('os').homedir(), '.config/prosaic/gmail');
-const CREDENTIALS_PATH = path.join(CREDS_DIR, 'credentials.json');
-const OAUTH_KEYS_PATH = path.join(CREDS_DIR, 'oauth-keys.json');
-const GMAIL_LOGO_URL =
-  'https://ssl.gstatic.com/ui/v1/icons/mail/rfr/logo_gmail_server_1x.png';
+//: Ledger format. v1 was a bare {threads:{}} for one mailbox; v2 nests
+//: threads under an account key because Gmail thread ids are scoped to
+//: a mailbox and two accounts can hand out the same id.
+const LEDGER_VERSION = 2;
 
-// Attachments over this size are listed in the PDF but not downloaded.
-// Gmail's own send limit is 25MB, so nothing legitimate exceeds it.
-const MAX_ATTACHMENT_BYTES = 25 * 1024 * 1024;
+//: Pause between threads during a backfill. The quota this respects is
+//: a per-user rate limit, not a daily cap; a small sleep keeps a long
+//: catch-up from tripping it.
+const BACKFILL_PAUSE_MS = 200;
 
 function snakeCase(str) {
   return str
@@ -101,40 +116,17 @@ function snakeCase(str) {
     .substring(0, 80);
 }
 
-function esc(s) {
-  if (!s) return '';
-  return s
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;')
-    .replace(/"/g, '&quot;');
-}
-
-function loadAuth() {
-  const oauthKeys = JSON.parse(fs.readFileSync(OAUTH_KEYS_PATH, 'utf-8'));
-  const creds = JSON.parse(fs.readFileSync(CREDENTIALS_PATH, 'utf-8'));
-  const key = oauthKeys.web || oauthKeys.installed;
-  const auth = new google.auth.OAuth2(
-    key.client_id,
-    key.client_secret,
-    key.redirect_uris[0]
-  );
-  auth.setCredentials(creds);
-  auth.on('tokens', (tokens) => {
-    const merged = { ...creds, ...tokens };
-    fs.writeFileSync(CREDENTIALS_PATH, JSON.stringify(merged));
-  });
-  google.options({ auth });
+function sleep(ms) {
+  return new Promise((resolve) => setTimeout(resolve, ms));
 }
 
 function getHeader(headers, name) {
-  return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())
-    ?.value;
+  return headers.find((h) => h.name.toLowerCase() === name.toLowerCase())?.value;
 }
 
-// A gmail_addresses entry is either a plain string (address or bare
+// A gmail addresses entry is either a plain string (address or bare
 // domain) or an object with per-address constraints:
-//   - address: expartner@example.com
+//   - address: someone@example.com
 //     after: 2024/04/01        # optional; Gmail after: syntax
 //     before: 2026/01/01       # optional; Gmail before: syntax
 function addressClause(entry) {
@@ -151,7 +143,10 @@ function addressClause(entry) {
 
 function addressDisplay(entry) {
   if (typeof entry === 'string') return entry;
-  const bounds = [entry.after && `after:${entry.after}`, entry.before && `before:${entry.before}`]
+  const bounds = [
+    entry.after && `after:${entry.after}`,
+    entry.before && `before:${entry.before}`,
+  ]
     .filter(Boolean)
     .join(' ');
   return bounds ? `${entry.address} (${bounds})` : entry.address;
@@ -174,574 +169,130 @@ async function searchThreads(gmail, addresses) {
   return threads;
 }
 
-function fmtDate(dateStr) {
-  if (!dateStr) return '';
-  const d = new Date(dateStr);
-  if (isNaN(d)) return esc(dateStr);
-  const datePart = d.toLocaleDateString('en-US', {
-    weekday: 'short',
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  });
-  const timePart = d.toLocaleTimeString('en-US', {
-    hour: 'numeric',
-    minute: '2-digit',
-  });
-  return esc(`${datePart} at ${timePart}`);
-}
+// --- the ledger -------------------------------------------------------
 
-function fmtSize(bytes) {
-  if (bytes < 1024) return `${bytes}B`;
-  return `${Math.round(bytes / 1024)}K`;
-}
-
-function decodeBody(part) {
-  if (!part) return { text: '', html: '' };
-  if (part.body?.data) {
-    const decoded = Buffer.from(part.body.data, 'base64url').toString('utf-8');
-    if (part.mimeType === 'text/html') return { text: '', html: decoded };
-    return { text: decoded, html: '' };
-  }
-  if (part.parts) {
-    let text = '',
-      html = '';
-    const textPart = part.parts.find((p) => p.mimeType === 'text/plain');
-    const htmlPart = part.parts.find((p) => p.mimeType === 'text/html');
-    if (textPart?.body?.data)
-      text = Buffer.from(textPart.body.data, 'base64url').toString('utf-8');
-    if (htmlPart?.body?.data)
-      html = Buffer.from(htmlPart.body.data, 'base64url').toString('utf-8');
-    if (text || html) return { text, html };
-    for (const sub of part.parts) {
-      const r = decodeBody(sub);
-      if (r.text || r.html) return r;
-    }
-  }
-  return { text: '', html: '' };
-}
-
-function collectInlineImages(part) {
-  const images = {};
-  if (!part) return images;
-  if (part.mimeType?.startsWith('image/') && part.headers) {
-    const cid = part.headers.find(
-      (h) => h.name.toLowerCase() === 'content-id'
-    );
-    if (cid) {
-      const id = cid.value.replace(/^<|>$/g, '');
-      images[id] = {
-        mimeType: part.mimeType,
-        attachmentId: part.body?.attachmentId,
-        data: part.body?.data,
-      };
-    }
-  }
-  if (part.parts)
-    for (const sub of part.parts) Object.assign(images, collectInlineImages(sub));
-  return images;
-}
-
-// Returns { html, embeddedCids }: embeddedCids is the set of content-ids
-// actually substituted into the rendered HTML. Anything NOT in that set is
-// not in the PDF, however its MIME headers label it, and must therefore be
-// treated as a real attachment by getAttachments below.
-async function resolveInlineImages(gmail, messageId, html, payload) {
-  const images = collectInlineImages(payload);
-  const embeddedCids = new Set();
-  const cidRefs = [...html.matchAll(/src=["']cid:([^"']+)["']/gi)];
-  if (cidRefs.length === 0) return { html, embeddedCids };
-
-  for (const match of cidRefs) {
-    const cid = match[1];
-    const img = images[cid];
-    if (!img) continue;
-
-    let b64;
-    if (img.data) {
-      b64 = img.data.replace(/-/g, '+').replace(/_/g, '/');
-    } else if (img.attachmentId) {
-      const att = await gmail.users.messages.attachments.get({
-        userId: 'me',
-        messageId,
-        id: img.attachmentId,
-      });
-      b64 = att.data.data.replace(/-/g, '+').replace(/_/g, '/');
-    } else {
-      continue;
-    }
-    html = html.replace(
-      new RegExp(`src=["']cid:${cid.replace(/[.*+?^${}()|[\]\\]/g, '\\$&')}["']`, 'gi'),
-      `src="data:${img.mimeType};base64,${b64}"`
-    );
-    embeddedCids.add(cid);
-  }
-  return { html, embeddedCids };
-}
-
-// A part is an attachment when it has a filename and its bytes did NOT
-// land in the rendered HTML. Judging by Content-ID / inline disposition
-// alone loses real documents: Outlook and Apple Mail stamp genuine PDF
-// attachments with Content-ID headers and inline dispositions, and the
-// old header-based rule silently dropped them (observed in production on
-// a court clerk's transmittal and a batch of phone-app scans).
-function getAttachments(part, embeddedCids) {
-  const atts = [];
-  if (!part) return atts;
-  const cidHeader = part.headers?.find(
-    (h) => h.name.toLowerCase() === 'content-id'
-  );
-  const cid = cidHeader ? cidHeader.value.replace(/^<|>$/g, '') : null;
-  const embedded = cid != null && embeddedCids != null && embeddedCids.has(cid);
-  if (part.filename && part.body?.size > 0 && !embedded)
-    atts.push({
-      name: part.filename,
-      size: part.body.size,
-      attachmentId: part.body.attachmentId,
+/**
+ * Read the ledger, lifting a v1 single-mailbox ledger into v2.
+ *
+ * A v1 ledger's threads belong to whichever mailbox the pre-accounts
+ * token authorized, which is the same mailbox `accounts:` names first
+ * (creds.js gives that account the legacy token). Migrating them under
+ * the primary's key is therefore the fact, not a guess — and it is
+ * what keeps adding a second account from re-exporting the first
+ * account's entire history.
+ */
+function loadLedger(matterDir, primaryKey) {
+  const state = loadState(matterDir, 'gmail', {});
+  if (!state.accounts) state.accounts = {};
+  if (state.threads) {
+    const target = (state.accounts[primaryKey] = state.accounts[primaryKey] || {
+      threads: {},
     });
-  if (part.parts)
-    for (const sub of part.parts) atts.push(...getAttachments(sub, embeddedCids));
-  return atts;
+    target.threads = { ...state.threads, ...(target.threads || {}) };
+    delete state.threads;
+  }
+  state.version = LEDGER_VERSION;
+  return state;
 }
 
-// A saved attachment keeps its own name, sanitized the way subjects are
-// (lowercase, runs of non-alphanumerics to _), with the extension
-// preserved. Unlike snakeCase this does NOT strip a leading "re:" — that
-// rule is about reply subjects, and a filename is not a subject.
-function safeAttachmentName(filename) {
-  const m = filename.match(/^(.*?)(\.[A-Za-z0-9]{1,8})?$/);
-  const stem =
-    (m[1] || '')
-      .toLowerCase()
-      .replace(/[^a-z0-9]+/g, '_')
-      .replace(/^_|_$/g, '')
-      .substring(0, 80) || 'attachment';
-  return stem + (m[2] || '').toLowerCase();
+function ledgerFor(state, key) {
+  if (!state.accounts[key]) state.accounts[key] = { threads: {} };
+  if (!state.accounts[key].threads) state.accounts[key].threads = {};
+  return state.accounts[key];
 }
 
-// Download a thread's real attachments into
-// <outDir>/attachments/<pdf stem>/. Returns [{name, size}] of what is
-// present afterwards, for the ledger. Collision suffixes (_2, _3…) are
-// deterministic — messages arrive in thread order and parts are walked
-// depth-first — so a re-export resolves each attachment to the same path
-// and the exists-with-expected-size check below can skip the download.
-async function saveThreadAttachments(gmail, messages, pdfFilename, outDir, embeddedByMsg) {
-  const entries = [];
-  for (const msg of messages) {
-    const embedded = embeddedByMsg ? embeddedByMsg.get(msg.id) : null;
-    for (const att of getAttachments(msg.payload, embedded)) {
-      if (att.attachmentId) entries.push({ messageId: msg.id, ...att });
+/** Every PDF filename any account has claimed, plus what is on disk. */
+function claimedFilenames(state, outDir) {
+  const claimed = new Set(fs.existsSync(outDir) ? fs.readdirSync(outDir) : []);
+  for (const account of Object.values(state.accounts)) {
+    for (const entry of Object.values(account.threads || {})) {
+      if (entry && entry.filename) claimed.add(entry.filename);
     }
   }
-  if (!entries.length) return [];
-
-  const dir = path.join(
-    outDir,
-    'attachments',
-    pdfFilename.replace(/\.pdf$/, '')
-  );
-  fs.mkdirSync(dir, { recursive: true });
-
-  const taken = new Set();
-  const saved = [];
-  for (const att of entries) {
-    if (att.size > MAX_ATTACHMENT_BYTES) {
-      console.error(
-        `  SKIPPED ${att.name} (${fmtSize(att.size)} exceeds ` +
-          `${fmtSize(MAX_ATTACHMENT_BYTES)} cap)`
-      );
-      continue;
-    }
-    let name = safeAttachmentName(att.name);
-    if (taken.has(name)) {
-      const m = name.match(/^(.*?)(\.[a-z0-9]+)?$/);
-      let i = 2;
-      while (taken.has(`${m[1]}_${i}${m[2] || ''}`)) i++;
-      name = `${m[1]}_${i}${m[2] || ''}`;
-    }
-    taken.add(name);
-
-    const dest = path.join(dir, name);
-    if (fs.existsSync(dest) && fs.statSync(dest).size === att.size) {
-      saved.push({ name, size: att.size });
-      continue;
-    }
-    try {
-      const res = await gmail.users.messages.attachments.get({
-        userId: 'me',
-        messageId: att.messageId,
-        id: att.attachmentId,
-      });
-      const buf = Buffer.from(res.data.data, 'base64url');
-      fs.writeFileSync(dest, buf);
-      saved.push({ name, size: buf.length });
-      console.log(`NEW ${dest}`);
-    } catch (err) {
-      console.error(`  warning: attachment ${att.name}: ${err.message}`);
-    }
-  }
-  return saved;
+  return claimed;
 }
 
-function parseSender(from) {
-  const m = from.match(/^(.+?)\s*<(.+?)>$/);
-  if (m) return { name: m[1].replace(/"/g, ''), email: m[2] };
-  return { name: from, email: from };
+// --- one thread -------------------------------------------------------
+
+/**
+ * Fetch a thread's raw messages and append them to its mbox.
+ *
+ * Returns {mboxPath, added, total}. `added` is the Gmail message ids
+ * actually written; a re-fetch of an unchanged thread adds nothing,
+ * because mbox.js dedups on Message-ID.
+ */
+async function captureThread(gmail, threadId, mboxPath) {
+  const res = await gmail.users.threads.get({
+    userId: 'me',
+    id: threadId,
+    format: 'raw',
+  });
+  const messages = (res.data.messages || []).map((m) => ({
+    id: m.id,
+    internalDate: m.internalDate,
+    raw: Buffer.from(m.raw, 'base64url'),
+  }));
+  const result = mboxlib.appendMessages(mboxPath, messages);
+  return { mboxPath, added: result.added, total: messages.length };
 }
 
-const QUOTED_HIDDEN_HTML = '<div><font size="1" color="#888888">[Quoted text hidden]</font></div>';
+// --- main -------------------------------------------------------------
 
-// keepAll: the message is itself a FORWARD (subject Fw:/Fwd:) --- its
-// body IS the forwarded material, including any Outlook From:/Sent:
-// header blocks and interior reply chains, none of which duplicates
-// other thread content. Strip nothing.
-function stripQuotedHtml(html, keepAll) {
-  if (keepAll) return html;
-  const $ = cheerio.load(html, { xmlMode: false, decodeEntities: false });
+//: Flags that take a value, so the value is not mistaken for the
+//: matter directory: `pull.js --limit 50 .` names one matter, not two.
+const VALUE_FLAGS = new Set(['--account', '--limit']);
 
-  // Gmail web replies. A FORWARD's body also lives inside gmail_quote,
-  // and unlike a reply quote (which duplicates an earlier message of the
-  // same thread) forwarded content exists nowhere else in the export ---
-  // hiding it destroys the only copy. Keep any quote block that opens as
-  // a forwarded message, including its gmail_attr header block
-  // (From/Date/Subject/To of the original sender is evidence).
-  const FWD = /-{5,}\s*Forwarded message\s*-{5,}/;
-  // True when el sits inside a forwarded-message block that is being
-  // kept; no stripping rule may fire in there --- the forward's interior
-  // ("On ... wrote:" lines included) is unique content, not duplication.
-  function insideForward(el) {
-    const q = $(el).closest('div.gmail_quote');
-    return q.length > 0 && FWD.test(q.text());
-  }
-  $('div.gmail_quote').each(function () {
-    if (FWD.test($(this).text())) return;
-    if (insideForward(this)) return;
-    $(this).replaceWith(QUOTED_HIDDEN_HTML);
-  });
-  $('div.gmail_attr').each(function () {
-    if (FWD.test($(this).text())) return;
-    $(this).remove();
-  });
-  $('div.gmail_extra').each(function () {
-    if (FWD.test($(this).text())) return;
-    $(this).replaceWith(QUOTED_HIDDEN_HTML);
-  });
-
-  // Actual reply-style blockquotes. Do not hide all blockquotes globally:
-  // some messages use blockquote purely for indentation/formatting rather than
-  // quoted reply content. Reply HTML commonly marks quoted sections with
-  // type="cite" (Apple Mail, Thunderbird, etc.).
-  $('blockquote[type="cite"]').each(function () {
-    if (insideForward(this)) return;
-    $(this).replaceWith(QUOTED_HIDDEN_HTML);
-  });
-
-  // Outlook-style replies: <hr> or horizontal rule followed by From/Sent/To block
-  $('hr').each(function () {
-    if (insideForward(this)) return;
-    const next = $(this).next();
-    const nextText = next.text().trim();
-    if (/^From:/.test(nextText) || next.find('b').first().text().trim() === 'From:') {
-      $(this).nextAll().remove();
-      $(this).replaceWith(QUOTED_HIDDEN_HTML);
-    }
-  });
-
-  // Outlook divRplyFwdMsg pattern
-  $('[id*="divRplyFwdMsg"], [id*="appendonsend"]').each(function () {
-    if (insideForward(this)) return;
-    $(this).nextAll().remove();
-    $(this).replaceWith(QUOTED_HIDDEN_HTML);
-  });
-
-  // "On [date] ... wrote:" followed by quoted content
-  $('div, span, p').each(function () {
-    if (insideForward(this)) return;
-    const t = $(this).text().trim();
-    if (/^On\s.+wrote:$/.test(t)) {
-      $(this).nextAll().remove();
-      $(this).replaceWith(QUOTED_HIDDEN_HTML);
-    }
-  });
-
-  // Apple Mail inline reply: "On [date], at [time], [name] wrote:"
-  $('div, span, p').each(function () {
-    if (insideForward(this)) return;
-    const t = $(this).text().trim();
-    if (/^On\s.+,\s+at\s+.+,\s+.+wrote:$/.test(t)) {
-      $(this).nextAll().remove();
-      $(this).replaceWith(QUOTED_HIDDEN_HTML);
-    }
-  });
-
-  // Generic: any element containing only "> " prefixed lines (plain-text quotes in HTML)
-  $('div, p, pre').each(function () {
-    if (insideForward(this)) return;
-    const lines = $(this).text().split('\n');
-    if (lines.length > 2 && lines.every((l) => l.trim() === '' || l.startsWith('>'))) {
-      $(this).replaceWith(QUOTED_HIDDEN_HTML);
-    }
-  });
-
-  // Collapse consecutive markers
-  let result = $.html();
-  const marker = QUOTED_HIDDEN_HTML.replace(/[.*+?^${}()|[\]\\]/g, '\\$&');
-  result = result.replace(new RegExp(`(\\s*${marker}\\s*){2,}`, 'g'), QUOTED_HIDDEN_HTML);
-  return result;
+function flagValue(name, fallback) {
+  const i = process.argv.indexOf(name);
+  if (i === -1) return fallback;
+  const next = process.argv[i + 1];
+  return next && !next.startsWith('--') ? next : fallback;
 }
 
-function stripQuotedText(text, keepAll) {
-  if (keepAll) return text;
-  const lines = text.split('\n');
+function positionalArgs() {
+  const argv = process.argv.slice(2);
   const out = [];
-  let inQuote = false;
-  for (const line of lines) {
-    const isQuoteLine =
-      line.startsWith('>') ||
-      (/^On .+ wrote:/.test(line) && !inQuote);
-    if (isQuoteLine) {
-      if (!inQuote) {
-        out.push('[Quoted text hidden]');
-        inQuote = true;
-      }
-    } else if (line.trim() === '' && inQuote) {
-      // skip blank lines inside quotes
-    } else {
-      inQuote = false;
-      out.push(line);
+  for (let i = 0; i < argv.length; i++) {
+    if (!argv[i].startsWith('--')) {
+      out.push(argv[i]);
+      continue;
     }
+    if (VALUE_FLAGS.has(argv[i]) && argv[i + 1] && !argv[i + 1].startsWith('--')) i++;
   }
-  return out.join('\n');
+  return out;
 }
 
-function renderBody(body, keepAll) {
-  if (body.html) {
-    let clean = body.html
-      .replace(/<html[^>]*>/gi, '')
-      .replace(/<\/html>/gi, '')
-      .replace(/<head[^>]*>[\s\S]*?<\/head>/gi, '')
-      .replace(/<body[^>]*>/gi, '')
-      .replace(/<\/body>/gi, '');
-    clean = stripQuotedHtml(clean, keepAll);
-    return clean;
-  }
-  const stripped = stripQuotedText(body.text, keepAll);
-  return `<div dir="ltr">${esc(stripped).replace(/\n/g, '<br>')}</div>`;
-}
-
-async function renderThread(gmail, subject, messages, userEmail) {
-  const msgCount = messages.length;
-  const sender = parseSender(userEmail);
-
-  // Which content-ids each message actually embedded in the rendered
-  // HTML; everything else with a filename is a real attachment.
-  const embeddedByMsg = new Map();
-
-  let msgHtml = '';
-  for (const msg of messages) {
-    const h = msg.payload.headers;
-    const from = getHeader(h, 'From') || '';
-    const to = getHeader(h, 'To') || '';
-    const cc = getHeader(h, 'Cc');
-    const dateStr = getHeader(h, 'Date');
-    const { name: senderName, email: senderEmail } = parseSender(from);
-    // A forwarded message's body IS forwarded material: Gmail wraps it
-    // in gmail_quote (handled below), but Outlook forwards are plain
-    // From:/Sent: blocks the reply-strippers would truncate. Subject
-    // is the reliable tell.
-    const msgSubject = getHeader(h, 'Subject') || subject || '';
-    const isForward = /^\s*(fwd?|fw)\s*:/i.test(msgSubject);
-
-    const body = decodeBody(msg.payload);
-    if (body.html) {
-      const resolved = await resolveInlineImages(gmail, msg.id, body.html, msg.payload);
-      body.html = resolved.html;
-      embeddedByMsg.set(msg.id, resolved.embeddedCids);
-    }
-    const atts = getAttachments(msg.payload, embeddedByMsg.get(msg.id));
-
-    msgHtml += `<hr>
-<table width="100%" cellpadding="0" cellspacing="0" border="0" class="message">
-<tbody>
-<tr>
-  <td><font size="-1"><b>${esc(senderName)} </b>&lt;${esc(senderEmail)}&gt;</font></td>
-  <td align="right"><font size="-1">${fmtDate(dateStr)}</font></td>
-</tr>
-<tr><td colspan="2" style="padding-bottom: 4px;">
-  <font size="-1" class="recipient"><div>To: ${esc(to)}</div>${
-      cc ? `<div>Cc: ${esc(cc)}</div>` : ''
-    }</font>
-</td></tr>
-<tr><td colspan="2">
-  <table width="100%" cellpadding="12" cellspacing="0" border="0">
-  <tbody><tr><td>
-    <div style="overflow: hidden;"><font size="-1">${renderBody(body, isForward)}</font></div>
-  </td></tr></tbody>
-  </table>
-</td></tr>
-${
-  atts.length
-    ? `<tr><td colspan="2" style="padding: 4px 12px;">
-    <table cellpadding="0" cellspacing="0" border="0" style="border-top:1px solid #ddd;padding-top:8px;margin-top:6px;width:100%">
-    <tr><td><font size="-1"><b>${atts.length} attachment${atts.length > 1 ? 's' : ''}</b></font></td></tr>
-    ${atts.map((a) => {
-      const ext = (a.name.match(/\.(\w+)$/) || ['', ''])[1].toLowerCase();
-      const iconUrl = {
-        pdf: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_pdf_list.png',
-        doc: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_word_list.png',
-        docx: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_word_list.png',
-        xls: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_excel_list.png',
-        xlsx: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_excel_list.png',
-        ppt: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_powerpoint_list.png',
-        pptx: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_powerpoint_list.png',
-        png: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_image_list.png',
-        jpg: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_image_list.png',
-        jpeg: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_image_list.png',
-        gif: 'https://ssl.gstatic.com/docs/doclist/images/icon_10_image_list.png',
-      }[ext] || 'https://ssl.gstatic.com/docs/doclist/images/icon_10_generic_list.png';
-      return `<tr><td style="padding:4px 0;">
-        <table cellpadding="0" cellspacing="0" border="0"><tr>
-          <td valign="top" style="padding-right:6px;"><img src="${iconUrl}" width="16" height="16"></td>
-          <td><font size="-1"><b>${esc(a.name)}</b><br><span style="color:#666">${fmtSize(a.size)}</span></font></td>
-        </tr></table>
-      </td></tr>`;
-    }).join('\n')}
-    </table>
-  </td></tr>`
-    : ''
-}
-</tbody></table>`;
-  }
-
-  const html = `<!DOCTYPE html PUBLIC "-//W3C//DTD HTML 4.01//EN" "https://www.w3.org/TR/html4/strict.dtd">
-<html lang="en"><head>
-<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-<style type="text/css">
-body,td,div,p,a,input{font-family:arial,sans-serif}
-body,td{font-size:13px}
-a:link,a:active{color:#1155CC;text-decoration:none}
-a:hover{text-decoration:underline;cursor:pointer}
-a:visited{color:#6611CC}
-img{border:0px}
-pre{white-space:pre;white-space:-moz-pre-wrap;white-space:-o-pre-wrap;white-space:pre-wrap;word-wrap:break-word;max-width:800px;overflow:auto}
-.logo{left:-7px;position:relative}
-@media print{.message{page-break-inside:avoid}}
-</style>
-</head><body>
-<div class="bodycontainer">
-<table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tbody><tr height="14px">
-  <td width="143"><img src="${GMAIL_LOGO_URL}" width="143" height="59" alt="Gmail" class="logo"></td>
-  <td align="right"><font size="-1" color="#777"><b>${esc(sender.name)} &lt;${esc(sender.email)}&gt;</b></font></td>
-</tr></tbody></table>
-<hr>
-<div class="maincontent">
-<table width="100%" cellpadding="0" cellspacing="0" border="0">
-<tbody><tr><td>
-  <font size="+1"><b>${esc(subject)}</b></font><br>
-  <font size="-1" color="#777">${msgCount} message${msgCount !== 1 ? 's' : ''}</font>
-</td></tr></tbody></table>
-${msgHtml}
-</div></div>
-</body></html>`;
-  return { html, embeddedByMsg };
-}
-
-let _browser = null;
-let _page = null;
-
-async function ensureBrowser() {
-  if (!_browser) {
-    _browser = await puppeteer.launch({
-      headless: 'new',
-      args: ['--no-sandbox'],
-    });
-    _page = await _browser.newPage();
-  }
-  return _page;
-}
-
-async function closeBrowser() {
-  if (_browser) await _browser.close();
-}
-
-async function htmlToPdf(htmlPath, pdfPath) {
-  const page = await ensureBrowser();
-  await page.goto(`file://${htmlPath}`, { waitUntil: 'networkidle2', timeout: 15000 });
-  await page.pdf({
-    path: pdfPath,
-    format: 'Letter',
-    printBackground: true,
-    displayHeaderFooter: false,
-    margin: { top: '0.3in', bottom: '0.3in', left: '0.4in', right: '0.4in' },
-  });
-}
-
-async function main() {
-  const dryRun = process.argv.includes('--dry-run');
-  const force = process.argv.includes('--force');
-
-  const matterDir = process.argv.find((a, i) => i >= 2 && !a.startsWith('--')) || process.cwd();
-  const cfg = connectorConfig(matterDir, 'gmail');
-  const addresses = cfg && cfg.addresses;
-  if (!addresses || !addresses.length) {
-    console.error('gmail connector not configured (needs addresses); nothing to do');
-    return;
-  }
-
-  const outDir = path.resolve(matterDir, cfg.out_dir || 'assets/gmail');
-  fs.mkdirSync(outDir, { recursive: true });
-
-  loadAuth();
-  const gmail = google.gmail({ version: 'v1' });
+async function pullAccount(ctx, account) {
+  const { gmail, cfg, outDir, state, uniqueName, dryRun, force } = ctx;
+  const key = creds.accountKey(account);
+  const ledger = ledgerFor(state, key);
+  const existingFiles = new Set(fs.readdirSync(outDir));
 
   const profile = await gmail.users.getProfile({ userId: 'me' });
   const userEmail = profile.data.emailAddress;
+  let identity = ledger.identity || userEmail;
 
-  let userDisplayEmail = userEmail;
-
-  // Durable ledger of exported threads (see the header comment).
-  const state = loadState(matterDir, 'gmail', { threads: {} });
-  if (!state.threads) state.threads = {};
-
-  // Filenames already taken — on disk and claimed by the ledger — so a
-  // new thread never overwrites another thread's export.
-  const existingFiles = new Set(fs.readdirSync(outDir));
-  const claimedNames = new Set(existingFiles);
-  for (const id of Object.keys(state.threads)) {
-    const f = state.threads[id] && state.threads[id].filename;
-    if (f) claimedNames.add(f);
-  }
-  function uniqueName(base) {
-    let name = base;
-    if (claimedNames.has(name)) {
-      const stem = base.replace(/\.pdf$/, '');
-      let i = 2;
-      while (claimedNames.has(`${stem}_${i}.pdf`)) i++;
-      name = `${stem}_${i}.pdf`;
-    }
-    claimedNames.add(name);
-    return name;
-  }
-
-  console.error(`Querying threads for: ${addresses.map(addressDisplay).join(', ')}`);
-  const threadList = await searchThreads(gmail, addresses);
+  console.error(
+    `[${userEmail}] querying threads for: ` +
+      cfg.addresses.map(addressDisplay).join(', ')
+  );
+  const threadList = await searchThreads(gmail, cfg.addresses);
   const seen = new Set();
   const uniqueThreads = threadList.filter((t) => {
     if (seen.has(t.id)) return false;
     seen.add(t.id);
     return true;
   });
-  console.error(`Found ${uniqueThreads.length} threads.`);
-  if (uniqueThreads.length === 0) return;
+  console.error(`[${userEmail}] found ${uniqueThreads.length} threads.`);
+  if (uniqueThreads.length === 0) return 0;
 
-  // Decide which threads need a (re)export. Unchanged threads (historyId
-  // matches the ledger) are skipped without a metadata fetch.
+  // Decide which threads need a (re)export. Unchanged threads
+  // (historyId matches the ledger) are skipped without a metadata fetch.
   const toExport = [];
   let skippedUnchanged = 0;
   let seeded = 0;
   for (const t of uniqueThreads) {
-    const prev = state.threads[t.id];
+    const prev = ledger.threads[t.id];
     if (
       !force &&
       prev &&
@@ -753,7 +304,6 @@ async function main() {
       continue;
     }
 
-    // Fetch metadata to learn the subject/date and current message count.
     let meta;
     try {
       const res = await gmail.users.threads.get({
@@ -764,8 +314,7 @@ async function main() {
       });
       const msgs = res.data.messages || [];
       const firstMsg = msgs[0];
-      const subject =
-        getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
+      const subject = getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
       const dateStr = getHeader(firstMsg.payload.headers, 'Date');
       const date = dateStr ? new Date(dateStr) : new Date();
       const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
@@ -782,118 +331,272 @@ async function main() {
     }
 
     if (prev) {
-      // Known thread whose historyId moved. Re-export only if it grew;
-      // otherwise a label/read-state change — just refresh the ledger.
+      // Known thread whose historyId moved. Re-export only if it grew.
+      // An entry that predates the mbox is left alone: giving it one is
+      // --backfill-mbox's job precisely so that a PDF the matter has
+      // already triaged is not announced a second time.
       if (force || meta.messageCount > (prev.messageCount || 0)) {
         meta.filename = prev.filename || uniqueName(meta.defaultFilename);
+        meta.previous = prev;
         toExport.push(meta);
       } else {
-        state.threads[t.id] = {
+        ledger.threads[t.id] = {
           ...prev,
           historyId: meta.historyId,
           messageCount: meta.messageCount,
         };
-        if (!dryRun) saveState(matterDir, 'gmail', state);
+        if (!dryRun) saveState(ctx.matterDir, 'gmail', state);
       }
       continue;
     }
 
-    // New to the ledger. If a matching export already sits on disk from a
-    // pre-ledger pull, absorb it without re-triaging.
+    // New to the ledger. If a matching export already sits on disk from
+    // a pre-ledger pull, absorb it without re-triaging. It has no mbox;
+    // --backfill-mbox is how it gets one.
     if (!force && existingFiles.has(meta.defaultFilename)) {
-      state.threads[t.id] = {
+      ledger.threads[t.id] = {
         historyId: meta.historyId,
         messageCount: meta.messageCount,
         filename: meta.defaultFilename,
         exportedAt: null,
         migrated: true,
       };
-      if (!dryRun) saveState(matterDir, 'gmail', state);
+      if (!dryRun) saveState(ctx.matterDir, 'gmail', state);
       seeded++;
       continue;
     }
 
-    // Genuinely new thread.
     meta.filename = uniqueName(meta.defaultFilename);
     toExport.push(meta);
   }
 
   console.error(
-    `${toExport.length} to export, ${skippedUnchanged} unchanged (skipped), ` +
-      `${seeded} pre-existing absorbed.`
+    `[${userEmail}] ${toExport.length} to export, ${skippedUnchanged} unchanged ` +
+      `(skipped), ${seeded} pre-existing absorbed.`
   );
 
-  if (dryRun || toExport.length === 0) {
-    if (dryRun) {
-      console.error('\n-- dry run --');
-      for (const m of toExport)
-        console.error(`  ${m.filename}  (${m.messageCount} msg)`);
-      if (toExport.length === 0) console.error('  (nothing new)');
+  if (dryRun) {
+    console.error('  -- dry run --');
+    for (const m of toExport) console.error(`  ${m.filename}  (${m.messageCount} msg)`);
+    if (toExport.length === 0) console.error('  (nothing new)');
+    return 0;
+  }
+  if (toExport.length === 0) return 0;
+
+  let exported = 0;
+  for (const meta of toExport) {
+    process.stderr.write(`  ${meta.filename} ... `);
+    try {
+      const mboxPath = mboxlib.mboxPathFor(outDir, meta.filename);
+      await captureThread(gmail, meta.threadId, mboxPath);
+      const messages = render.loadThread(mboxPath);
+
+      // The identity in the print view's header line: the mailbox, with
+      // whatever display name it uses in its own messages.
+      if (identity === userEmail) {
+        for (const message of messages) {
+          const from = message.node.header('From');
+          if (from && from.includes(userEmail) && from.includes('<')) {
+            identity = from;
+            break;
+          }
+        }
+      }
+
+      const pdfPath = path.join(outDir, meta.filename);
+      await render.renderMboxToPdf(mboxPath, pdfPath, {
+        messages,
+        subject: meta.subject,
+        account: identity,
+        quoted: ctx.quoted,
+        tmpDir: ctx.tmpDir,
+      });
+      exported++;
+      console.error('ok');
+      console.log(`NEW ${pdfPath}`);
+
+      const written = render.extractAttachments(
+        messages,
+        render.attachmentsDirFor(mboxPath),
+        {
+          onSkip: (att) =>
+            console.error(
+              `  SKIPPED ${att.originalName} (${render.fmtSize(att.size)} exceeds ` +
+                `${render.fmtSize(render.MAX_ATTACHMENT_BYTES)} cap)`
+            ),
+        }
+      );
+      for (const file of written) if (file.created) console.log(`NEW ${file.path}`);
+
+      // Record incrementally so a crash mid-batch never re-exports what
+      // already succeeded (connector contract).
+      ledger.identity = identity;
+      ledger.threads[meta.threadId] = {
+        historyId: meta.historyId,
+        messageCount: meta.messageCount,
+        filename: meta.filename,
+        mbox: path.relative(outDir, mboxPath),
+        exportedAt: new Date().toISOString(),
+        attachments: written.map((f) => ({ name: f.name, size: f.size })),
+      };
+      saveState(ctx.matterDir, 'gmail', state);
+    } catch (err) {
+      console.error(`FAIL (${err.message})`);
     }
+  }
+  return exported;
+}
+
+/**
+ * Give already-exported threads the mbox they predate.
+ *
+ * Opt-in, because it costs one raw fetch per thread in the ledger and
+ * a matter with years of correspondence has a lot of them. It renders
+ * nothing and announces nothing: the PDFs it would announce are
+ * already in the matter and already triaged.
+ */
+async function backfillAccount(ctx, account) {
+  const { gmail, outDir, state, dryRun } = ctx;
+  const key = creds.accountKey(account);
+  const ledger = ledgerFor(state, key);
+  const pending = Object.entries(ledger.threads).filter(
+    ([, entry]) => entry && entry.filename && !entry.mbox
+  );
+  const limit = ctx.limit ? Math.min(ctx.limit, pending.length) : pending.length;
+  console.error(
+    `[${key}] backfill: ${pending.length} thread(s) without an mbox` +
+      (limit < pending.length ? `, doing ${limit} this run` : '')
+  );
+  if (dryRun) {
+    for (const [id, entry] of pending.slice(0, limit))
+      console.error(`  ${entry.filename} (${id})`);
+    return 0;
+  }
+
+  let done = 0;
+  for (const [threadId, entry] of pending.slice(0, limit)) {
+    process.stderr.write(`  ${entry.filename} ... `);
+    try {
+      const mboxPath = mboxlib.mboxPathFor(outDir, entry.filename);
+      const result = await captureThread(gmail, threadId, mboxPath);
+      ledger.threads[threadId] = {
+        ...entry,
+        mbox: path.relative(outDir, mboxPath),
+        messageCount: Math.max(entry.messageCount || 0, result.total),
+      };
+      saveState(ctx.matterDir, 'gmail', state);
+      done++;
+      console.error(`ok (${result.total} msg)`);
+    } catch (err) {
+      console.error(`FAIL (${err.message})`);
+    }
+    await sleep(BACKFILL_PAUSE_MS);
+  }
+  return done;
+}
+
+async function main() {
+  const dryRun = process.argv.includes('--dry-run');
+  const force = process.argv.includes('--force');
+  const backfill = process.argv.includes('--backfill-mbox');
+  const onlyAccount = flagValue('--account', null);
+  const limit = Number(flagValue('--limit', 0)) || 0;
+
+  const matterDir = positionalArgs()[0] || process.cwd();
+  const cfg = connectorConfig(matterDir, 'gmail');
+  if (!cfg || !cfg.addresses || !cfg.addresses.length) {
+    console.error('gmail connector not configured (needs addresses); nothing to do');
     return;
   }
 
-  const tmpDir = fs.mkdtempSync(path.join(require('os').tmpdir(), 'gmail-'));
-  let exported = 0;
+  const outDir = path.resolve(matterDir, cfg.out_dir || 'assets/gmail');
+  fs.mkdirSync(outDir, { recursive: true });
 
-  try {
-    for (const meta of toExport) {
-      process.stderr.write(`  ${meta.filename} ... `);
-      try {
-        const res = await gmail.users.threads.get({
-          userId: 'me',
-          id: meta.threadId,
-          format: 'full',
-        });
-        if (userDisplayEmail === userEmail) {
-          for (const m of res.data.messages) {
-            const from = getHeader(m.payload.headers, 'From') || '';
-            if (from.includes(userEmail) && from.includes('<')) {
-              userDisplayEmail = from;
-              break;
-            }
-          }
-        }
-        const rendered = await renderThread(gmail, meta.subject, res.data.messages, userDisplayEmail);
-        const htmlPath = path.join(tmpDir, `${meta.threadId}.html`);
-        const pdfPath = path.join(outDir, meta.filename);
-        fs.writeFileSync(htmlPath, rendered.html);
-        await htmlToPdf(htmlPath, pdfPath);
-        exported++;
-        console.error('ok');
-        console.log(`NEW ${pdfPath}`);
-        const attachments = await saveThreadAttachments(
-          gmail,
-          res.data.messages,
-          meta.filename,
-          outDir,
-          rendered.embeddedByMsg
-        );
-        // Record incrementally so a crash mid-batch never re-exports
-        // what already succeeded (connector contract).
-        state.threads[meta.threadId] = {
-          historyId: meta.historyId,
-          messageCount: meta.messageCount,
-          filename: meta.filename,
-          exportedAt: new Date().toISOString(),
-          attachments,
-        };
-        saveState(matterDir, 'gmail', state);
-      } catch (err) {
-        console.error(`FAIL (${err.message})`);
+  const configured = creds.configuredAccounts(cfg);
+  // The primary is the first CONFIGURED account, not the first one this
+  // run happens to touch: --account must not promote a second mailbox
+  // into the primary's fallback to the pre-accounts token.
+  const primaryKey = creds.accountKey(configured[0]);
+  let accounts = configured;
+  if (onlyAccount) {
+    accounts = accounts.filter(
+      (a) => a && a.toLowerCase() === onlyAccount.toLowerCase()
+    );
+    if (!accounts.length) {
+      console.error(`--account ${onlyAccount} is not in connectors.gmail.accounts`);
+      process.exit(1);
+    }
+  }
+
+  const state = loadLedger(matterDir, primaryKey);
+  const claimed = claimedFilenames(state, outDir);
+  const ctx = {
+    matterDir,
+    cfg,
+    outDir,
+    state,
+    dryRun,
+    force,
+    limit,
+    quoted: cfg.quoted || render.DEFAULT_QUOTED_MODE,
+    tmpDir: fs.mkdtempSync(path.join(os.tmpdir(), 'gmail-')),
+    uniqueName(base) {
+      let name = base;
+      if (claimed.has(name)) {
+        const stem = base.replace(/\.pdf$/, '');
+        let i = 2;
+        while (claimed.has(`${stem}_${i}.pdf`)) i++;
+        name = `${stem}_${i}.pdf`;
       }
+      claimed.add(name);
+      return name;
+    },
+  };
+
+  if (!render.QUOTED_MODES.includes(ctx.quoted)) {
+    console.error(
+      `connectors.gmail.quoted must be one of ${render.QUOTED_MODES.join('|')}`
+    );
+    process.exit(1);
+  }
+
+  let total = 0;
+  try {
+    for (const account of accounts) {
+      const auth = creds.loadOAuthClient(account, {
+        primary: creds.accountKey(account) === primaryKey,
+      });
+      const gmail = google.gmail({ version: 'v1', auth });
+      const accountCtx = { ...ctx, gmail };
+      total += backfill
+        ? await backfillAccount(accountCtx, account)
+        : await pullAccount(accountCtx, account);
     }
   } finally {
-    fs.rmSync(tmpDir, { recursive: true, force: true });
-    await closeBrowser();
+    fs.rmSync(ctx.tmpDir, { recursive: true, force: true });
+    await render.closeBrowser();
   }
 
   console.error(
-    `\nDone. ${exported}/${toExport.length} exported to ${outDir}`
+    backfill
+      ? `\nDone. ${total} thread(s) backfilled under ${outDir}`
+      : `\nDone. ${total} thread(s) exported to ${outDir}`
   );
 }
 
-main().catch((err) => {
-  console.error('Fatal:', err.message);
-  process.exit(1);
-});
+module.exports = {
+  snakeCase,
+  addressClause,
+  addressDisplay,
+  positionalArgs,
+  loadLedger,
+  ledgerFor,
+  claimedFilenames,
+};
+
+if (require.main === module) {
+  main().catch((err) => {
+    console.error('Fatal:', err.message);
+    process.exit(1);
+  });
+}

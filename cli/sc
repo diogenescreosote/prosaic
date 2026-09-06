@@ -11,6 +11,7 @@ details. Commands:
   clean [dir]             report stale files in out/ (--apply removes them)
   ocr <pdf> <outdir>      OCR-supplement one PDF
   connectors              list available connectors
+  mail-render <mbox>      re-render a stored gmail thread (PDF/eml/attachments)
   backup <action> [dir]   init/push/status a matter's backup upstream
   commit-check [file]     validate a matter commit message
   hooks <dir>             install the matter git hooks
@@ -290,6 +291,24 @@ def cmd_docuseal(args: argparse.Namespace) -> int:
 def cmd_sign(args: argparse.Namespace) -> int:
     return subprocess.run(
         [sys.executable, str(ROOT / "signing" / "sign.py"), *args.rest]
+    ).returncode
+
+
+#: The gmail connector's presentation layer, reachable on its own.
+#: Capture (pull.js) and rendering (render.js) are separate steps, so a
+#: thread stored months ago can be re-rendered with different options
+#: from the mbox alone — no mailbox, no token, no network (ADR-0038).
+MAIL_RENDERER = ROOT / "connectors" / "gmail" / "render.js"
+
+
+def cmd_mail_render(args: argparse.Namespace) -> int:
+    node = shutil.which("node")
+    if node is None:
+        print("sc mail-render needs node on PATH", file=sys.stderr)
+        return 1
+    env = {**os.environ, "NODE_PATH": str(ROOT / "connectors" / "node_modules")}
+    return subprocess.run(
+        [node, str(MAIL_RENDERER), *args.rest], env=env
     ).returncode
 
 
@@ -765,6 +784,12 @@ def main() -> int:
 
     sp = sub.add_parser("connectors", help="list available connectors")
     sp.set_defaults(func=cmd_connectors)
+
+    sp = sub.add_parser("mail-render",
+                        help="re-render a stored gmail thread mbox: PDF, .eml, attachments")
+    sp.add_argument("rest", nargs=argparse.REMAINDER,
+                    help="passed through to connectors/gmail/render.js")
+    sp.set_defaults(func=cmd_mail_render)
 
     sp = sub.add_parser("paths", help="print an application directory")
     sp.add_argument("kind", choices=PATH_KINDS)
