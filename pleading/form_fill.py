@@ -67,7 +67,9 @@ from __future__ import annotations
 
 import argparse
 import re
+import os
 import sys
+import tempfile
 from dataclasses import dataclass, field as dc_field
 from pathlib import Path
 from typing import Any, Optional
@@ -101,8 +103,12 @@ REPO_ROOT = PLEADING_DIR.parent
 # precedence, first hit wins: local/ → modules/<name>/ → built-in — so
 # a deployment can patch a stock or module form without editing either
 # repo.
-LOCAL_PLEADING_DIR = REPO_ROOT / "local" / "pleading"
-MODULES_DIR = REPO_ROOT / "modules"
+# PROSAIC_LAYERS_ROOT points the overlay scan at another checkout's
+# local/ and modules/ --- how a candidate engine is checked against a
+# deployment's descriptors before it is merged (`sc form check`).
+LAYERS_ROOT = Path(os.environ.get("PROSAIC_LAYERS_ROOT") or REPO_ROOT).resolve()
+LOCAL_PLEADING_DIR = LAYERS_ROOT / "local" / "pleading"
+MODULES_DIR = LAYERS_ROOT / "modules"
 
 
 def _overlay_dirs(*sub: str) -> list[Path]:
@@ -1153,7 +1159,9 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
             return
         es = spec.get("esign") or {}
         color = CHECKBOX_COLOR if is_checkbox else FIELD_BOX_COLOR
-        label = name
+        # A descriptor key like `yes:` or `no:` parses as a YAML bool;
+        # fill() coerces it, so the preview must too.
+        label = str(name)
         if es:
             etype = str(es.get("type") or "text")
             if etype not in ESIGN_TYPES:
@@ -1308,6 +1316,102 @@ def prepend(main_pdf: Path, cover_pdf: Path) -> None:
 # CLI
 # ---------------------------------------------------------------------------
 
+# ---------------------------------------------------------------------------
+# Descriptor check: does every registered form still fill under this engine?
+# ---------------------------------------------------------------------------
+
+@dataclass
+class CheckRow:
+    form_id: str
+    layer: str
+    technology: str
+    pages: int = 0
+    warnings_empty: int = 0
+    warnings_full: int = 0
+    error: str = ""
+    notes: str = ""
+
+    @property
+    def ok(self) -> bool:
+        return not self.error
+
+
+def _layer_of(path: Optional[Path]) -> str:
+    if path is None:
+        return "?"
+    try:
+        rel = path.resolve().relative_to(LAYERS_ROOT)
+    except ValueError:
+        return "built-in"
+    parts = rel.parts
+    if parts[:1] == ("local",):
+        return "local"
+    if parts[:1] == ("modules",) and len(parts) > 1:
+        return f"modules/{parts[1]}"
+    return "built-in"
+
+
+def _sample_data(desc: dict) -> dict:
+    """One value per logical field and every checkbox set: the fill that
+    exercises every rect a descriptor names."""
+    data: dict = {}
+    for name, spec in (desc.get("fields") or {}).items():
+        data[name] = str(spec.get("example") or spec.get("default") or f"{name} sample")
+    for name in (desc.get("checkboxes") or {}):
+        data[name] = True
+    return data
+
+
+def check_forms(form_ids: Optional[list[str]] = None,
+                keep_dir: Optional[Path] = None) -> list[CheckRow]:
+    """Fill every registered descriptor twice (auto bindings only, then
+    every field populated), render its geometry preview, and report one
+    row per form. An exception is a failure; descriptor warnings are
+    counted, not fatal. This is the merge gate that keeps a deployment's
+    module descriptors working across engine changes.
+    """
+    ids = form_ids or list_forms()
+    out_dir = keep_dir or Path(tempfile.mkdtemp(prefix="form-check-"))
+    out_dir.mkdir(parents=True, exist_ok=True)
+    rows: list[CheckRow] = []
+    for fid in ids:
+        path = _registry_path(fid)
+        row = CheckRow(form_id=fid, layer=_layer_of(path), technology="?")
+        try:
+            desc = load_descriptor(fid)
+            row.technology = str(desc.get("technology") or "acroform")
+            odd = [k for sect in ("fields", "checkboxes")
+                   for k in (desc.get(sect) or {}) if not isinstance(k, str)]
+            if odd:
+                row.notes = (f"{len(odd)} non-string key(s) {odd} --- quote them "
+                             "in the descriptor (YAML reads yes/no/on/off as booleans)")
+            empty = fill(fid, out_dir / f"{fid}.empty.pdf", meta={}, data={})
+            row.warnings_empty = len(empty.warnings)
+            full = fill(fid, out_dir / f"{fid}.full.pdf", meta={}, data=_sample_data(desc))
+            row.warnings_full = len(full.warnings)
+            geometry_preview(fid, out_dir / f"{fid}.preview.pdf")
+            row.pages = len(PdfReader(str(full.output_path)).pages)
+        except Exception as exc:  # noqa: BLE001 --- every failure is a row
+            row.error = f"{type(exc).__name__}: {exc}"
+        rows.append(row)
+    return rows
+
+
+def format_check(rows: list[CheckRow]) -> str:
+    head = f"{'form':<10} {'layer':<28} {'tech':<9} {'pages':>5} {'warn':>9}  status"
+    lines = [head, "-" * len(head)]
+    for r in rows:
+        warn = f"{r.warnings_empty}/{r.warnings_full}"
+        status = "ok" if r.ok else f"FAIL {r.error}"
+        if r.ok and r.notes:
+            status += f" ({r.notes})"
+        lines.append(f"{r.form_id:<10} {r.layer:<28} {r.technology:<9} {r.pages:>5} {warn:>9}  {status}")
+    bad = [r for r in rows if not r.ok]
+    lines.append(f"{len(rows)} forms, {len(rows) - len(bad)} ok, {len(bad)} failed"
+                 f" (warn = empty-fill/full-fill descriptor warnings; layers from {LAYERS_ROOT})")
+    return "\n".join(lines)
+
+
 def main() -> int:
     p = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     sub = p.add_subparsers(dest="cmd", required=True)
@@ -1333,7 +1437,25 @@ def main() -> int:
 
     sub.add_parser("list", help="list registered forms")
 
+    sp = sub.add_parser(
+        "check",
+        help="fill every registered form (autos only, then every field), "
+             "render its geometry preview, and report; exit 1 on any failure. "
+             "PROSAIC_LAYERS_ROOT=<checkout> checks that checkout's local/ "
+             "and modules/ descriptors under this engine")
+    sp.add_argument("form_ids", nargs="*", help="default: every registered form")
+    sp.add_argument("--keep", metavar="DIR", help="keep the rendered PDFs here")
+    sp.add_argument("--strict", action="store_true",
+                    help="also fail on descriptor warnings")
+
     args = p.parse_args()
+    if args.cmd == "check":
+        rows = check_forms(args.form_ids or None, Path(args.keep) if args.keep else None)
+        print(format_check(rows))
+        failed = [r for r in rows if not r.ok]
+        if args.strict:
+            failed += [r for r in rows if r.ok and (r.warnings_empty or r.warnings_full)]
+        return 1 if failed else 0
     if args.cmd == "list":
         for f in list_forms():
             d = load_descriptor(f)

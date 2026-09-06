@@ -13,6 +13,8 @@ sc form info subp010         # a form's agent guide + field schema
 sc form fill mc030 --meta caption.yaml --data values.yaml -o out.pdf
 sc form fields blank.pdf     # introspect a new blank → descriptor skeleton
 sc form preview mc040 -o preview.pdf   # geometry check: colored boxes over every fillable/e-sign area
+sc form check                # fill + preview every registered form; exit 1 on any failure
+PROSAIC_LAYERS_ROOT=/path/to/deployment sc form check   # same, against that deployment's local/ and modules/ descriptors
 ```
 
 ## Why "just fill the PDF" doesn't work

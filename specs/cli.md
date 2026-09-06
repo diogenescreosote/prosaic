@@ -52,7 +52,15 @@ subcommand's real promises live in that component's spec.
   legend) — the geometry sanity check that precedes trusting a new
   descriptor (ADR-0033). *(tested:
   pleading/tests/test_overlay_forms.test_geometry_preview_draws_clean,
-  via the engine function the subcommand wraps)*
+  via the engine function the subcommand wraps)* `sc form check [ids…]`
+  fills every registered descriptor twice (auto bindings only, then
+  every field and checkbox populated), renders its geometry preview,
+  and prints one row per form with its layer (built-in, `modules/<name>`,
+  `local`), technology, page count and warning counts; any exception is
+  a failure and the exit status is 1. `PROSAIC_LAYERS_ROOT=<checkout>`
+  scans that checkout's `local/` and `modules/` instead of this one's,
+  which is how a candidate engine is checked against a deployment's
+  descriptors before a merge. *(tested: pleading/tests/test_form_check)*
 - **`sc attest ...`** passes through to the attestation engine
   (`crypto/attest.py`): dual hashes, detached signatures, pinned-key
   verification, the signed manifest, timestamps. The real promises
