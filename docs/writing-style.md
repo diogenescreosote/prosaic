@@ -113,7 +113,7 @@ structural gap.
 The relief is worth having only if counsel has lead time to use it.
 I can serve the day an order issues. The difficulty is the hearing
 date.
-No one presently speaks for the child's own interests.
+No party presently speaks for the absent lienholder's interests.
 ```
 
 Three narrow cases where the contrast earns its place, because the
@@ -121,9 +121,9 @@ reader arrives already holding X:
 
 - **Correcting a specific thing on the record.** The other side, an
   order, or a cited document says X. Name it and quote it: "The brief
-  asserts the child witnessed the incident. The note it cites records
-  only that she described being upstairs." That is a rebuttal, and the
-  contrast is the substance.
+  asserts the inspector saw the leak. The report it cites records only
+  that he was told about it." That is a rebuttal, and the contrast is
+  the substance.
 - **A legal standard the court will otherwise assume.** "The standard
   is good cause, not irreparable harm" is worth writing when the
   authority is genuinely mistaken for the stricter test, and the
@@ -135,6 +135,48 @@ reader arrives already holding X:
 Outside those, delete the negative half and let the affirmative
 sentence carry the weight. If deleting it loses nothing, it was never
 doing anything.
+
+## Say what the instrument does; never banner what it doesn't
+
+The same instinct, one level up: **never open an instrument with a
+paragraph disclaiming what is NOT sought, NOT asserted, or NOT
+intended.** Good legal writing goes directly to the point. Just as good
+code does not rely on comments, good legal writing does not depend on
+qualifications: if a request needs a disclaimer to be read correctly,
+rewrite the request.
+
+A disclaimer banner defines the document by its negative space, and
+the other side gets to interpret the negative. The canonical failure: a
+records subpoena headed "NO PRIVILEGED CONTENT IS SOUGHT" whose first
+request was access logs *for the privileged files* — arguably all of
+it was privileged content, and the custodian's objection was drafted
+for them, in the demand's own words, covering everything.
+
+When a carve-out is legally necessary — a third party's privilege, a
+statutory exclusion — it is **one operative sentence**, phrased as a
+command or a scope line, placed where it operates:
+
+```
+# WRONG — a thematic banner above the requests
+NO PRIVILEGED CONTENT IS SOUGHT. No request below seeks the substance
+of any communication between the company and its counsel. If a
+responsive record...
+
+# RIGHT — a command inside the instructions
+If a responsive record contains the substance of a communication with
+counsel, redact that substance and produce the remainder, including all
+dates, headers, senders, recipients, and system information.
+
+# RIGHT — a scope line
+Communications between the company and its counsel are outside the
+scope of this subpoena.
+```
+
+The same governs letters and declarations: cut "to be clear, I am
+not..." framings unless the negative statement is itself the point (a
+non-reconsideration sentence heading off a CCP § 1008 objection is the
+point; a reflexive hedge is not). Each disclaimer kept must earn its
+place by doing legal work a well-drafted affirmative sentence cannot.
 
 ## Citation format
 

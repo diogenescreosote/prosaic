@@ -23,50 +23,17 @@ Judicial Council form POS-050/EFS-050, registered here as form id
 
 ## One send, one proof --- and superseded sends get none
 
-Two rules, and they decide how many proofs exist before you write any.
-
-**Each email is its own service event.** A proof declares one set of
-documents, served on named people, on one date: the form has a single
-`On (date)` and no field for a time. So two emails are two proofs even
-when they go out the same day, to the same people, minutes apart. Do
-not merge them because the date field would look the same --- the
-merged proof would be attesting to a service that never happened as
-described, and it is signed under penalty of perjury.
-
-**A send that was superseded gets no proof at all.** When a document
-goes out and a corrected version of the same document follows, only
-the corrected send is proved. The erroneous copy is not mentioned in
-any proof, and the superseded document simply does not appear in the
-earlier send's proof.
-
-The practical shape, for a morning that went:
-
-```
-09:00  email 1 --> FORM-A, FORM-B, FORM-C, FORM-D
-09:30  email 2 --> FORM-A (corrected), FORM-B (corrected)
-```
-
-is **two** proofs, not one and not four documents' worth:
-
-```
-proof for email 1, On (date): that day
-  FORM-C and FORM-D only
-  --- FORM-A and FORM-B are omitted: superseded 30 minutes later
-
-proof for email 2, On (date): that day
-  FORM-A and FORM-B, the corrected versions
-```
-
-Both proofs carry the same date. That is correct and is not a defect.
-
-**Courtesy attachments are not served documents.** A blank form sent
-for the other side's convenience is not your pleading and does not
-belong in `efs050_documents`.
-
-Name the sources for the date, and for the send when a date carries
-more than one:
-`<served_stem>.efs050.<YYYY-MM-DD>.md`, adding a suffix when two sends
-share a day.
+The form has one `On (date)` and no time field, so **each email is its
+own service event and its own proof**, even two minutes apart on the
+same day; a merged proof attests to a service that never happened.
+**A send superseded by a corrected version is not proved at all** ---
+the erroneous copy appears in no proof, and the corrected send is the
+one papered. Courtesy attachments (a blank form for the other side's
+convenience) are not served documents. Worked example and reasoning:
+`specs/pleading/forms/efs050.md`, "Non-obvious constraints." Name the
+sources for the date, and for the send when a date carries more than
+one: `<served_stem>.efs050.<YYYY-MM-DD>.md`, adding a suffix when two
+sends share a day.
 
 ## Canonical name and path
 
@@ -78,8 +45,8 @@ src/<dir>/<served_stem>.efs050.md          # one service of that document
 src/<dir>/<served_stem>.efs050.<YYYY-MM-DD>.md   # re-service of the same document
 ```
 
-Example: service of `src/change_of_address/mc040_berkeley_po_box.md`
-is proven by `src/change_of_address/mc040_berkeley_po_box.efs050.md`.
+Example: service of `src/change_of_address/mc040_new_mailing_address.md`
+is proven by `src/change_of_address/mc040_new_mailing_address.efs050.md`.
 Add the proof to the **same envelope** as the served document, right
 after it, so the packet and its proof travel together and render to
 `out/<envelope>/<served_stem>.efs050.pdf`.
@@ -125,7 +92,7 @@ front matter, and a forms block. What each field wants:
    evidence of.**
 2. Write the source at the canonical path; wire it into the served
    document's envelope.
-3. `make <envelope>` and read stderr per the build-envelope skill.
+3. `sc build <envelope>` and read stderr per the build-envelope skill.
 4. Verify the render (open it): exact title, addresses, date; the
    signature/date lines blank.
 5. The declarant signs **and dates** — the declaration date belongs
