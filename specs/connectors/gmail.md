@@ -108,6 +108,14 @@ what is stored, and can be produced again.
     needed), OAuth tokens outside the matter, exit nonzero on failure.
     *(untested)*
 
+12. **Concurrent, bounded fetching.** A thread's raw messages are
+   fetched with up to 6 requests in flight, the metadata for threads
+   that may need work with up to 8, and a backfill keeps up to 4 threads
+   in flight (`--concurrency N` overrides), all under a 60-second
+   per-request timeout with retry on timeout, reset, 429 and 5xx. The
+   bounds sit well under Gmail's 250-units-per-second per-user quota.
+   Ledger writes stay ordered; results keep input order. *(tested)*
+
 ## Non-obvious constraints
 
 - **The mbox is deliberately not announced.** The connector contract

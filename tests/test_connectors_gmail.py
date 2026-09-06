@@ -937,3 +937,70 @@ def test_drafts_in_a_thread_are_never_captured() -> None:
     assert out["ids"] == ["s1"]
     assert out["stored"] == 1
     assert out["draftOnly"] is False and out["sent"] is True and out["unlabeled"] is True
+
+
+# --- concurrency ---------------------------------------------------------
+
+
+def test_map_limit_bounds_in_flight_work_and_keeps_order() -> None:
+    """At most `limit` tasks run at once; results come back in input order;
+    one failure rejects the map after the in-flight work settles."""
+    out = _json(
+        r"""
+        const { mapLimit } = require('./pull.js');
+        (async () => {
+          let inFlight = 0, peak = 0;
+          const seen = [];
+          const results = await mapLimit([5, 1, 4, 2, 3, 6, 0], 3, async (ms, i) => {
+            inFlight++; peak = Math.max(peak, inFlight);
+            await new Promise((r) => setTimeout(r, ms));
+            inFlight--; seen.push(i);
+            return ms * 10;
+          });
+          let failed = null;
+          try {
+            await mapLimit([1, 2, 3], 2, async (x) => {
+              if (x === 2) throw new Error('boom');
+              return x;
+            });
+          } catch (e) { failed = e.message; }
+          const outOfOrder = seen.join('') !== '0123456';
+          console.log(JSON.stringify({ results, peak, outOfOrder, failed }));
+        })();
+        """
+    )
+    assert out["results"] == [50, 10, 40, 20, 30, 60, 0], "input order is preserved"
+    assert out["peak"] == 3, "never more than the limit in flight"
+    assert out["outOfOrder"], "tasks really did overlap"
+    assert out["failed"] == "boom"
+
+
+def test_capture_fetches_a_thread_s_messages_concurrently() -> None:
+    """Every fetch is issued before any completes, up to the per-thread bound."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js');
+        const raw = (n) => Buffer.from(
+          'From: jane@example.com\r\nMessage-ID: <c' + n + '@example.com>\r\n\r\n' + n + '\r\n');
+        const N = 5; let started = 0; const waiters = [];
+        const gmail = { users: {
+          threads: { get: async () => ({ data: { messages:
+            Array.from({ length: N }, (_, i) => ({ id: 'm' + i })) } }) },
+          messages: { get: (p) => new Promise((resolve) => {
+            started++;
+            const data = { id: p.id, raw: raw(p.id).toString('base64url') };
+            waiters.push(() => resolve({ data }));
+            // release everyone only once every fetch has been issued
+            if (started === N) waiters.forEach((w) => w());
+          }) },
+        } };
+        (async () => {
+          const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+          const r = await pull.captureThread(gmail, 't', path.join(dir, 't.mbox'));
+          console.log(JSON.stringify({ total: r.total, ids: r.ids }));
+        })();
+        """
+    )
+    assert out["total"] == 5
+    assert out["ids"] == ["m0", "m1", "m2", "m3", "m4"], "stored in thread order"

@@ -4,7 +4,7 @@
 //
 // Usage:  node pull.js <matter_dir> [--dry-run] [--force]
 //                                   [--backfill-mbox [--limit N]]
-//                                   [--account <email>]
+//                                   [--account <email>] [--concurrency N]
 //
 // Config (matter.yaml, connectors.gmail; legacy envelopes.yaml
 // gmail_addresses: also read):
@@ -143,6 +143,42 @@ async function apiCall(fn, label) {
     }
   }
   throw lastErr;
+}
+
+//: Concurrency. Every message is its own round trip, and a mailbox of
+//: hundreds of threads is thousands of them; done one at a time that is
+//: the whole wall clock. Gmail allows 250 quota units per user per
+//: second and a raw messages.get costs 5, so the ceiling is ~50/s; these
+//: defaults stay well under it and 429s fall back on apiCall's retry.
+const MESSAGE_CONCURRENCY = 6; // raw fetches in flight per thread
+const THREAD_CONCURRENCY = 4; // threads in flight during a backfill
+const METADATA_CONCURRENCY = 8; // threads.get(metadata) in flight while deciding
+
+/**
+ * Run fn over items with at most `limit` in flight. Results keep the
+ * input order; the first rejection rejects the whole map once the
+ * in-flight work has settled (so callers see one error, not a flood).
+ */
+async function mapLimit(items, limit, fn) {
+  const results = new Array(items.length);
+  let next = 0;
+  let firstError = null;
+  const worker = async () => {
+    while (next < items.length) {
+      const i = next++;
+      if (firstError) return;
+      try {
+        results[i] = await fn(items[i], i);
+      } catch (err) {
+        if (!firstError) firstError = err;
+        return;
+      }
+    }
+  };
+  const n = Math.max(1, Math.min(limit, items.length));
+  await Promise.all(Array.from({ length: n }, worker));
+  if (firstError) throw firstError;
+  return results;
 }
 
 function sleep(ms) {
@@ -297,18 +333,17 @@ async function captureThread(gmail, threadId, mboxPath) {
     `threads.get ${threadId}`
   );
   const stubs = (res.data.messages || []).filter(isNotDraft);
-  const messages = [];
-  for (const stub of stubs) {
+  const messages = await mapLimit(stubs, MESSAGE_CONCURRENCY, async (stub) => {
     const msg = await apiCall(
       (opts) => gmail.users.messages.get({ userId: 'me', id: stub.id, format: 'raw' }, opts),
       `messages.get ${stub.id}`
     );
-    messages.push({
+    return {
       id: msg.data.id || stub.id,
       internalDate: msg.data.internalDate || stub.internalDate,
       raw: Buffer.from(msg.data.raw, 'base64url'),
-    });
-  }
+    };
+  });
   const result = mboxlib.appendMessages(mboxPath, messages);
   return {
     mboxPath,
@@ -322,7 +357,7 @@ async function captureThread(gmail, threadId, mboxPath) {
 
 //: Flags that take a value, so the value is not mistaken for the
 //: matter directory: `pull.js --limit 50 .` names one matter, not two.
-const VALUE_FLAGS = new Set(['--account', '--limit']);
+const VALUE_FLAGS = new Set(['--account', '--limit', '--concurrency']);
 
 function flagValue(name, fallback) {
   const i = process.argv.indexOf(name);
@@ -342,6 +377,42 @@ function positionalArgs() {
     if (VALUE_FLAGS.has(argv[i]) && argv[i + 1] && !argv[i + 1].startsWith('--')) i++;
   }
   return out;
+}
+
+/**
+ * One thread's decision inputs: subject, date-derived filename, count
+ * and ids of its non-draft messages. Null for a draft-only thread.
+ */
+async function fetchThreadMeta(gmail, t) {
+  const res = await apiCall(
+    (opts) =>
+      gmail.users.threads.get(
+        {
+          userId: 'me',
+          id: t.id,
+          format: 'metadata',
+          metadataHeaders: ['Subject', 'Date'],
+          //: labelIds ride along with metadata; isNotDraft needs them.
+        },
+        opts
+      ),
+    `threads.get ${t.id}`
+  );
+  const msgs = (res.data.messages || []).filter(isNotDraft);
+  if (msgs.length === 0) return null;
+  const firstMsg = msgs[0];
+  const subject = getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
+  const dateStr = getHeader(firstMsg.payload.headers, 'Date');
+  const date = dateStr ? new Date(dateStr) : new Date();
+  const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
+  return {
+    threadId: t.id,
+    historyId: t.historyId,
+    subject,
+    messageCount: msgs.length,
+    messageIds: msgs.map((m) => m.id),
+    defaultFilename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
+  };
 }
 
 async function pullAccount(ctx, account) {
@@ -373,50 +444,45 @@ async function pullAccount(ctx, account) {
   const toExport = [];
   let skippedUnchanged = 0;
   let seeded = 0;
-  for (const t of uniqueThreads) {
+  const unchanged = (t) => {
     const prev = ledger.threads[t.id];
-    if (
+    return (
       !force &&
       prev &&
       prev.historyId != null &&
       t.historyId != null &&
       String(prev.historyId) === String(t.historyId)
-    ) {
+    );
+  };
+  // Metadata for every thread that might need work, fetched concurrently
+  // up front; the decisions below stay sequential so ledger writes keep
+  // their order.
+  const needMeta = uniqueThreads.filter((t) => !unchanged(t));
+  const metaById = new Map();
+  await mapLimit(needMeta, METADATA_CONCURRENCY, async (t) => {
+    try {
+      metaById.set(t.id, { meta: await fetchThreadMeta(gmail, t) });
+    } catch (err) {
+      metaById.set(t.id, { error: err });
+    }
+  });
+  for (const t of uniqueThreads) {
+    const prev = ledger.threads[t.id];
+    if (unchanged(t)) {
       skippedUnchanged++;
       continue;
     }
 
-    let meta;
-    try {
-      const res = await gmail.users.threads.get({
-        userId: 'me',
-        id: t.id,
-        format: 'metadata',
-        metadataHeaders: ['Subject', 'Date'],
-        //: labelIds ride along with metadata; isNotDraft needs them.
-      });
-      const msgs = (res.data.messages || []).filter(isNotDraft);
-      if (msgs.length === 0) {
-        // A thread that is nothing but a draft is not mail yet.
-        continue;
-      }
-      const firstMsg = msgs[0];
-      const subject = getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
-      const dateStr = getHeader(firstMsg.payload.headers, 'Date');
-      const date = dateStr ? new Date(dateStr) : new Date();
-      const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
-      meta = {
-        threadId: t.id,
-        historyId: t.historyId,
-        subject,
-        messageCount: msgs.length,
-        messageIds: msgs.map((m) => m.id),
-        defaultFilename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
-      };
-    } catch (err) {
-      console.error(`  warning: skipping thread ${t.id}: ${err.message}`);
+    const fetched = metaById.get(t.id);
+    if (fetched && fetched.error) {
+      console.error(`  warning: skipping thread ${t.id}: ${fetched.error.message}`);
       continue;
     }
+    if (!fetched || !fetched.meta) {
+      // A thread that is nothing but a draft is not mail yet.
+      continue;
+    }
+    const meta = fetched.meta;
 
     if (prev) {
       // Known thread whose historyId moved. Re-export only if its
@@ -566,8 +632,7 @@ async function backfillAccount(ctx, account) {
   }
 
   let done = 0;
-  for (const [threadId, entry] of pending.slice(0, limit)) {
-    process.stderr.write(`  ${entry.filename} ... `);
+  await mapLimit(pending.slice(0, limit), ctx.concurrency || THREAD_CONCURRENCY, async ([threadId, entry]) => {
     try {
       const mboxPath = mboxlib.mboxPathFor(outDir, entry.filename);
       const result = await captureThread(gmail, threadId, mboxPath);
@@ -579,12 +644,12 @@ async function backfillAccount(ctx, account) {
       };
       saveState(ctx.matterDir, 'gmail', state);
       done++;
-      console.error(`ok (${result.total} msg)`);
+      console.error(`  ${entry.filename} ok (${result.total} msg)`);
     } catch (err) {
-      console.error(`FAIL (${err.message})`);
+      console.error(`  ${entry.filename} FAIL (${err.message})`);
     }
     await sleep(BACKFILL_PAUSE_MS);
-  }
+  });
   return done;
 }
 
@@ -593,6 +658,7 @@ async function main() {
   const force = process.argv.includes('--force');
   const backfill = process.argv.includes('--backfill-mbox');
   const onlyAccount = flagValue('--account', null);
+  const concurrency = Number(flagValue('--concurrency', 0)) || 0;
   const limit = Number(flagValue('--limit', 0)) || 0;
 
   const matterDir = positionalArgs()[0] || process.cwd();
@@ -644,6 +710,7 @@ async function main() {
       claimed.add(name);
       return name;
     },
+    concurrency,
   };
 
   if (!render.QUOTED_MODES.includes(ctx.quoted)) {
@@ -681,6 +748,7 @@ module.exports = {
   captureThread,
   threadChanged,
   isNotDraft,
+  mapLimit,
   snakeCase,
   addressClause,
   addressDisplay,
