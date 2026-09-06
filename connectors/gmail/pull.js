@@ -241,6 +241,19 @@ function claimedFilenames(state, outDir) {
   return claimed;
 }
 
+// --- drafts --------------------------------------------------------------
+
+//: A draft is not mail. Gmail keeps unsent drafts (including scheduled
+//: sends) inside the thread they belong to, and threads.get returns
+//: them beside the real messages. An earlier export rendered a
+//: scheduled-then-cancelled draft as though it had been sent; the
+//: matter's record then said a message went out that never did. So a
+//: message carrying the DRAFT label is never captured, counted or
+//: rendered.
+function isNotDraft(message) {
+  return !(message.labelIds || []).includes('DRAFT');
+}
+
 // --- change detection --------------------------------------------------
 
 /**
@@ -283,7 +296,7 @@ async function captureThread(gmail, threadId, mboxPath) {
     (opts) => gmail.users.threads.get({ userId: 'me', id: threadId, format: 'minimal' }, opts),
     `threads.get ${threadId}`
   );
-  const stubs = res.data.messages || [];
+  const stubs = (res.data.messages || []).filter(isNotDraft);
   const messages = [];
   for (const stub of stubs) {
     const msg = await apiCall(
@@ -380,8 +393,13 @@ async function pullAccount(ctx, account) {
         id: t.id,
         format: 'metadata',
         metadataHeaders: ['Subject', 'Date'],
+        //: labelIds ride along with metadata; isNotDraft needs them.
       });
-      const msgs = res.data.messages || [];
+      const msgs = (res.data.messages || []).filter(isNotDraft);
+      if (msgs.length === 0) {
+        // A thread that is nothing but a draft is not mail yet.
+        continue;
+      }
       const firstMsg = msgs[0];
       const subject = getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
       const dateStr = getHeader(firstMsg.payload.headers, 'Date');
@@ -662,6 +680,7 @@ async function main() {
 module.exports = {
   captureThread,
   threadChanged,
+  isNotDraft,
   snakeCase,
   addressClause,
   addressDisplay,

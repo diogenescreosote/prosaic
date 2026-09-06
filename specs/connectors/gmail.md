@@ -82,7 +82,10 @@ what is stored, and can be produced again.
    re-triaged; a thread whose `historyId` moved for a label or
    read-state change only refreshes its ledger entry. An entry recorded
    before message ids were kept falls back to the count comparison
-   until its next export or backfill. Because identity is the thread id rather than the filename,
+   until its next export or backfill. Messages carrying Gmail's `DRAFT` label
+   (unsent drafts, including scheduled sends not yet gone) are never
+   captured, counted or rendered; a thread that is only a draft is
+   skipped. *(tested)* Because identity is the thread id rather than the filename,
    triage may move or rename an exported PDF and it will not be
    re-pulled. A matter whose `assets/gmail/` predates the ledger
    absorbs those files on first run instead of re-exporting them. The

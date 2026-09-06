@@ -899,3 +899,41 @@ def test_capture_passes_a_timeout_and_retries_a_transient_failure() -> None:
     assert out["total"] == 1
     assert out["calls"] == 3, "threads.get, a failed messages.get, and the retry"
     assert out["timeouts"], "every API call must carry a timeout"
+
+
+def test_drafts_in_a_thread_are_never_captured() -> None:
+    """Gmail returns unsent drafts inside their thread; they are not mail."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js'); const mbox = require('./mbox.js');
+        const raw = Buffer.from(
+          'From: jane@example.com\r\nMessage-ID: <sent@example.com>\r\n\r\nsent\r\n');
+        const fetched = [];
+        const gmail = { users: {
+          threads: { get: async () => ({ data: { messages: [
+            { id: 'd1', labelIds: ['DRAFT'] },
+            { id: 's1', labelIds: ['SENT'] },
+          ] } }) },
+          messages: { get: async (p) => {
+            fetched.push(p.id);
+            return { data: { id: p.id, raw: raw.toString('base64url') } };
+          } },
+        } };
+        (async () => {
+          const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+          const mboxPath = path.join(dir, 't.mbox');
+          const r = await pull.captureThread(gmail, 't', mboxPath);
+          console.log(JSON.stringify({
+            fetched, ids: r.ids, stored: mbox.readMessages(mboxPath).length,
+            draftOnly: pull.isNotDraft({ labelIds: ['DRAFT'] }),
+            sent: pull.isNotDraft({ labelIds: ['SENT'] }),
+            unlabeled: pull.isNotDraft({}),
+          }));
+        })();
+        """
+    )
+    assert out["fetched"] == ["s1"], "the draft must not even be fetched"
+    assert out["ids"] == ["s1"]
+    assert out["stored"] == 1
+    assert out["draftOnly"] is False and out["sent"] is True and out["unlabeled"] is True
