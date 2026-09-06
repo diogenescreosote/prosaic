@@ -527,9 +527,9 @@ def _inherited(obj, key):
 
 # Chrome pushbuttons by name: the Judicial Council names its
 # viewer-convenience buttons Print/Save/Reset (and the Warning privacy
-# banner) across the corpus (MC-040, SUBP-010, FL-300, ...). Everything
+# banner) across the corpus (MC-040, SUBP-010, ...). Everything
 # else with the pushbutton flag is page FURNITURE dressed as a button:
-# FL-300 alone draws its blue "Attachment 9." and "FL-305" / "FL-150"
+# one request-for-order form draws its blue "Attachment 9." and sibling-form
 # cross-reference labels as pushbutton widgets, and stripping those
 # leaves sentences pointing at blank gaps ("as attached on form ____").
 _CHROME_BUTTON_NAME = re.compile(
@@ -565,8 +565,8 @@ def _strip_pushbutton_widgets(writer: PdfWriter) -> None:
     filing ("Print this form" / "Save this form" / "Clear this form"
     and the privacy banner) --- those are stripped, identified by the
     corpus-wide Print/Save/Reset/Warning naming with an appearance-text
-    fallback. But NOT every pushbutton is chrome: FL-300 implements its
-    blue "Attachment 9." and "FL-305"/"FL-150" cross-reference labels
+    fallback. But NOT every pushbutton is chrome: one request-for-order form implements
+    its blue "Attachment 9." and sibling-form cross-reference labels
     as pushbutton widgets, and an earlier strip-everything rule deleted
     them, leaving sentences that point at blank gaps. Label buttons are
     kept so the bake converts their appearance into ordinary page

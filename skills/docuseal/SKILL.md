@@ -27,7 +27,7 @@ text layer stays clean), or embed classic `{{...}}` text tags when
 the source says `esign: tags` — the mode the free web UI needs
 (ADR-0027). Both `\signblock` bodies AND a `cover_sheet:` form's
 signature/date lines flow into the sidecar, so a filled JC/local form
-(FL-300, MC-040, FL-014, …) signs through DocuSeal with no
+(MC-040, module forms, …) signs through DocuSeal with no
 hand-placement. `--to` order is the document's signature order; field
 roles are reconciled onto the roster at send, so a single-signer
 roster attaches every field to the one signer without fuss. A PDF with

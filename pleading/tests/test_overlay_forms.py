@@ -218,8 +218,8 @@ def test_no_pushbutton_chrome_survives_the_fill(tmp_path):
 
 
 def test_label_pushbuttons_survive_the_fill_as_page_content(tmp_path):
-    """The chrome strip must not eat cross-reference labels. FL-300
-    draws its blue "Attachment 9." / "FL-305" labels as pushbutton
+    """The chrome strip must not eat cross-reference labels. One Judicial
+    Council form draws its blue "Attachment 9." / sibling-form labels as pushbutton
     widgets; strip-everything deleted them and left sentences pointing
     at blank gaps. A pushbutton is chrome only by Print/Save/Reset/
     Warning name or by tell-tale appearance text; anything else keeps
