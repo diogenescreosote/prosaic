@@ -829,3 +829,37 @@ def test_capture_fetches_raw_bytes_per_message_not_per_thread() -> None:
     assert out["added"] == ["m1", "m2"]
     assert out["total"] == 2
     assert out["same"], "the stored bytes must be the raw bytes, unchanged"
+
+
+def test_a_thread_that_changed_without_growing_is_re_exported() -> None:
+    """A deleted send replaced by another leaves the count alone.
+
+    The ledger remembers which message ids it exported, so a changed id
+    set re-exports even at the same count; an entry from before ids were
+    recorded falls back to the count comparison.
+    """
+    out = _json(
+        r"""
+        const { threadChanged } = require('./pull.js');
+        const prev = { messageCount: 1, messageIds: ['a'] };
+        console.log(JSON.stringify({
+          same: threadChanged(prev, { messageCount: 1, messageIds: ['a'] }),
+          replaced: threadChanged(prev, { messageCount: 1, messageIds: ['b'] }),
+          grown: threadChanged(prev, { messageCount: 2, messageIds: ['a', 'b'] }),
+          shrunk: threadChanged({ messageCount: 2, messageIds: ['a', 'b'] },
+                                { messageCount: 1, messageIds: ['a'] }),
+          legacySame: threadChanged({ messageCount: 1 }, { messageCount: 1, messageIds: ['b'] }),
+          legacyGrown: threadChanged({ messageCount: 1 }, { messageCount: 2, messageIds: ['a', 'b'] }),
+          forced: threadChanged(prev, { messageCount: 1, messageIds: ['a'] }, true),
+        }));
+        """
+    )
+    assert out == {
+        "same": False,
+        "replaced": True,
+        "grown": True,
+        "shrunk": True,
+        "legacySame": False,
+        "legacyGrown": True,
+        "forced": True,
+    }

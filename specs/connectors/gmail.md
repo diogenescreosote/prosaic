@@ -73,13 +73,16 @@ what is stored, and can be produced again.
    *(tested: tests/test_connectors_gmail.py)*
 8. **Incremental by thread ledger.** `.state/gmail.json` records every
    exported thread by account and Gmail thread id, with the
-   `historyId` and message count it had when exported. A thread whose
-   `historyId` is unchanged is skipped from the list stub alone — no
-   metadata fetch, no render, no `NEW` — so a broad domain filter does
-   not re-examine the whole history every run. A thread that has
-   *grown* is re-exported and re-triaged; a thread whose `historyId`
-   moved for a label or read-state change only refreshes its ledger
-   entry. Because identity is the thread id rather than the filename,
+   `historyId`, message count and message ids it had when exported. A
+   thread whose `historyId` is unchanged is skipped from the list stub
+   alone — no metadata fetch, no render, no `NEW` — so a broad domain
+   filter does not re-examine the whole history every run. A thread
+   whose *message set changed* — it grew, or a message was deleted and
+   another threaded in beside it at the same count — is re-exported and
+   re-triaged; a thread whose `historyId` moved for a label or
+   read-state change only refreshes its ledger entry. An entry recorded
+   before message ids were kept falls back to the count comparison
+   until its next export or backfill. Because identity is the thread id rather than the filename,
    triage may move or rename an exported PDF and it will not be
    re-pulled. A matter whose `assets/gmail/` predates the ledger
    absorbs those files on first run instead of re-exporting them. The

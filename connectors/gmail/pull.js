@@ -212,6 +212,31 @@ function claimedFilenames(state, outDir) {
   return claimed;
 }
 
+// --- change detection --------------------------------------------------
+
+/**
+ * Has a known thread changed in a way that needs a re-export?
+ *
+ * Growth is the common case. But a thread can change without growing:
+ * a superseded send deleted from the mailbox after the connector
+ * exported it, and its replacement threaded in beside it, leaves the
+ * count where it was while the content is different. So when the
+ * ledger knows which message ids it exported, any difference in the
+ * id SET re-exports. An entry from before ids were recorded falls back
+ * to the count comparison; it gains ids on its next export or backfill.
+ */
+function threadChanged(prev, meta, force = false) {
+  if (force) return true;
+  if ((meta.messageCount || 0) > (prev.messageCount || 0)) return true;
+  if (Array.isArray(prev.messageIds) && Array.isArray(meta.messageIds)) {
+    const before = new Set(prev.messageIds);
+    const after = new Set(meta.messageIds);
+    if (before.size !== after.size) return true;
+    for (const id of after) if (!before.has(id)) return true;
+  }
+  return false;
+}
+
 // --- one thread -------------------------------------------------------
 
 /**
@@ -245,7 +270,12 @@ async function captureThread(gmail, threadId, mboxPath) {
     });
   }
   const result = mboxlib.appendMessages(mboxPath, messages);
-  return { mboxPath, added: result.added, total: messages.length };
+  return {
+    mboxPath,
+    added: result.added,
+    total: messages.length,
+    ids: messages.map((m) => m.id),
+  };
 }
 
 // --- main -------------------------------------------------------------
@@ -335,6 +365,7 @@ async function pullAccount(ctx, account) {
         historyId: t.historyId,
         subject,
         messageCount: msgs.length,
+        messageIds: msgs.map((m) => m.id),
         defaultFilename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
       };
     } catch (err) {
@@ -343,11 +374,13 @@ async function pullAccount(ctx, account) {
     }
 
     if (prev) {
-      // Known thread whose historyId moved. Re-export only if it grew.
-      // An entry that predates the mbox is left alone: giving it one is
+      // Known thread whose historyId moved. Re-export only if its
+      // message set changed (see threadChanged); a label or read-state
+      // change just refreshes the stored historyId. An entry that
+      // predates the mbox is left alone: giving it one is
       // --backfill-mbox's job precisely so that a PDF the matter has
       // already triaged is not announced a second time.
-      if (force || meta.messageCount > (prev.messageCount || 0)) {
+      if (threadChanged(prev, meta, force)) {
         meta.filename = prev.filename || uniqueName(meta.defaultFilename);
         meta.previous = prev;
         toExport.push(meta);
@@ -356,6 +389,7 @@ async function pullAccount(ctx, account) {
           ...prev,
           historyId: meta.historyId,
           messageCount: meta.messageCount,
+          messageIds: meta.messageIds,
         };
         if (!dryRun) saveState(ctx.matterDir, 'gmail', state);
       }
@@ -446,6 +480,7 @@ async function pullAccount(ctx, account) {
       ledger.threads[meta.threadId] = {
         historyId: meta.historyId,
         messageCount: meta.messageCount,
+        messageIds: meta.messageIds,
         filename: meta.filename,
         mbox: path.relative(outDir, mboxPath),
         exportedAt: new Date().toISOString(),
@@ -495,6 +530,7 @@ async function backfillAccount(ctx, account) {
         ...entry,
         mbox: path.relative(outDir, mboxPath),
         messageCount: Math.max(entry.messageCount || 0, result.total),
+        messageIds: result.ids,
       };
       saveState(ctx.matterDir, 'gmail', state);
       done++;
@@ -598,6 +634,7 @@ async function main() {
 
 module.exports = {
   captureThread,
+  threadChanged,
   snakeCase,
   addressClause,
   addressDisplay,
