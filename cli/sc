@@ -6,7 +6,8 @@ details. Commands:
 
   init <dir>              scaffold a new matter directory
   sync <dir>              run configured connectors + AI triage now
-  build <envelope>        build a filing envelope (from a matter dir)
+  build <envelope>|--all  build a filing envelope (from a matter dir)
+  build-doc <source.md>   build exactly one envelope-owned source
   list                    list envelopes (from a matter dir)
   clean [dir]             report stale files in out/ (--apply removes them)
   ocr <pdf> <outdir>      OCR-supplement one PDF
@@ -127,10 +128,6 @@ def cmd_init(args: argparse.Namespace) -> int:
         target.parent.mkdir(parents=True, exist_ok=True)
         shutil.copy(f, target)
         print(f"  wrote {target.relative_to(dest)}")
-    makefile = dest / "Makefile"
-    if not makefile.exists():
-        makefile.symlink_to(ROOT / "pleading" / "Makefile")
-        print("  linked Makefile")
     if args.git and not (dest / ".git").exists():
         subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
         print("  git init")
@@ -157,7 +154,12 @@ def _build(argv: list[str]) -> int:
 
 
 def cmd_build(args: argparse.Namespace) -> int:
-    extra = []
+    if bool(args.envelope) == bool(args.all):
+        print("sc build: name exactly one envelope, or pass --all", file=sys.stderr)
+        return 2
+    extra = ["--all"] if args.all else [args.envelope]
+    if args.check_stale:
+        extra.append("--check-stale")
     if args.force:
         extra.append("--force")
     if getattr(args, "final", False):
@@ -166,7 +168,24 @@ def cmd_build(args: argparse.Namespace) -> int:
         extra += ["--variant", args.variant]
     if args.sign:
         extra += ["--sign", args.sign]
-    return _build([args.envelope, *extra])
+    if args.date:
+        extra += ["--date", args.date]
+    return _build(extra)
+
+
+def cmd_build_doc(args: argparse.Namespace) -> int:
+    extra = ["--build-doc", args.source]
+    if args.force:
+        extra.append("--force")
+    if getattr(args, "final", False):
+        extra.append("--final")
+    if args.variant:
+        extra += ["--variant", args.variant]
+    if args.sign:
+        extra += ["--sign", args.sign]
+    if args.date:
+        extra += ["--date", args.date]
+    return _build(extra)
 
 
 def cmd_list(_args: argparse.Namespace) -> int:
@@ -418,7 +437,7 @@ COMMIT_TYPES = {
     "docket": "a real-world event: filed, served, lodged, received",
     "discovery": "requests, responses, subpoenas, productions",
     "record": "durable case knowledge (KNOWLEDGE, TODO, QUESTIONS)",
-    "config": "matter machinery (matter.yaml, envelopes.yaml, Makefile)",
+    "config": "matter machinery (matter.yaml, envelopes.yaml, build config)",
     "chore": "housekeeping with no case meaning",
 }
 
@@ -719,11 +738,31 @@ def main() -> int:
     sp = sub.add_parser("build", help="build a filing envelope (run from the matter dir)")
     sp.add_argument("--final", action="store_true",
                     help="suppress the default DRAFT banner: this build goes into the world")
-    sp.add_argument("envelope")
+    sp.add_argument("envelope", nargs="?",
+                    help="envelope name from envelopes.yaml (or pass --all)")
+    sp.add_argument("--all", action="store_true",
+                    help="every envelope not marked sent (--force includes sent ones)")
+    sp.add_argument("--check-stale", action="store_true",
+                    help="build nothing; fail if any output is missing or stale")
     sp.add_argument("--force", action="store_true")
-    sp.add_argument("--variant")
+    sp.add_argument("--variant", choices=["sealed", "public"])
     sp.add_argument("--sign", metavar="NAME")
+    sp.add_argument("--date", metavar="YYYY-MM-DD")
     sp.set_defaults(func=cmd_build)
+
+    sp = sub.add_parser("build-doc",
+                        help="build exactly one envelope-owned Markdown source "
+                             "(run from the matter dir; ADR-0038)")
+    sp.add_argument("source",
+                    help="source path, e.g. src/declaration.md")
+    sp.add_argument("--final", action="store_true",
+                    help="suppress the default DRAFT banner: this build goes into the world")
+    sp.add_argument("--force", action="store_true",
+                    help="rebuild even if current, or if the owning envelope is sent")
+    sp.add_argument("--variant", choices=["sealed", "public"])
+    sp.add_argument("--sign", metavar="NAME")
+    sp.add_argument("--date", metavar="YYYY-MM-DD")
+    sp.set_defaults(func=cmd_build_doc)
 
     sp = sub.add_parser("list", help="list envelopes (run from the matter dir)")
     sp.set_defaults(func=cmd_list)

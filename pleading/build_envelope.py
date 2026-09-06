@@ -14,6 +14,7 @@ points and authorities, and proposed order.
 from __future__ import annotations
 
 import argparse
+import json
 import os
 import shutil
 import subprocess
@@ -222,6 +223,117 @@ def _staleness_reason(outputs: List[Path], deps: List[Path]) -> Optional[str]:
     return None
 
 
+# --- Mode-aware build manifest (ADR-0038) ----------------------------------
+#
+# Timestamps alone cannot answer "is this output what this invocation would
+# produce?" A draft PDF is byte-identical-fresh to mtime but wrong for a
+# --final request. The manifest records the options that change the artifact
+# alongside the inputs; staleness is input-drift OR option-drift.
+
+BUILD_MANIFEST_NAME = ".build_manifest.json"
+BUILD_MANIFEST_VERSION = 1
+
+
+def _render_options(final: bool, variant: Optional[str], sign: Optional[str],
+                    date: Optional[str]) -> dict:
+    """The invocation options that change a rendered artifact."""
+    return {
+        "final": bool(final),
+        "variant": variant,
+        "sign": sign,
+        "date": date,
+    }
+
+
+def _dep_fingerprint(deps: List[Path]) -> List[dict]:
+    """(path, mtime, size) per dependency. Second-precision mtime, matching
+    what os.utime can set and restore: a probe that bumps and restores a
+    dependency's mtime must leave the build exactly as fresh as before.
+    Size rides along to catch the rare same-second content swap."""
+    return [
+        {
+            "path": str(dep.resolve()),
+            "mtime": dep.stat().st_mtime,
+            "size": dep.stat().st_size,
+        }
+        for dep in sorted(deps, key=lambda d: str(d))
+    ]
+
+
+def _manifest_path(out_dir: Path) -> Path:
+    return out_dir / BUILD_MANIFEST_NAME
+
+
+def _load_manifest(out_dir: Path) -> dict:
+    path = _manifest_path(out_dir)
+    if not path.exists():
+        return {"version": BUILD_MANIFEST_VERSION, "documents": {}}
+    try:
+        data = json.loads(path.read_text(encoding="utf-8"))
+    except (OSError, json.JSONDecodeError):
+        return {"version": BUILD_MANIFEST_VERSION, "documents": {}}
+    if data.get("version") != BUILD_MANIFEST_VERSION:
+        return {"version": BUILD_MANIFEST_VERSION, "documents": {}}
+    data.setdefault("documents", {})
+    return data
+
+
+def _write_manifest(out_dir: Path, manifest: dict) -> None:
+    out_dir.mkdir(parents=True, exist_ok=True)
+    tmp = _manifest_path(out_dir).with_suffix(".tmp")
+    tmp.write_text(json.dumps(manifest, indent=2, sort_keys=True) + "\n",
+                   encoding="utf-8")
+    tmp.replace(_manifest_path(out_dir))
+
+
+def _manifest_key(source_rel: str) -> str:
+    return source_rel
+
+
+def _manifest_staleness_reason(out_dir: Path, source_rel: str,
+                               deps: List[Path], outputs: List[Path],
+                               options: dict) -> Optional[str]:
+    """Mode-aware staleness: manifest first, then mtime as a backstop for
+    manifests written before this version existed."""
+    for output in outputs:
+        if not output.exists():
+            return f"missing output {output}"
+    entry = _load_manifest(out_dir).get("documents", {}).get(
+        _manifest_key(source_rel))
+    if entry is None:
+        # No manifest record (pre-ADR-0038 output): fall back to mtimes,
+        # and let the build write the manifest on the next render.
+        return _staleness_reason(outputs, deps)
+    if entry.get("options") != options:
+        old = entry.get("options", {})
+        changed = sorted(k for k in set(old) | set(options)
+                         if old.get(k) != options.get(k))
+        return (f"render options changed ({', '.join(changed)}): "
+                f"{', '.join(f'{k}={options.get(k)!r}' for k in changed)}")
+    current = _dep_fingerprint(deps)
+    if entry.get("deps") != current:
+        recorded = {d["path"]: d for d in entry.get("deps", [])}
+        for dep in current:
+            old = recorded.get(dep["path"])
+            if old is None:
+                return f"{outputs[0]}: new dependency {dep['path']}"
+            if old != dep:
+                return f"{outputs[0]}: dependency changed: {dep['path']}"
+        return f"{outputs[0]}: dependency set changed"
+    return None
+
+
+def _record_manifest(out_dir: Path, source_rel: str, deps: List[Path],
+                     outputs: List[Path], options: dict) -> None:
+    manifest = _load_manifest(out_dir)
+    manifest["documents"][_manifest_key(source_rel)] = {
+        "options": options,
+        "deps": _dep_fingerprint(deps),
+        "outputs": [str(p.resolve()) for p in outputs],
+    }
+    _write_manifest(out_dir, manifest)
+
+
 def _copy_output_paths(
     envelope_name: str,
     copies: List[CopyEntry],
@@ -265,6 +377,8 @@ def check_staleness(
     copies: Optional[List[CopyEntry]] = None,
     redacted_pdfs: Optional[List["RedactedPdfEntry"]] = None,
     variant: Optional[str] = None,
+    sign: Optional[str] = None,
+    date: Optional[str] = None,
 ) -> bool:
     """Return True if all outputs are present and newer than dependencies."""
     src_dir = Path("src")
@@ -301,7 +415,9 @@ def check_staleness(
             outputs.append(out_dir / f"{stem}.docx")
         outputs.extend(out_dir / name for name in companions)
 
-        reason = _staleness_reason(outputs, deps)
+        reason = _manifest_staleness_reason(
+            out_dir, entry.file, deps, outputs,
+            _render_options(FINAL_BUILD, variant, sign, date))
         if reason:
             print(f"  STALE: {reason}", file=sys.stderr, flush=True)
             ok = False
@@ -439,6 +555,91 @@ def _build_txt_source(
     return True
 
 
+def _plan_pdf_source_build(
+    envelope_name: str,
+    entry: SourceEntry,
+    src_dir: Path,
+    out_dir: Path,
+    *,
+    final: bool,
+    variant: Optional[str],
+    sign: Optional[str],
+    date: Optional[str],
+    force_rebuild: bool,
+) -> Tuple[List[RenderJob], List[Path], List[Path], dict]:
+    """Plan the render jobs for one PDF source, or report it current.
+
+    Returns (jobs, deps, outputs, options). An empty job list means the
+    source is up to date for these options."""
+    input_path = src_dir / entry.file
+    stem = Path(entry.file).stem
+    output_pdf = out_dir / f"{stem}.pdf"
+    outputs = [output_pdf]
+    if entry.docx:
+        outputs.append(out_dir / f"{stem}.docx")
+    options = _render_options(final, variant, sign, date)
+
+    deps: List[Path] = []
+    companions: List[str] = []
+    if not force_rebuild:
+        try:
+            deps, companions = _source_build_info(input_path.resolve(), variant)
+            all_outputs = outputs + [out_dir / n for n in companions]
+            reason = _manifest_staleness_reason(
+                out_dir, entry.file, deps, all_outputs, options)
+        except Exception as err:
+            print(
+                f"  WARNING: could not inspect dependencies for {entry.file}; "
+                f"rebuilding anyway ({err})",
+                file=sys.stderr,
+                flush=True,
+            )
+            reason = "dependency inspection failed"
+        if reason is None:
+            print(f"  {entry.file} is up to date", flush=True)
+            return [], deps, outputs, options
+        print(f"  rebuilding {entry.file}: {reason}", flush=True)
+    else:
+        print(f"  force rebuilding {entry.file}", flush=True)
+        try:
+            deps, companions = _source_build_info(input_path.resolve(), variant)
+        except Exception:
+            deps, companions = [], []
+
+    cmd = [sys.executable, str(PLEADING_GEN), str(input_path), str(output_pdf)]
+    if final:
+        cmd.append("--final")
+    if variant:
+        cmd += ["--variant", variant]
+    if sign:
+        cmd += ["--sign", sign]
+    if date:
+        cmd += ["--date", date]
+
+    jobs = [RenderJob(
+        label=f"{entry.file} -> {output_pdf}",
+        cmd=cmd,
+        error=f"{entry.file} failed",
+    )]
+
+    # The .docx renderer reads the markdown, not the PDF, so it is
+    # independent of the job above and can run alongside it.
+    if entry.docx:
+        output_docx = out_dir / f"{stem}.docx"
+        docx_cmd = [sys.executable, str(MD_TO_DOCX),
+                    str(input_path), str(output_docx)]
+        if final:
+            docx_cmd.append("--final")
+        if variant:
+            docx_cmd += ["--variant", variant]
+        jobs.append(RenderJob(
+            label=f"{entry.file} -> {output_docx}",
+            cmd=docx_cmd,
+            error=f"{entry.file} .docx failed",
+        ))
+    return jobs, deps, outputs, options
+
+
 @dataclass
 class RenderJob:
     """One renderer invocation, planned but not yet run.
@@ -523,6 +724,7 @@ def build_envelope(
 
     ok = True
     render_jobs: List[RenderJob] = []
+    planned = []  # (entry, deps, all_outputs, options) for manifest writing
     for entry in sources:
         input_path = src_dir / entry.file
         stem = Path(entry.file).stem
@@ -533,65 +735,21 @@ def build_envelope(
                 ok = False
             continue
 
-        output_pdf = out_dir / f"{stem}.pdf"
-        outputs = [output_pdf]
-        if entry.docx:
-            outputs.append(out_dir / f"{stem}.docx")
-
-        if not force_rebuild:
-            try:
-                deps, companions = _source_build_info(input_path.resolve(), variant)
-                reason = _staleness_reason(
-                    outputs + [out_dir / name for name in companions], deps)
-            except Exception as err:
-                print(
-                    f"  WARNING: could not inspect dependencies for {entry.file}; "
-                    f"rebuilding anyway ({err})",
-                    file=sys.stderr,
-                    flush=True,
-                )
-                reason = "dependency inspection failed"
-            if reason is None:
-                print(f"  {entry.file} is up to date", flush=True)
-                continue
-            print(f"  rebuilding {entry.file}: {reason}", flush=True)
-        else:
-            print(f"  force rebuilding {entry.file}", flush=True)
-
-        cmd = [sys.executable, str(PLEADING_GEN), str(input_path), str(output_pdf)]
-        if FINAL_BUILD:
-            cmd.append("--final")
-        if variant:
-            cmd += ["--variant", variant]
-        if sign:
-            cmd += ["--sign", sign]
-        if date:
-            cmd += ["--date", date]
-
-        render_jobs.append(RenderJob(
-            label=f"{entry.file} -> {output_pdf}",
-            cmd=cmd,
-            error=f"{entry.file} failed",
-        ))
-
-        # The .docx renderer reads the markdown, not the PDF, so it is
-        # independent of the job above and can run alongside it.
-        if entry.docx:
-            output_docx = out_dir / f"{stem}.docx"
-            docx_cmd = [sys.executable, str(MD_TO_DOCX),
-                        str(input_path), str(output_docx)]
-            if FINAL_BUILD:
-                docx_cmd.append("--final")
-            if variant:
-                docx_cmd += ["--variant", variant]
-            render_jobs.append(RenderJob(
-                label=f"{entry.file} -> {output_docx}",
-                cmd=docx_cmd,
-                error=f"{entry.file} .docx failed",
-            ))
+        new_jobs, deps, outputs, options = _plan_pdf_source_build(
+            name, entry, src_dir, out_dir,
+            final=FINAL_BUILD, variant=variant, sign=sign, date=date,
+            force_rebuild=force_rebuild,
+        )
+        render_jobs.extend(new_jobs)
+        if new_jobs:
+            planned.append((entry, deps, outputs, options))
 
     if not _run_render_jobs(render_jobs, jobs):
         ok = False
+
+    if ok:
+        for entry, deps, outputs, options in planned:
+            _record_manifest(out_dir, entry.file, deps, outputs, options)
 
     for src_path, output_path in _copy_output_paths(name, copies or [], variant):
         reason = None if force_rebuild else _staleness_reason([output_path], [src_path])
@@ -610,6 +768,89 @@ def build_envelope(
             ok = False
 
     return ok
+
+
+def find_source_owner(envelopes: dict, source_rel: str) -> List[str]:
+    """Envelope names whose sources include source_rel (normalized to the
+    src/-relative form used in envelopes.yaml)."""
+    norm = str(Path(source_rel))
+    owners = []
+    for name, raw_cfg in envelopes.items():
+        cfg = EnvelopeEntry.from_yaml(raw_cfg)
+        if any(entry.file == norm for entry in cfg.sources):
+            owners.append(name)
+    return owners
+
+
+def build_doc_source(
+    source: str,
+    envelopes: dict,
+    *,
+    final: bool = False,
+    variant: Optional[str] = None,
+    sign: Optional[str] = None,
+    date: Optional[str] = None,
+    force_rebuild: bool = False,
+    jobs: Optional[int] = None,
+) -> bool:
+    """Build exactly one envelope-owned Markdown source (ADR-0038).
+
+    The owning envelope determines the output directory and whether a DOCX
+    companion renders. Zero or multiple owners is an error: the location
+    would be a guess."""
+    global FINAL_BUILD
+    FINAL_BUILD = final
+
+    source_path = Path(source)
+    if source_path.parts and source_path.parts[0] == "src":
+        source_rel = str(Path(*source_path.parts[1:]))
+    else:
+        source_rel = str(source_path)
+    if not (Path("src") / source_rel).is_file():
+        print(f"Error: no such source: src/{source_rel}", file=sys.stderr)
+        return False
+
+    owners = find_source_owner(envelopes, source_rel)
+    if not owners:
+        print(f"Error: src/{source_rel} is not a source in any envelope in "
+              "envelopes.yaml", file=sys.stderr)
+        return False
+    if len(owners) > 1:
+        print(f"Error: src/{source_rel} appears in multiple envelopes "
+              f"({', '.join(owners)}); build the envelope instead",
+              file=sys.stderr)
+        return False
+
+    name = owners[0]
+    cfg = EnvelopeEntry.from_yaml(envelopes[name])
+    if cfg.is_sent and not force_rebuild:
+        print(
+            f"Error: envelope '{name}' was marked sent on {cfg.sent_on}. "
+            "Re-run with --force to rebuild it.",
+            file=sys.stderr,
+        )
+        return False
+    entry = next(e for e in cfg.sources if e.file == source_rel)
+    if entry.is_txt:
+        print(f"Error: {source_rel} is a txt-format source; "
+              "build its envelope instead", file=sys.stderr)
+        return False
+
+    out_dir = Path("out") / name
+    if variant:
+        out_dir = out_dir / variant
+    print(f"Building document: {source_rel} (envelope {name})", flush=True)
+    planned_jobs, deps, outputs, options = _plan_pdf_source_build(
+        name, entry, Path("src"), out_dir,
+        final=final, variant=variant, sign=sign, date=date,
+        force_rebuild=force_rebuild,
+    )
+    if not planned_jobs:
+        return True
+    if not _run_render_jobs(planned_jobs, jobs):
+        return False
+    _record_manifest(out_dir, entry.file, deps, outputs, options)
+    return True
 
 
 def list_envelopes(envelopes: dict) -> None:
@@ -650,6 +891,8 @@ def expected_outputs(envelopes: dict) -> List[str]:
         dirs = [Path("out") / name,
                 Path("out") / name / "public",
                 Path("out") / name / "sealed"]
+        for d in dirs:
+            out.append(str(d / BUILD_MANIFEST_NAME))
         for entry in cfg.sources:
             stem = Path(entry.file).stem
             for d in dirs:
@@ -699,6 +942,10 @@ def main() -> None:
     parser.add_argument("--list-outputs", action="store_true",
                         help="print every output path the config can produce, "
                              "one per line (used by `sc clean`)")
+    parser.add_argument("--build-doc", metavar="SOURCE.md", default=None,
+                        help="Build exactly one envelope-owned Markdown source "
+                             "(its PDF and configured DOCX), in the owning "
+                             "envelope's output directory")
     parser.add_argument("--check-stale", action="store_true",
                         help="Fail if outputs are missing or older than sources/exhibits")
     parser.add_argument("--final", action="store_true",
@@ -736,6 +983,20 @@ def main() -> None:
             print(line)
         return
 
+    if args.build_doc:
+        if not build_doc_source(
+            args.build_doc,
+            envelopes,
+            final=args.final,
+            variant=args.variant,
+            sign=args.sign,
+            date=args.date,
+            force_rebuild=args.force,
+            jobs=args.jobs,
+        ):
+            sys.exit(1)
+        return
+
     if not args.envelope and not args.all:
         parser.print_usage()
         sys.exit(1)
@@ -746,8 +1007,8 @@ def main() -> None:
             "out/<envelope>/ rather than out/<envelope>/public or "
             "out/<envelope>/sealed, and any redaction-bearing source will "
             "render its PUBLIC (redacted) variant. Pass --variant sealed "
-            "explicitly for sealed content; prefer VARIANT=public or "
-            "VARIANT=sealed for filing-ready packets.",
+            "explicitly for sealed content; prefer --variant public or "
+            "--variant sealed for filing-ready packets.",
             file=sys.stderr,
             flush=True,
         )
@@ -800,6 +1061,8 @@ def main() -> None:
                 copies=cfg.copies,
                 redacted_pdfs=cfg.redacted_pdfs,
                 variant=args.variant,
+                sign=args.sign,
+                date=args.date,
             ):
                 all_ok = False
         else:

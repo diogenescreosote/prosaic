@@ -33,10 +33,6 @@ def load_scenario(name: str, tmp_path: Path) -> Path:
         raise FileNotFoundError(f"scenario fixture missing: {src}")
     dest = tmp_path / name
     shutil.copytree(src, dest)
-    # Matters link the shared Makefile; recreate the link in the copy.
-    mk = dest / "Makefile"
-    if not mk.exists():
-        mk.symlink_to(PLEADING / "Makefile")
     return dest
 
 

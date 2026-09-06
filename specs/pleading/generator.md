@@ -86,13 +86,19 @@ sent to a court.
    rendered output contains no NOTREAL markers, TODO/FIXME tokens,
    or draft annotations. *(tested: leak-scan in the pleading_build
    scenario)*
-8. **Rebuilds are deterministic and dependency-aware.** A build
-   regenerates a source when the source, any selected exhibit, or
-   any exhibit-letter mapping file is newer than the output —
-   otherwise it skips; `check-stale` fails loudly when outputs lag
-   dependencies; a forced rebuild is always available. *(tested:
-   up-to-date skip, exhibit/exhibit_source/variant-companion staleness,
-   and check-stale checks in the pleading_exhibits scenario)*
+8. **Rebuilds are deterministic, dependency-aware, and mode-aware.**
+   A build regenerates a source when the source, any selected exhibit,
+   or any exhibit-letter mapping file has changed since the output was
+   written, or when the render options that shape the artifact
+   (final/draft, variant, signer, date) differ from the ones recorded
+   for it in `out/<envelope>/.build_manifest.json` — a draft PDF is
+   never "up to date" for a `--final` request (ADR-0038). Otherwise it
+   skips; `--check-stale` fails loudly when outputs lag dependencies or
+   options; a forced rebuild is always available. The manifest is
+   build state, not evidence: deleting it costs one clean rebuild.
+   *(tested: up-to-date skip, exhibit/exhibit_source/variant-companion
+   staleness, and check-stale checks in the pleading_exhibits scenario;
+   option drift in test_single_document_build.py)*
 9. **Sent envelopes are protected.** Marking an envelope with the
    date it was sent or filed makes routine rebuilds skip it and
    explicit rebuilds require force — the on-disk output of a mailed
