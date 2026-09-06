@@ -186,8 +186,13 @@ Every document moved from `inbox/` into `assets/`:
    `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>`.
    Supplements, never replaces: `foo.pdf` → `foo_ocr.pdf`, side by
    side, original untouched. Already-searchable PDFs get no `_ocr`
-   copy — note that in INDEX.md instead. Searchable PDFs get a `.txt`
-   sidecar; images get verified-transcription sidecars.
+   copy — note that in INDEX.md instead. Every PDF gets a page-marked
+   `.txt` sidecar and every image a machine `.ocr.txt`; `sc text ensure`
+   writes them mechanically (and the sync runs it), so check
+   `sc text audit` rather than hand-writing sidecars. A human
+   transcription of an image is a `.txt` beside it and is never
+   overwritten. `sc find` treats anything the audit calls not
+   searchable as UNSEARCHED, never as absent.
 2. **Update `assets/INDEX.md` in the same change.** INDEX.md is the
    authoritative description of the evidence and must never drift from
    disk.

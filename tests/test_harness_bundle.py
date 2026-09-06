@@ -128,19 +128,22 @@ def test_open_prints_built_pdfs(matter: Path):
 
 
 def test_find_reports_hits_and_unsearched_pdfs(matter: Path):
+    import pymupdf as fitz
     (matter / "assets").mkdir(exist_ok=True)
-    (matter / "assets" / "scan.pdf").write_bytes(b"%PDF-1.4\n")          # no sidecar
-    (matter / "assets" / "letter.pdf").write_bytes(b"%PDF-1.4\n")
+    scan = fitz.open(); pg = scan.new_page(); pg.draw_rect(pg.rect, color=(0, 0, 0))
+    scan.save(str(matter / "assets" / "scan.pdf")); scan.close()          # no text layer, no sidecar
+    letter = fitz.open(); letter.new_page().insert_text((72, 72), "Dear Jane Roe, about the meeting on May 3. " * 3)
+    letter.save(str(matter / "assets" / "letter.pdf")); letter.close()
     (matter / "assets" / "letter.txt").write_text("Dear Jane Roe, about the meeting on May 3.")
     (matter / "out").mkdir(exist_ok=True)
     (matter / "out" / "ignored.md").write_text("Jane Roe should not be found under out/")
     proc = sc("find", "Jane Roe", "--matter-dir", str(matter))
-    assert proc.returncode == 0, proc.stderr
+    assert proc.returncode == 2, "something was not searchable, so exit 2 even with hits"
     out = proc.stdout
     assert "assets/letter.txt" in out
     assert "Declaration of Jane Roe.md" in out
     assert "out/ignored.md" not in out
-    assert "UNSEARCHED: 1 PDF" in out and "assets/scan.pdf" in out
+    assert "UNSEARCHED: 1 document(s)" in out and "assets/scan.pdf" in out
+    assert "text coverage:" in out
     miss = sc("find", "zzz-not-there", "--matter-dir", str(matter))
-    assert miss.returncode == 1
-    assert "0 hit line(s)" in miss.stdout
+    assert miss.returncode == 2 and "0 hit line(s)" in miss.stdout

@@ -24,8 +24,9 @@ The full discipline is the `triage-inbox` skill.
 
 Per-connector handling:
 
-**gmail** (assets/gmail/, born-digital searchable PDFs; no OCR, no .txt
-sidecars):
+**gmail** (assets/gmail/, born-digital searchable PDFs; `sc text ensure`
+has already written their page-marked `.txt` sidecars --- do not
+hand-write sidecars, and do not OCR them):
 - Append one row per file to assets/gmail/CATALOG.md: date, subject,
   participants, a 1–2 sentence gist, and case relevance. Mark
   privileged attorney-client threads as such. Keep rows in filename
@@ -52,7 +53,8 @@ a routing hint):
 
 **any other connector**: treat its output as inbox material — follow
 the matter agent-contract triage conventions (literate rename, OCR
-supplement if scanned, sidecar, INDEX.md row, route to the right
+supplement if scanned --- `sc text ensure` does this and writes the
+sidecar; check its output rather than redoing it --- INDEX.md row, route to the right
 directory).
 
 Then, for ALL connectors:

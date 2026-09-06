@@ -164,14 +164,28 @@ for name in $CONNECTORS; do
     continue
   fi
   log "CONNECTOR $name start"
-  if NODE_PATH="$CONNECTORS_DIR/node_modules" node "$entry" "$MATTER_DIR" 2>> "$LOG_FILE" \
-      | sed -n "s/^NEW /$name /p" >> "$NEW_LIST"; then
+  # The pipe's status is sed's, not node's, so a crashed connector used
+  # to log `ok` and advance the success guard. Test node's status.
+  NODE_PATH="$CONNECTORS_DIR/node_modules" node "$entry" "$MATTER_DIR" 2>> "$LOG_FILE" \
+      | sed -n "s/^NEW /$name /p" >> "$NEW_LIST"
+  if [ "${PIPESTATUS[0]}" = 0 ]; then
     log "CONNECTOR $name ok"
   else
-    log "ERROR: connector $name failed"
+    log "ERROR: connector $name failed (exit ${PIPESTATUS[0]})"
     FAILURES=$((FAILURES+1))
   fi
 done
+
+# --- text coverage -----------------------------------------------------------
+# Every document the matter holds gets a page-marked text sidecar (and an
+# _ocr sibling where pages lack text) before any agent reads or searches.
+# Deterministic, cached, and never dependent on a model remembering to.
+log "TEXT ensure start"
+if "$PROSAIC_ROOT/cli/sc" text ensure "$MATTER_DIR" --jobs 2 > "$STATE_DIR/text_ensure_last.txt" 2>> "$LOG_FILE"; then
+  log "TEXT ensure ok: $(head -1 "$STATE_DIR/text_ensure_last.txt")"
+else
+  log "TEXT ensure: gaps remain: $(head -1 "$STATE_DIR/text_ensure_last.txt")"
+fi
 
 [ "$FAILURES" = 0 ] && date +%s > "$GUARD_FILE"
 

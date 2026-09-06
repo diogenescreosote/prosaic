@@ -762,6 +762,11 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     if know.is_file():
         n = sum(1 for _ in know.open(errors="replace"))
         lines.append(f"- KNOWLEDGE.md: {n} lines; read the section you need, not the file")
+    try:
+        tc = _text_coverage()
+        lines.append("- " + tc.coverage_line(tc.audit(matter)))
+    except Exception as exc:  # the brief must never fail on a coverage error
+        lines.append(f"- text coverage: audit failed ({type(exc).__name__})")
 
     lines.append("")
     lines.append("## Routine commands (deterministic; no deliberation needed)")
@@ -769,6 +774,31 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
                  "`/status` `/find <term>` `/commit <type(scope): subject>` --- each runs the CLI and "
                  "reports; a warning that needs a source edit is a separate, visible decision.")
     return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# text: searchability is audited and repaired, never assumed (ADR-0040)
+# ---------------------------------------------------------------------------
+
+def _text_coverage():
+    sys.path.insert(0, str(ROOT / "triage"))
+    import text_coverage  # noqa: E402
+    return text_coverage
+
+
+def cmd_text(args: argparse.Namespace) -> int:
+    tc = _text_coverage()
+    matter = _matter_root(Path(args.matter_dir))
+    if args.action == "audit":
+        docs = tc.audit(matter, include_inbox=args.include_inbox, use_cache=not args.no_cache)
+    else:
+        docs = tc.ensure(matter, include_inbox=args.include_inbox, dry_run=args.dry_run,
+                         redo_ocr=args.redo_ocr, jobs=args.jobs)
+    if args.json:
+        print(json.dumps([tc.asdict(d) for d in docs], indent=1))
+    else:
+        sys.stdout.write(tc.format_audit(docs))
+    return 0 if all(d.searched or d.state == "untriaged" for d in docs) else 1
 
 
 # ---------------------------------------------------------------------------
@@ -783,20 +813,14 @@ FIND_GLOBS = ("*.md", "*.txt", "*.yaml", "*.yml", "*.json", "*.csv", "*.srt", "*
 FIND_EXCLUDE_DIRS = ("out", ".state", ".git", ".flow", "node_modules", ".claude")
 
 
-def _pdf_has_text_sidecar(pdf: Path) -> bool:
-    stem = pdf.with_suffix("")
-    return (pdf.with_suffix(".txt").exists()
-            or Path(f"{stem}_ocr.pdf").exists()
-            or Path(f"{stem}_ocr.txt").exists()
-            or pdf.name.endswith("_ocr.pdf"))
-
-
 def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
-                   fixed: bool = False) -> dict:
-    """ripgrep every term over the matter's text; list PDFs that have no
-    text sidecar as UNSEARCHED. Returns a structured report."""
+                   fixed: bool = False, docs=None) -> dict:
+    """ripgrep every term over the matter's text; every document the
+    coverage audit says is not searchable is listed as UNSEARCHED with
+    its reason. Returns a structured report."""
     rg = shutil.which("rg")
-    report: dict = {"terms": {}, "unsearched": [], "searched_files": 0, "tool": rg or "grep"}
+    report: dict = {"terms": {}, "unsearched": [], "searched_files": 0, "tool": rg or "grep",
+                    "coverage": ""}
     excludes: list[str] = []
     for d in FIND_EXCLUDE_DIRS:
         excludes += ["--glob", f"!{d}/**"]
@@ -824,18 +848,24 @@ def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
             path = path[2:] if path.startswith("./") else path
             hits.setdefault(path, []).append(rest[:300])
         report["terms"][term] = hits
-    # what could not be searched
+    # what could not be searched: the coverage audit decides, so a PDF
+    # with an _ocr sibling but no .txt, or a stale sidecar, is never
+    # counted as searched just because a file with the right name exists.
+    if docs is None:
+        docs = _text_coverage().audit(matter)
+    tc = _text_coverage()
+    report["coverage"] = tc.coverage_line(docs)
+    report["unsearched"] = sorted(
+        f"[{d.state}] {d.path}" + (f" --- {d.note}" if d.note else "")
+        for d in docs if not d.searched and d.state != "untriaged")
+    report["untriaged"] = sorted(d.path for d in docs if d.state == "untriaged")
     n_text = 0
     for f in matter.rglob("*"):
         if not f.is_file() or any(part in FIND_EXCLUDE_DIRS for part in f.relative_to(matter).parts):
             continue
-        if f.suffix.lower() == ".pdf":
-            if not f.name.endswith("_ocr.pdf") and not _pdf_has_text_sidecar(f):
-                report["unsearched"].append(str(f.relative_to(matter)))
-        elif any(f.match(g) for g in FIND_GLOBS):
+        if any(f.match(g) for g in FIND_GLOBS):
             n_text += 1
     report["searched_files"] = n_text
-    report["unsearched"].sort()
     return report
 
 
@@ -851,19 +881,29 @@ def format_find(report: dict, show_unsearched: int = 40) -> str:
         lines.append("")
     un = report["unsearched"]
     lines.append(f"Searched {report['searched_files']} text file(s) with {report['tool']}. "
-                 f"UNSEARCHED: {len(un)} PDF(s) with no text sidecar"
-                 + (":" if un else "."))
+                 f"{report.get('coverage', '')}")
+    lines.append(f"UNSEARCHED: {len(un)} document(s)" + (":" if un else "."))
     for u in un[:show_unsearched]:
         lines.append(f"  - {u}")
     if len(un) > show_unsearched:
-        lines.append(f"  ... and {len(un) - show_unsearched} more")
+        lines.append(f"  ... and {len(un) - show_unsearched} more (sc text audit for all)")
+    untri = report.get("untriaged") or []
+    if untri:
+        lines.append(f"UNTRIAGED (inbox/, not searched): {len(untri)} file(s)")
     return "\n".join(lines) + "\n"
 
 
 def cmd_find(args: argparse.Namespace) -> int:
+    """Exit 0: hits and everything searchable. 1: no hits. 2: something
+    was not searchable (whatever the hits) --- the caller must not read
+    silence as absence."""
     matter = _matter_root(Path(args.matter_dir))
-    report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed)
+    tc = _text_coverage()
+    docs = tc.ensure(matter, jobs=2) if args.ensure else tc.audit(matter)
+    report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs)
     sys.stdout.write(format_find(report))
+    if report["unsearched"]:
+        return 2
     return 0 if any(report["terms"].values()) else 1
 
 
@@ -1174,12 +1214,26 @@ def main() -> int:
     sp.add_argument("matter_dir", nargs="?", default=".")
     sp.set_defaults(func=cmd_harness)
 
-    sp = sub.add_parser("find", help="grep the record for terms; list PDFs that could not be searched")
+    sp = sub.add_parser("find", help="grep the record for terms; list every document that could not be searched (exit 2)")
     sp.add_argument("terms", nargs="+")
     sp.add_argument("--matter-dir", default=".", dest="matter_dir")
     sp.add_argument("--per-file", type=int, default=12, help="max hit lines shown per file")
     sp.add_argument("-F", "--fixed", action="store_true", help="literal terms, not regex")
+    sp.add_argument("--ensure", action="store_true",
+                    help="run `sc text ensure` first so sidecars exist before searching")
     sp.set_defaults(func=cmd_find)
+
+    sp = sub.add_parser("text", help="text coverage: audit or ensure that every document is searchable")
+    sp.add_argument("action", choices=("audit", "ensure"))
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--json", action="store_true")
+    sp.add_argument("--include-inbox", action="store_true", help="also cover inbox/ (normally triage first)")
+    sp.add_argument("--no-cache", action="store_true", help="re-survey every document")
+    sp.add_argument("--dry-run", action="store_true", help="ensure: report what would be repaired")
+    sp.add_argument("--redo-ocr", action="store_true",
+                    help="ensure: regenerate an _ocr sibling that still has uncovered pages")
+    sp.add_argument("--jobs", type=int, default=2)
+    sp.set_defaults(func=cmd_text)
 
     sp = sub.add_parser("brief", help="print a short matter brief for a session start")
     sp.add_argument("matter_dir", nargs="?", default=".")
