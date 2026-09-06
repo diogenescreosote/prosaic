@@ -20,4 +20,4 @@ matter.yaml       Case + connector configuration
 envelopes.yaml    Filing envelope definitions
 ```
 
-Build: `make list`, `make <envelope>`. Sync: `sc sync .`
+Build: `sc list`, `sc build <envelope>`, `sc build-doc src/<source>.md`. Sync: `sc sync .`

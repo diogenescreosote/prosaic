@@ -45,7 +45,7 @@ Footer-Key: value
 | `docket` | a real-world event: filed, served, lodged, received | `pleadings/` |
 | `discovery` | requests, responses, subpoenas, productions | `discovery/` |
 | `record` | durable case knowledge | `KNOWLEDGE.md`, `TODO.md`, `QUESTIONS.md` |
-| `config` | matter machinery | `matter.yaml`, `envelopes.yaml`, `Makefile` |
+| `config` | matter machinery | `matter.yaml`, `envelopes.yaml`, build config |
 | `chore` | housekeeping with no case meaning | renames, `.gitignore` |
 
 `sc commit-check --list-types` prints this list.

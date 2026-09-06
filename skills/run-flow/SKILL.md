@@ -6,7 +6,7 @@ description: Run a files-first flow - a YAML graph of agent, command, judge, and
 # Run a flow
 
 Flows (`specs/flows.md`, ADR-0024) are to judgment work what the
-Makefile is to builds. The repo ships them in `flows/`; a matter may
+envelope build (`sc build`) is to documents. The repo ships them in `flows/`; a matter may
 carry its own.
 
 ## Running
@@ -34,8 +34,8 @@ Follow `flows/draft-review.yaml` as the model. Rules that matter:
   directory, and a human adopts results by hand. Put a gate before
   anything a court, counsel, or counterparty would ever see.
 - Deterministic steps (render, hash, grep) are `command` steps or,
-  better, calls into Make and the existing CLIs; do not restate build
-  logic inside a flow.
+  better, calls into `sc build` and the existing CLIs; do not restate
+  build logic inside a flow.
 - New reusable flows are documented like any capability: the flow
   file's own header comment says what it is for and how to invoke it.
 

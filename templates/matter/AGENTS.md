@@ -28,8 +28,9 @@ If there is no workspace contract above this directory, copy
 
 | Need | Use |
 |---|---|
-| Build a filing envelope | `make <envelope>` (this dir; `Makefile` includes prosaic's) |
-| List envelopes | `make list` |
+| Build a filing envelope | `<prosaic>/cli/sc build <envelope>` |
+| Build one document | `<prosaic>/cli/sc build-doc src/<source>.md` |
+| List envelopes | `<prosaic>/cli/sc list` |
 | Report stale build output | `<prosaic>/cli/sc clean .` |
 | Fill a Judicial Council form | `<prosaic>/cli/sc form fill <id> …` (`sc form info <id>` first) |
 | OCR-supplement a PDF | `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>` |

@@ -105,6 +105,9 @@ $EDITOR ~/cases/smith-v-smith/matter.yaml
 # Build a filing envelope from Markdown sources
 cd ~/cases/smith-v-smith && sc build responsive_declaration
 
+# Or rebuild exactly one source, with its configured DOCX if any
+sc build-doc src/declaration.md --final
+
 # Install the every-12-hours background sync (macOS)
 ./cli/sc schedule install ~/cases/smith-v-smith
 ```

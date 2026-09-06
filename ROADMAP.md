@@ -304,7 +304,7 @@ verified operations rather than improvised shell.**
 - An **MCP server exposing prosaic's operations as typed tools** —
   `build_envelope`, `fill_form`, `triage_file`, `search_matter`,
   `run_sync`. This is the important piece: the agent calls checked
-  operations with typed arguments instead of guessing at the Makefile,
+  operations with typed arguments instead of guessing at the build DAG,
   and permission hooks can gate the destructive ones.
 - An interactive session built on the **Claude Agent SDK**
   (`@anthropic-ai/claude-agent-sdk`), which supplies the agent loop,

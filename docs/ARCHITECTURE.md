@@ -41,8 +41,9 @@ templates/      what `sc init` writes into a new matter, including the
 ```
 
 There is no importable Python package. The scripts are run by path and the
-CLI is a shell script, which is why a matter's `Makefile` includes
-`pleading/Makefile` rather than depending on an installed distribution.
+CLI is the supported command surface. Matters contain no build Makefile;
+envelope and single-document builds run through `sc build` and
+`sc build-doc` (ADR-0038).
 
 ## Data flow
 
@@ -155,7 +156,7 @@ directory, and turns Markdown drafting into filing-ready documents.
 ### Repository ↔ matter separation
 
 The repo (this code) contains no case data. A matter directory
-contains no code, just config (`matter.yaml`, `envelopes.yaml`), a
-symlinked `Makefile`, and content. Multiple matters share one repo
+contains no code, just config (`matter.yaml`, `envelopes.yaml`) and
+content; builds run through the repo's `sc` CLI. Multiple matters share one repo
 checkout; each schedules its own sync. This mirrors how the system is
 actually run across several concurrent live matters.

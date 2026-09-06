@@ -87,7 +87,7 @@ signed rather than stamped; it is not a substitute, and it says nothing
 about provenance. Check it:
 
 ```bash
-python3 <slopcannon>/pleading/pleadings_manifest.py <matter>
+python3 <prosaic>/pleading/pleadings_manifest.py <matter>
 ```
 
 A PDF carries no sign of its own provenance. A marked-up working copy, a
@@ -129,7 +129,7 @@ before being cited in any filing.
 
 **Proceed, then report** — configuration and project metadata, where
 there is one obviously correct answer: `matter.yaml`, `envelopes.yaml`,
-`Makefile`, `.gitignore`; key renames tracking current tooling;
+`.gitignore`; key renames tracking current tooling;
 regenerating a derived file from its source; keeping an index in sync
 with disk.
 

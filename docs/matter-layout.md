@@ -14,7 +14,6 @@ smith-v-smith/
 ├── TODO.md                # live task list (delete resolved items)
 ├── QUESTIONS.md           # open interview prompts
 ├── README.md              # human orientation
-├── Makefile → prosaic/pleading/Makefile
 │
 ├── inbox/                 # drop zone; unprocessed by definition
 ├── processed_files/       # canonical raw bytes of triaged inbox material

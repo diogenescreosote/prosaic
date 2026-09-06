@@ -22,8 +22,8 @@ stop — a half-deployment fails silently later.
 
 ## 1. Clone the engine
 
-**The path is permanent**: `sc init` symlinks each matter's `Makefile`
-into this directory, so moving it later breaks every matter.
+**The path is permanent**: matters run builds through this deployment's
+`sc` CLI, so moving it later breaks every matter's commands.
 
 ```bash
 git clone https://github.com/diogenescreosote/prosaic.git ~/lawyering/slopcannon
@@ -90,7 +90,7 @@ rm -rf /tmp/deploy-check
 | `form list` shows only general-civil forms | step 2 — submodule absent |
 | `form info fl300` unknown form | step 2 — submodule not checked out |
 | `ls local/templates/workspace/AGENTS.md` missing, so step 5's symlink dangles | step 3 — `local/` not cloned |
-| a matter's `make` cannot find the Makefile | step 1 — deployment moved after `sc init` |
+| a matter's `sc` points at the old deployment | step 1 — deployment moved after `sc init` |
 
 A dangling `AGENTS.md` symlink is the quiet one: the matter builds, and
 none of the shared conventions are in force. Check it resolves:
