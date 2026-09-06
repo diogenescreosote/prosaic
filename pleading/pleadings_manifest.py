@@ -81,9 +81,12 @@ import sys
 from pathlib import Path
 
 try:
-    import fitz  # type: ignore[import]
+    import pymupdf as fitz  # type: ignore[import]  (the `fitz` alias warns on stdout)
 except ImportError:
-    fitz = None  # stamp spot-check is optional
+    try:
+        import fitz  # type: ignore[import]
+    except ImportError:
+        fitz = None  # stamp spot-check is optional
 
 SUBSTITUTE = {"as-served", "portal", "counsel-copy", "unverified"}
 FILED = {"conformed", "efiled"}

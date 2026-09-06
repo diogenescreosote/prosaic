@@ -24,6 +24,7 @@ def _write_descriptor(d: Path, form_id: str, blank: str) -> None:
     (d / f"{form_id}.yaml").write_text(textwrap.dedent(f"""\
         form: {form_id.upper()}
         blank: {blank}
+        technology: overlay
         fields: []
     """))
 
@@ -37,7 +38,7 @@ def test_local_registry_joins_and_wins(tmp_path, monkeypatch):
     _write_descriptor(stock, "zz901", "zz901.pdf")
     _write_descriptor(local, "zz901", "zz901-local.pdf")  # collision: local wins
     _write_descriptor(local, "zz902", "zz902.pdf")        # local-only
-    monkeypatch.setattr(form_fill, "REGISTRY_DIRS", [local, stock])
+    monkeypatch.setattr(form_fill, "registry_dirs", lambda: [local, stock])
     assert form_fill.list_forms() == ["zz900", "zz901", "zz902"]
     assert form_fill.load_descriptor("zz901")["blank"] == "zz901-local.pdf"
     assert form_fill.load_descriptor("zz902")["form"] == "ZZ902"
@@ -47,7 +48,7 @@ def test_missing_descriptor_error_names_known_forms(tmp_path, monkeypatch):
     stock = tmp_path / "stock"
     stock.mkdir()
     _write_descriptor(stock, "zz900", "zz900.pdf")
-    monkeypatch.setattr(form_fill, "REGISTRY_DIRS", [stock])
+    monkeypatch.setattr(form_fill, "registry_dirs", lambda: [stock])
     try:
         form_fill.load_descriptor("nope")
     except FileNotFoundError as e:
@@ -62,7 +63,7 @@ def test_blank_path_resolves_across_dirs(tmp_path, monkeypatch):
     stock.mkdir()
     local.mkdir()
     (local / "only-local.pdf").write_bytes(b"%PDF-1.4\n")
-    monkeypatch.setattr(form_fill, "BLANKS_DIRS", [local, stock])
+    monkeypatch.setattr(form_fill, "blanks_dirs", lambda: [local, stock])
     assert form_fill.blank_path({"blank": "only-local.pdf"}) == local / "only-local.pdf"
 
 
