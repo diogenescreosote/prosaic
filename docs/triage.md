@@ -29,6 +29,16 @@ cd <matter_dir> && cli/agent-run --yolo < prompt.txt
 
 ## Design principles
 
+**Complete by instruction.** Reading is mechanical, not discretionary.
+`triage/read_coverage.py` classifies every page of a PDF, exits
+non-zero when any page is not covered by its text layer, and with
+`--text` emits the whole document page-marked so the agent has every
+page in context and the markers prove which ones. This exists because
+the expensive triage failure is not a mis-route — it is a confident
+catalog row written after a partial read, which is indistinguishable
+from a good one and which every later draft inherits. The page classes,
+and what each asks of the reader, are in "Reading every page" below.
+
 **Conservative by instruction.** The prompt's standing order: when
 significance or routing is unclear, *leave the file where it is*, mark
 it "needs human review" in the catalog/index, and move on. A triage
@@ -56,6 +66,35 @@ you configured.
 signs anything; never edits pleading sources during triage; and never
 deletes anything except a staged duplicate whose content-identical
 twin is already in place.
+
+## Reading every page
+
+`python3 triage/read_coverage.py <pdf...>` prints one line per file and
+names every page that needs OCR or eyes; `--text <pdf>` emits the whole
+document with `[[[ page k of N ]]]` markers and a closing page count.
+The classes, and the failure each one names:
+
+| class | meaning | what to do |
+|---|---|---|
+| `text` | enough extractable text, no large embedded raster | read it |
+| `sparse` | a little text — a caption band on a scan, a form's filled overlay | OCR or look |
+| `image-only` | no text, drawn content present: a scan | OCR (`ocr_supplement.py`) or rasterize and look |
+| `blank` | nothing extractable and nothing drawn | genuinely empty |
+| `image-bodied` | text present, but a raster covers much of the page: an email export carrying a screenshot, a declaration with a photographed exhibit | extract the image and look at it; the header alone is not the read |
+| `garbled` | plenty of text and no common English word in it: the embedded font's encoding is nonstandard, so the page renders perfectly and extracts as nonsense | rasterize and read, or `ocrmypdf --force-ocr` into a new file |
+
+`image-bodied` is the quietest miss: extraction succeeds, nothing looks
+wrong, and the content is never read. `garbled` is the one a careful
+reader still misses, and it over-flags on purpose — a page of pure
+labels and numbers (a tax form's summary page, a statement's
+transaction grid, an ID card) trips it and is fine — so it means "look
+at this page," not "this page is broken." An `_ocr.pdf` is image-bodied
+by construction; there the OCR text is the read.
+
+The rules that follow from the classes, and the extraction checklist a
+catalog row must satisfy, are the `triage-inbox` skill. The prompt
+template (`triage/prompts/sync_triage.md`) requires the same read of
+every headless session.
 
 ## Tuning
 

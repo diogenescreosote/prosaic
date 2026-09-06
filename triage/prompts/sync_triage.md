@@ -4,6 +4,24 @@ brought in the NEW files listed at the end of this prompt. Each line is
 per this matter's agent contract conventions (AGENTS.md, or legacy
 CLAUDE.md).
 
+**Read every page before you catalog anything.** The failure this
+prompt exists to prevent is a confident catalog row written after
+reading part of a document. For each file:
+
+```bash
+python3 <prosaic>/triage/read_coverage.py --text <file.pdf>
+```
+
+Read that output end to end and check the closing page count against
+the document's. No `head`, no `grep`-instead-of-reading, no
+first-page-only. A page with no text layer is not an empty page --- the
+tool flags it and exits non-zero; OCR it (`ocr_supplement.py`) and read
+the OCR, or rasterize and look. An attachment inside an email export is
+its own document and gets its own read. If a document cannot be fully
+read, say which pages, mark the row PARTIAL and "needs human review",
+and move on --- that is a fine outcome; silently reading less is not.
+The full discipline is the `triage-inbox` skill.
+
 Per-connector handling:
 
 **gmail** (assets/gmail/, born-digital searchable PDFs; no OCR, no .txt
@@ -12,6 +30,10 @@ sidecars):
   participants, a 1–2 sentence gist, and case relevance. Mark
   privileged attorney-client threads as such. Keep rows in filename
   (chronological) order.
+- Read the whole thread, not the top message: a forward carries the
+  quoted chain beneath it, and the operative fact is often in the
+  oldest message. Note any attachment the export carries, and treat it
+  as a document in its own right.
 
 **mycase** (inbox/mycase/ staging, already renamed to dated
 snake_case; the staging subdirectory mirrors the portal folder and is
@@ -41,6 +63,11 @@ Then, for ALL connectors:
   first; resolved items are deleted, not struck through).
 - Never put drafting-history annotations in pleading sources; never
   write ` --- ` with spaces around it (em-dash convention).
+
+Before you finish, re-list the staged files and account for every one
+--- routed, or deliberately left with a stated reason. Count in equals
+count out. Report, by name, every file you could not fully read or
+could not route.
 
 Be conservative: when significance or routing is unclear, leave the
 file where it is, note it in the catalog/INDEX with "needs human

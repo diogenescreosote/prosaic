@@ -48,6 +48,17 @@ guesses confidently is expensive.
    discipline, originals-are-sacred, NOTREAL, and typography rules
    apply without being restated in the prompt. *(untested)*
 
+9. **Every page is read, and the read is checkable.**
+   `triage/read_coverage.py` classifies each page of a PDF by whether
+   its text layer speaks for it, exits non-zero when any page does not
+   (image-only, sparse, image-bodied, garbled), and with `--text` emits
+   the whole document page-marked so coverage is provable from the
+   transcript. A catalog row records pages read; a document that
+   cannot be fully read is marked PARTIAL with the pages named, never
+   silently summarized from the part that extracted. *(tested:
+   tests/test_read_coverage.py for the tool; the discipline itself is
+   untested)*
+
 ## Non-obvious constraints
 
 - **Triage reads adversarial documents.** Opposing filings, hostile
