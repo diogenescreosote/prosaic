@@ -112,3 +112,40 @@ with one prompt and a working directory. Any agent harness that can
 (b) honor an instruction file in that directory could be substituted
 by editing the `TRIAGE` block of `sync/matter_sync.sh`. An agent CLI is
 what this system is tested with.
+
+## Text coverage: every document searchable, provably
+
+```
+sc text audit .              # what is and is not searchable, and why
+sc text ensure .             # OCR what lacks text; write page-marked .txt sidecars
+sc text ensure . --dry-run   # show what would be repaired
+sc find "<term>" --ensure    # search; exit 2 if anything is still unsearchable
+```
+
+`sc text audit` classifies every PDF, image, DOCX and audio file under
+the matter. A PDF counts as searchable only when a sidecar written by
+the tool covers every page; an `_ocr.pdf` sibling alone does not, since
+ripgrep cannot read a PDF. `ensure` repairs mechanically: `ocrmypdf
+--skip-text` for pages with no text layer, `--force-ocr --pages` for
+pages whose text is useless (a screenshot with a header, a garbled
+font), then a `.txt` dump of the best source with a header
+
+```
+[[[ prosaic text sidecar ]]]
+original: scan.pdf
+source: scan_ocr.pdf
+pages: 4
+tool: pymupdf 1.27; ocr: ocrmypdf --skip-text
+generated: 2026-09-06T21:40:12
+MACHINE TEXT --- VERIFY AGAINST THE DOCUMENT BEFORE CITING IN ANY FILING
+```
+
+and `[[[ page k of N ]]]` markers so a hit names its page. Images get
+`<stem>.ocr.txt` through tesseract; a human transcription is a `.txt`
+beside the image and is never overwritten. Audio is only reported:
+transcription is the local pipeline in `stt.md`.
+
+The sync runs `ensure` on every pass, so the agent's triage prompt can
+assume sidecars exist. `sc brief` prints the coverage line at every
+session start. Handwriting is the remaining weak spot; a review
+interface for correcting handwritten regions is planned.

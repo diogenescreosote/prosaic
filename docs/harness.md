@@ -85,12 +85,15 @@ fifths of all calls.
 `sc find` is tier one of the three-tier search (explicit graph, ripgrep,
 cheap reader) described in the v2 proposal. It greps every `.md`,
 `.txt`, `.yaml`, `.json`, `.csv`, `.srt`, `.eml` and `.html` under the
-matter except `out/`, `.state/`, `.git/`, `.flow/`, and lists every PDF
-that has neither a `.txt` sidecar nor an `_ocr` sibling as UNSEARCHED.
-The `/find` skill then makes a Sonnet-class reader open the hits,
-search name variants and OCR misspellings, OCR-supplement short
-unsearched lists, and say "not in the record" only after all of that,
-with the searched scope stated.
+matter except `out/`, `.state/`, `.git/`, `.flow/`. Its UNSEARCHED list
+comes from the text-coverage audit (ADR-0040): anything not provably
+covered by a current sidecar is listed with its reason, and the exit
+status is 2 whenever that list is non-empty, hits or not. The `/find`
+skill runs `sc find --ensure`, so OCR and sidecars are produced before
+the search; the Sonnet-class reader then opens the hits, searches name
+variants and OCR misspellings, and says "not in the record" only after
+that, with the coverage line and the remaining unsearched documents
+stated.
 
 ## Customizing without forking
 

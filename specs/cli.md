@@ -159,11 +159,24 @@ agent CLI is named (ADR-0020). Its promises:
   envelope's built PDFs in the system viewer (newest variant plus the
   envelope root when variants exist) and prints the paths; a missing
   build is a clear error, not an empty viewer. *(tested)*
-- **`sc find <term…> [-F] [--per-file N]`** greps every text file and
-  sidecar in the matter (never out/, .state/, .git/) for each term,
-  prints hits grouped by file, and lists every PDF that has no text
-  sidecar as UNSEARCHED; exit 1 when no term hit. A document that was
-  not searched is reported, never silently skipped. *(tested)*
+- **`sc find <term…> [-F] [--per-file N] [--ensure]`** greps every text
+  file and sidecar in the matter (never out/, .state/, .git/) for each
+  term and prints hits grouped by file. Every document the coverage
+  audit calls not searchable is listed as UNSEARCHED with its reason,
+  the coverage line is printed, and the exit status is 2 whenever such a
+  document exists (hits or not); 1 means searched everything and found
+  nothing; 0 means hits and full coverage. `--ensure` runs
+  `sc text ensure` first. A document that was not searched is reported,
+  never silently skipped (ADR-0040). *(tested)*
+- **`sc text audit|ensure [matter] [--json] [--include-inbox] [--dry-run] [--redo-ocr] [--jobs N]`**
+  classifies every PDF, image, DOCX and audio file as searchable,
+  unverified-sidecar, needs-sidecar, stale-sidecar, needs-ocr,
+  transcript-needed, unsupported, unreadable or untriaged; `ensure`
+  OCR-supplements and writes page-marked sidecars with a provenance
+  header, never touching an original or a sidecar it did not write.
+  Exit 1 while anything triaged is not searchable. Results are cached
+  in `.state/text_coverage.json` by path, size and mtime. *(tested:
+  tests/test_text_coverage)*
 - **`sc harness install [matter]`** installs or refreshes the coding-agent
   harness bundle (`templates/matter/.claude`: the SessionStart hook and
   the build, build-doc, open, clean, status, commit and find commands),

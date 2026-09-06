@@ -81,3 +81,12 @@ guesses confidently is expensive.
 - **Machine summaries are working aids, not citations** — anything
   triage writes into a catalog or knowledge file is subject to the
   matter-wide verify-before-citing rule.
+
+- **Text coverage is guaranteed mechanically, not by convention.**
+  `sync/matter_sync.sh` runs `sc text ensure` after the connectors and
+  before the agent, so every arriving document has a page-marked text
+  sidecar (and an `_ocr` sibling where pages lacked text) before anyone
+  reads or searches it. The audit (`sc text audit`) is the check; the
+  triage prompt tells the agent sidecars exist rather than asking it to
+  write them (ADR-0040). *(tested: tests/test_text_coverage; the sync
+  hook itself is untested, like the rest of matter_sync.sh)*
