@@ -51,7 +51,7 @@ The core bet holds: model drafts Markdown, deterministic code renders it, one se
 
 **W2. Standby loops (medium).** A `prosaic-supervisor` per matter, installed by `sc schedule`, replacing the two 12-hourly plists:
 
-- *Inbox watcher.* launchd `WatchPaths` on `inbox/` and each connector's staging directory; triage starts within a minute of a file landing, with a model, turn cap and budget set per role.
+- *Inbox watcher.* launchd `WatchPaths` on `inbox/` and each connector's staging directory; triage starts within a minute of a file landing, on Fable, with a turn cap and budget set per role.
 - *Honest sync.* Fix the exit-status masking, write a run summary to `.state/`, surface failures in the daily brief.
 - *Nightly knowledge refinement.* A flow that reads KNOWLEDGE, INDEX, MANIFEST and the day's commits, proposes integrated edits and a list of open questions, and stops at a gate. It never writes KNOWLEDGE unattended.
 - *Retention.* `sc clean --older-than` for `out/` renders and `.flow/` run directories, still report-first, never touching `assets/`, `pleadings/` or `processed_files/`.
@@ -69,6 +69,12 @@ Each step declares its own provider and effort so personas can run on different 
 
 **W4. Knowledge as a directory (medium).** An ADR replacing the single file with `knowledge/` topic files, each with front matter (`related:`, `updated:`, `sources:`), and KNOWLEDGE.md reduced to an index with one line per topic. A linter, `sc knowledge check`, enforces absolute dates, no date-titled sections, every file indexed, every link resolving, and flags topics untouched since a later docket event. Migration of the live matters is a gated agent task you approve file by file. The nightly refinement loop and the session brief both become cheap once knowledge is topical.
 
+**W4a. Guaranteed extraction and recall (medium, part of W4, raised to critical).** A real failure motivates this: asked whether a particular lawyer interaction appeared in a Bates-stamped production, the agent searched several times, reported that it did not, and was wrong; the passage was prominent. A false negative about the record is the worst failure this product can have. So the knowledge layer gets three mechanisms:
+
+1. *Per-document extraction at triage.* Every triaged document gets a structured sidecar (people and entities, dates, events, statements and admissions, each with a page or Bates cite), written by Fable under the read-every-page discipline, alongside the prose INDEX row.
+2. *A matter-wide entity and fact index*, rebuilt from the sidecars, that maps every person, organization and topic to every document and page mentioning it. Cheap to query, never the place a fact lives.
+3. *A search contract for negative answers.* "Not in the record" is only sayable after an exhaustive pass: the index, every text layer, every OCR sidecar, with the list of what was searched shown to you. A `/find` command runs that pass deterministically before the model speaks. Anything image-only without a sidecar is reported as unsearched, not absent.
+
 **W5. Backend choice and the privilege boundary (large, staged).**
 
 - *Now:* an `agent:` block in deployment config and `matter.yaml` naming provider, model and endpoint per role (triage, judge, clerk, bench, oppo, drafting). `agent-run --role` reads it. Document the self-hosted path: Claude Code or Codex CLI pointed at an OpenAI-compatible endpoint serving Qwen, GLM, Kimi or gpt-oss. Every role defaults to local or first-party; nothing goes to a second vendor by default.
@@ -84,7 +90,7 @@ These are list-price equivalents computed from the same month of transcripts, ho
 |---|---|---|
 | Fresh sessions, session brief, subagents for bulk reading (W1, W2) | Context per call capped near 150k instead of a 380k median | about \$2,500 (41 %) |
 | Reviewer-directed small changes on Opus, Fable for drafts (decision 2) | Half of current Fable calls move to Opus | about \$900 (15 %) |
-| Cheap models and capped effort for triage and routine commands (W1, W2) | Sonnet or Haiku with turn and budget caps | about \$150 (2 %) |
+| Cheap models for routine commands; turn and budget caps on triage, which stays on Fable (W1, W2) | Sonnet or Haiku for build, open, commit, clean | about \$100 (2 %) |
 | Combined | Levers overlap, so less than the sum | about \$3,000 to \$3,300 (50 %), from \$6,150 to roughly \$3,000 |
 
 Thinking tokens are not a cost lever: all 3.8 M of them cost about \$125. Effort tuning is worth doing for latency, not for money.
@@ -93,7 +99,7 @@ Thinking tokens are not a cost lever: all 3.8 M of them cost about \$125. Effort
 
 - A typical drafting or research turn, about nine calls today, should run 35 % to 45 % faster from context alone, and about 2x faster where Opus takes the small directed changes.
 - A routine command (build, open, commit, clean) goes from a 39-second median to a few seconds, because the deterministic path makes no model call, or one short call on a cheap model. Call it 5x to 10x on those turns, which are about 40 % of all prompts by count.
-- Scheduled triage drops from about 4 to 5 minutes per run to roughly 2 on Sonnet with caps, and runs within a minute of a file landing instead of up to twelve hours later.
+- Scheduled triage stays on Fable and keeps its 4 to 5 minutes per run; the gain there is latency to start, within a minute of a file landing instead of up to twelve hours later.
 - Overall, across the month's mix, roughly half the wall-clock time per unit of work, with the gains concentrated exactly where the slowness is most felt.
 
 **Standing constraint (added September 6, 2026).** The deployment's practice-area form adapters, the descriptors, blanks and specs in the private module mounted under `modules/`, and the overlay engine that drives them, must keep working through every workstream. Any change to the form engine, descriptor schema, registry, `sc form` or module discovery either fills the existing module descriptors unchanged, verified against the deployment before a merge to `main`, or ships a mechanical migration script and doc with the change. The descriptor contract is treated as a public API. Concretely: the module today holds eleven descriptors and one test, so the gate is a new `sc form check --all` that discovers every descriptor across built-in, `modules/` and `local/` layers, fills each with fixture data, flattens, and renders the geometry preview, run in the deployment against the candidate engine before any merge to `main`. Building that check is part of W0.
@@ -103,7 +109,7 @@ Thinking tokens are not a cost lever: all 3.8 M of them cost about \$125. Effort
 Order: W0, W1, W2 (watcher and honest sync first), W3, W4, W5-now, then W5-later. W1 and W2 are a week or two together; W3 and W4 a week or two each; W5-later is open-ended.
 
 1. `main` is production; `dev` is the working branch, checked out at `~/code/prosaic_dev`. Decided.
-2. Fable stays the drafting default for initial drafts and major changes. Small, directed changes that a reviewing frontier model specifies are implemented on Opus. Routine commands and triage go to a cheap model. Decided.
+2. Fable stays the drafting default for initial drafts and major changes. Small, directed changes that a reviewing frontier model specifies are implemented on Opus. Routine commands go to a cheap model. **Triage and first-pass integration of new documents stay on Fable**: they are heavyweight, critical work, not clerical work (revised later the same day, see the recall requirement below). Decided.
 3. Knowledge-directory ADR direction approved; migration remains gated file by file. Decided.
 4. For the owner's own matters, every role may run on any model and any vendor now; no sanitizer gate applies. The privilege boundary in W5-later is built for deployments serving other people, not as a precondition here. Decided.
 5. `/standup` runs at 9 am daily by default. Decided.
