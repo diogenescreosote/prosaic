@@ -1240,11 +1240,43 @@ def find_case_dir(input_md: Path) -> Path:
     return input_md.parent.parent
 
 
+def _src_relative_dir(input_md: Path) -> Optional[Path]:
+    """``input_md``'s directory, relative to its ancestor named ``src``.
+
+    Returns ``Path(".")`` for a source sitting directly in ``src/``,
+    and ``None`` when ``input_md`` has no ``src`` ancestor at all (a
+    source outside the case's ``src/`` tree, e.g. a scratch file).
+    """
+    for ancestor in input_md.parents:
+        if ancestor.name == "src":
+            return input_md.parent.relative_to(ancestor)
+    return None
+
+
+def cover_sheet_cache_path(form_id: str, input_md: Path) -> Path:
+    """Where ``ensure_cached`` reads/writes the filled cover sheet for
+    ``input_md``.
+
+    Keyed by the source's path relative to ``src/``, mirrored under
+    ``assets/decl_cover_sheets/``, so two sources with the same bare
+    filename in different subfolders of ``src/`` (e.g.
+    ``src/packet_a/proposed_order.md`` and
+    ``src/packet_b/proposed_order.md``) get distinct cache files
+    instead of silently overwriting one another. A source directly in
+    ``src/`` caches at the top of ``decl_cover_sheets/``; a source with
+    no ``src`` ancestor falls back to the bare stem, as before.
+    """
+    case_dir = find_case_dir(input_md)
+    base = case_dir / "assets" / "decl_cover_sheets"
+    rel_dir = _src_relative_dir(input_md)
+    cache_dir = base if rel_dir is None or rel_dir == Path(".") else base / rel_dir
+    return cache_dir / f"{input_md.stem}.{form_id}.pdf"
+
+
 def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
     """Return a cached filled form for a pleading source, refreshing if stale."""
     desc = load_descriptor(form_id)
-    case_dir = find_case_dir(input_md)
-    cache = case_dir / "assets" / "decl_cover_sheets" / f"{input_md.stem}.{form_id}.pdf"
+    cache = cover_sheet_cache_path(form_id, input_md)
     blank = blank_path(desc)
     descriptor_file = _registry_path(form_id) or (REGISTRY_DIR / f"{form_id}.yaml")
     fresh = (

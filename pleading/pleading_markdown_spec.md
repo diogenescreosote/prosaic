@@ -319,7 +319,12 @@ YAML front matter. At build time, the generator:
 1. Fills a blank MC-030 from `pleading_gen/forms/mc030.pdf` using the
    pleading metadata.
 2. Caches the filled MC-030 at
-   `<case_dir>/assets/decl_cover_sheets/<source_stem>.mc030.pdf`.
+   `<case_dir>/assets/decl_cover_sheets/<source_dir>/<source_stem>.mc030.pdf`,
+   where `<source_dir>` is the source's path relative to the case's
+   `src/`, mirrored (empty for a source directly in `src/`) so that two
+   sources with the same filename in different `src/` subfolders don't
+   collide — see **Declaration and other cover sheets** below for the
+   full rule.
 3. Prepends the cached MC-030 as page 1 of the final output PDF.
 
 The cache is regenerated automatically whenever the source `.md` or
@@ -595,9 +600,23 @@ matter, and at build time the generator:
 2. Fills the blank form from `forms/<form_id>.pdf` using the pleading
    metadata and the form's registry descriptor.
 3. Caches the filled form at
-   `<case_dir>/assets/decl_cover_sheets/<source_stem>.<form_id>.pdf`,
+   `<case_dir>/assets/decl_cover_sheets/<source_dir>/<source_stem>.<form_id>.pdf`,
    regenerated whenever the source `.md`, the bundled blank form, or
-   the descriptor is newer than the cache.
+   the descriptor is newer than the cache. `<source_dir>` is the
+   source's path relative to the case's `src/`, mirrored under
+   `decl_cover_sheets/` (a source directly in `src/` caches at the top
+   of `decl_cover_sheets/`, with no extra subfolder). This keys the
+   cache by the source's full path rather than its bare filename, so
+   two same-named sources in different `src/` subfolders (e.g.
+   `src/packet_a/proposed_order.md` and
+   `src/packet_b/proposed_order.md`) cache to distinct files instead of
+   overwriting each other. A source that is not under any `src/` at
+   all (uncommon — a scratch file outside the normal tree) falls back
+   to the bare-stem path at the top of `decl_cover_sheets/`, as before.
+   Moving a source between `src/` subfolders, or renaming a containing
+   folder, leaves the old cache file behind at its old path; it is
+   inert (nothing reads it) and safe to delete, and `sc clean` does not
+   currently sweep `assets/` for it.
 4. Prepends the cached form as the front of the final output PDF.
 
 **Attached page counts.** Some cover forms state the page count of the

@@ -254,6 +254,66 @@ def test_unknown_data_key_is_reported(tmp_path):
     assert any("unknown field" in w for w in res.warnings)
 
 
+class TestCoverSheetCachePath:
+    """Two sources with the same bare filename in different src/
+    subfolders must not collide on the same cover-sheet cache file
+    (they used to, keyed only by ``<source_stem>.<form_id>.pdf``)."""
+
+    def _make_source(self, case_dir, *parts):
+        src = case_dir / "src"
+        for p in parts[:-1]:
+            src = src / p
+        src.mkdir(parents=True, exist_ok=True)
+        md = src / parts[-1]
+        md.write_text("dummy source\n")
+        return md
+
+    def test_same_stem_different_subfolders_cache_distinctly(self, tmp_path):
+        case_dir = tmp_path / "smith_v_roe"
+        a = self._make_source(case_dir, "packet_a", "proposed_order.md")
+        b = self._make_source(case_dir, "packet_b", "proposed_order.md")
+
+        cache_a = form_fill.cover_sheet_cache_path("mc030", a)
+        cache_b = form_fill.cover_sheet_cache_path("mc030", b)
+
+        assert cache_a != cache_b
+        assert cache_a.name == cache_b.name == "proposed_order.mc030.pdf"
+        assert cache_a.parent.name == "packet_a"
+        assert cache_b.parent.name == "packet_b"
+
+        assets = case_dir / "assets" / "decl_cover_sheets"
+        assert cache_a == assets / "packet_a" / "proposed_order.mc030.pdf"
+        assert cache_b == assets / "packet_b" / "proposed_order.mc030.pdf"
+
+    def test_source_directly_in_src_has_no_extra_subfolder(self, tmp_path):
+        case_dir = tmp_path / "smith_v_roe"
+        top = self._make_source(case_dir, "complaint.md")
+        cache = form_fill.cover_sheet_cache_path("mc030", top)
+        assert cache == case_dir / "assets" / "decl_cover_sheets" / "complaint.mc030.pdf"
+
+    def test_source_outside_src_falls_back_to_bare_stem(self, tmp_path):
+        scratch_dir = tmp_path / "scratch"
+        scratch_dir.mkdir()
+        outside = scratch_dir / "notes.md"
+        outside.write_text("dummy\n")
+        cache = form_fill.cover_sheet_cache_path("mc030", outside)
+        # No `src/` ancestor: falls back to case_dir = parent.parent (as
+        # find_case_dir always did), with no mirrored subfolder.
+        assert cache.name == "notes.mc030.pdf"
+        assert cache.parent.name == "decl_cover_sheets"
+
+    def test_ensure_cached_writes_distinct_files_for_same_stem(self, tmp_path):
+        case_dir = tmp_path / "smith_v_roe"
+        a = self._make_source(case_dir, "packet_a", "proposed_order.md")
+        b = self._make_source(case_dir, "packet_b", "proposed_order.md")
+
+        out_a = form_fill.ensure_cached("mc030", dict(FIXTURE_META), a)
+        out_b = form_fill.ensure_cached("mc030", dict(FIXTURE_META), b)
+
+        assert out_a != out_b
+        assert out_a.exists() and out_b.exists()
+
+
 @pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
 def test_civ110_dismissal_and_pleading_type_checkboxes_render_checked(tmp_path):
     """Item 1.a/1.b are fillable when a human names the choice
