@@ -59,6 +59,7 @@ project accretes decisions instead of middleware.
 - [0036](adr/0036-attest-artifacts-not-builds.md) Attest artifacts byte-for-byte; no build reproducibility
 - [0037](adr/0037-no-acroform-filling.md) AcroForm filling prohibited; overlay is the only form technology
 - [0038](adr/0038-cli-first-mode-aware-builds.md) CLI-first builds: `sc` is the only build interface; freshness is mode-aware
+- [0039](adr/0039-routine-operations-are-harness-commands.md) Routine operations are harness commands run on small models; sessions start from `sc brief`
 
 Also:
 
