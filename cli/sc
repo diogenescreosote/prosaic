@@ -108,6 +108,54 @@ def cmd_paths(args: argparse.Namespace) -> int:
     return 0
 
 
+#: Placeholder in matter-template files that must resolve to the prosaic
+#: checkout at scaffold time --- the harness bundle (.claude/) runs shell
+#: commands and needs a real path, unlike the prose `<prosaic>` in AGENTS.md.
+PROSAIC_PLACEHOLDER = "@@PROSAIC@@"
+
+
+def _copy_template_file(src: Path, target: Path) -> None:
+    """Copy a template file, resolving the checkout placeholder in text."""
+    try:
+        text = src.read_text(encoding="utf-8")
+    except UnicodeDecodeError:
+        shutil.copy(src, target)
+        return
+    if PROSAIC_PLACEHOLDER in text:
+        target.write_text(text.replace(PROSAIC_PLACEHOLDER, str(ROOT)), encoding="utf-8")
+        shutil.copymode(src, target)
+    else:
+        shutil.copy(src, target)
+
+
+def cmd_harness(args: argparse.Namespace) -> int:
+    """Install (or refresh) the coding-agent harness bundle in a matter.
+
+    The bundle is templates/matter/.claude: a SessionStart hook that
+    prints `sc brief`, and the routine slash commands (build, build-doc,
+    open, clean, status, commit, find). Each command runs the CLI and
+    relays; none deliberates (ADR-0039). Existing files are overwritten,
+    because the bundle is prosaic's, not the matter's: a matter
+    customizes through .claude/settings.local.json and its own skills
+    under other names. A matter's own settings.local.json is never
+    touched.
+    """
+    dest = _matter_root(Path(args.matter_dir))
+    src = ROOT / "templates" / "matter" / ".claude"
+    written = 0
+    for f in src.rglob("*"):
+        if f.is_dir():
+            continue
+        target = dest / ".claude" / f.relative_to(src)
+        target.parent.mkdir(parents=True, exist_ok=True)
+        _copy_template_file(f, target)
+        written += 1
+        print(f"  wrote {target.relative_to(dest)}")
+    print(f"Harness bundle installed in {dest} ({written} files). "
+          "Start a new session there to load the brief.")
+    return 0
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     dest = Path(args.matter_dir).expanduser().resolve()
     dest.mkdir(parents=True, exist_ok=True)
@@ -126,7 +174,7 @@ def cmd_init(args: argparse.Namespace) -> int:
             print(f"  keep existing {target.relative_to(dest)}")
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
-        shutil.copy(f, target)
+        _copy_template_file(f, target)
         print(f"  wrote {target.relative_to(dest)}")
     if args.git and not (dest / ".git").exists():
         subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
@@ -560,6 +608,318 @@ def cmd_hooks(args: argparse.Namespace) -> int:
     return 0
 
 
+
+# ---------------------------------------------------------------------------
+# Session brief and open: the deterministic paths behind the routine
+# harness commands (ADR-0039). Neither asks a model anything.
+# ---------------------------------------------------------------------------
+
+def _matter_root(start: Path) -> Path:
+    """Walk up from `start` to the directory holding matter.yaml."""
+    here = start.expanduser().resolve()
+    for cand in (here, *here.parents):
+        if (cand / "matter.yaml").is_file():
+            return cand
+    raise SystemExit(f"no matter.yaml at or above {start}")
+
+
+def _git_lines(matter: Path, *argv: str) -> list[str]:
+    if not (matter / ".git").exists():
+        return []
+    proc = subprocess.run(["git", *argv], cwd=matter, capture_output=True, text=True)
+    return [ln for ln in proc.stdout.splitlines() if ln.strip()] if proc.returncode == 0 else []
+
+
+def _list_items(path: Path, limit: int) -> list[str]:
+    """First `limit` list items of a Markdown live list (TODO/QUESTIONS)."""
+    if not path.is_file():
+        return []
+    import re
+    items: list[str] = []
+    for ln in path.read_text(errors="replace").splitlines():
+        st = ln.strip()
+        if re.match(r"^(?:[-*]|\d+[.)])\s+\S", st):
+            items.append(st)
+            if len(items) >= limit:
+                break
+    return items
+
+
+def _count_items(path: Path) -> int:
+    return len(_list_items(path, 10_000))
+
+
+def _knowledge_dates(path: Path, limit: int) -> list[str]:
+    """Lines under any heading that reads like a calendar: hearings, key
+    dates, deadlines. Heading match is by name, not by position, so a
+    matter whose KNOWLEDGE has drifted still yields something."""
+    if not path.is_file():
+        return []
+    import re
+    out: list[str] = []
+    grab = False
+    for ln in path.read_text(errors="replace").splitlines():
+        if ln.startswith("#"):
+            grab = bool(re.search(r"hearing|key dates|deadline|calendar|upcoming", ln, re.I))
+            continue
+        if grab and ln.strip():
+            out.append(ln.rstrip())
+            if len(out) >= limit:
+                break
+    return out
+
+
+def _age(ts: float) -> str:
+    import time
+    delta = max(0, time.time() - ts)
+    if delta < 3600:
+        return f"{int(delta // 60)} min ago"
+    if delta < 86400:
+        return f"{delta / 3600:.0f} h ago"
+    return f"{delta / 86400:.1f} d ago"
+
+
+def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> str:
+    """A matter brief small enough to load into every session.
+
+    The knowledge file of a live matter is tens of thousands of tokens
+    and grows; loading it whole into every session is what made every
+    call slow. The brief is the two-minute orientation instead: what
+    the case is, what is next, what is open, what changed, where the
+    routine commands are. Everything else is read on demand.
+    """
+    import datetime as dt
+    import yaml
+    cfg = yaml.safe_load((matter / "matter.yaml").read_text()) or {}
+    case = cfg.get("case") or {}
+    lines: list[str] = []
+    name = case.get("name") or matter.name
+    head = f"# Matter brief: {name}"
+    bits = [b for b in (case.get("number"), case.get("court")) if b]
+    if bits:
+        head += " (" + ", ".join(str(b) for b in bits) + ")"
+    lines.append(head)
+    meta = [f"generated {dt.date.today().isoformat()}"]
+    if case.get("role"):
+        meta.append(f"our role: {case['role']}")
+    if case.get("type"):
+        meta.append(f"type: {case['type']}")
+    lines.append("- " + "; ".join(meta))
+    lines.append(f"- matter dir: `{matter}`; prosaic: `{ROOT}`")
+
+    env_file = matter / "envelopes.yaml"
+    if env_file.is_file():
+        envs = (yaml.safe_load(env_file.read_text()) or {}).get("envelopes") or {}
+        if envs:
+            lines.append("")
+            lines.append(f"## Envelopes ({len(envs)})")
+            lines.append(", ".join(f"`{e}`" for e in envs))
+
+    dates = _knowledge_dates(matter / "KNOWLEDGE.md", dates_limit)
+    if dates:
+        lines.append("")
+        lines.append("## Dates and hearings (from KNOWLEDGE.md)")
+        lines.extend(dates)
+
+    todo = _list_items(matter / "TODO.md", todo_limit)
+    if todo:
+        total = _count_items(matter / "TODO.md")
+        lines.append("")
+        lines.append(f"## Open TODO (top {len(todo)} of {total})")
+        lines.extend(t[:160] for t in todo)
+    q = _count_items(matter / "QUESTIONS.md")
+    if q:
+        lines.append(f"- QUESTIONS.md holds {q} open item(s)")
+
+    docket = _git_lines(matter, "log", "-5", "--format=%ad %s", "--date=short",
+                        "-E", "--grep", r"^docket")
+    if docket:
+        lines.append("")
+        lines.append("## Recent docket events (git)")
+        lines.extend(f"- {d[:140]}" for d in docket)
+    last = _git_lines(matter, "log", "-3", "--format=%ad %s", "--date=short")
+    if last:
+        lines.append("")
+        lines.append("## Last commits")
+        lines.extend(f"- {d[:140]}" for d in last)
+
+    lines.append("")
+    lines.append("## State")
+    guard = matter / ".state" / "sync_last_success"
+    if guard.is_file():
+        lines.append(f"- last successful sync: {_age(guard.stat().st_mtime)}")
+    conns = list((cfg.get("connectors") or {}).keys())
+    if conns:
+        lines.append(f"- connectors: {', '.join(conns)}")
+    inbox = matter / "inbox"
+    if inbox.is_dir():
+        n_inbox = sum(1 for f in inbox.rglob("*") if f.is_file() and not f.name.startswith("."))
+        lines.append(f"- inbox/: {n_inbox} untriaged file(s)")
+    dirty = _git_lines(matter, "status", "--short")
+    if (matter / ".git").exists():
+        lines.append(f"- working tree: {len(dirty)} changed path(s)")
+    know = matter / "KNOWLEDGE.md"
+    if know.is_file():
+        n = sum(1 for _ in know.open(errors="replace"))
+        lines.append(f"- KNOWLEDGE.md: {n} lines; read the section you need, not the file")
+
+    lines.append("")
+    lines.append("## Routine commands (deterministic; no deliberation needed)")
+    lines.append("`/build <envelope>` `/build-doc <src>` `/open <envelope>` `/clean` "
+                 "`/status` `/find <term>` `/commit <type(scope): subject>` --- each runs the CLI and "
+                 "reports; a warning that needs a source edit is a separate, visible decision.")
+    return "\n".join(lines) + "\n"
+
+
+# ---------------------------------------------------------------------------
+# find: the deterministic first tier of record search
+# ---------------------------------------------------------------------------
+
+#: Text the record can be grepped through. PDFs are searched through
+#: their text sidecars; a PDF with no sidecar is reported, never skipped
+#: silently --- a document that was not searched is not a document that
+#: says nothing.
+FIND_GLOBS = ("*.md", "*.txt", "*.yaml", "*.yml", "*.json", "*.csv", "*.srt", "*.eml", "*.html")
+FIND_EXCLUDE_DIRS = ("out", ".state", ".git", ".flow", "node_modules", ".claude")
+
+
+def _pdf_has_text_sidecar(pdf: Path) -> bool:
+    stem = pdf.with_suffix("")
+    return (pdf.with_suffix(".txt").exists()
+            or Path(f"{stem}_ocr.pdf").exists()
+            or Path(f"{stem}_ocr.txt").exists()
+            or pdf.name.endswith("_ocr.pdf"))
+
+
+def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
+                   fixed: bool = False) -> dict:
+    """ripgrep every term over the matter's text; list PDFs that have no
+    text sidecar as UNSEARCHED. Returns a structured report."""
+    rg = shutil.which("rg")
+    report: dict = {"terms": {}, "unsearched": [], "searched_files": 0, "tool": rg or "grep"}
+    excludes: list[str] = []
+    for d in FIND_EXCLUDE_DIRS:
+        excludes += ["--glob", f"!{d}/**"]
+    for term in terms:
+        hits: dict[str, list[str]] = {}
+        if rg:
+            # rg applies globs in order and the last match wins, so the
+            # directory exclusions must come after the type globs.
+            cmd = [rg, "-n", "-i", "--no-heading", "--color", "never",
+                   "--max-count", str(per_file)]
+            for g in FIND_GLOBS:
+                cmd += ["--glob", g]
+            cmd += excludes
+            cmd += ["-F"] if fixed else []
+            cmd += ["-e", term, "."]
+            proc = subprocess.run(cmd, cwd=matter, capture_output=True, text=True, errors="replace")
+            out = proc.stdout
+        else:
+            cmd = ["grep", "-r", "-n", "-i", "-I", *(["-F"] if fixed else []),
+                   *[f"--exclude-dir={d}" for d in FIND_EXCLUDE_DIRS], "-e", term, "."]
+            proc = subprocess.run(cmd, cwd=matter, capture_output=True, text=True, errors="replace")
+            out = proc.stdout
+        for ln in out.splitlines():
+            path, _, rest = ln.partition(":")
+            path = path[2:] if path.startswith("./") else path
+            hits.setdefault(path, []).append(rest[:300])
+        report["terms"][term] = hits
+    # what could not be searched
+    n_text = 0
+    for f in matter.rglob("*"):
+        if not f.is_file() or any(part in FIND_EXCLUDE_DIRS for part in f.relative_to(matter).parts):
+            continue
+        if f.suffix.lower() == ".pdf":
+            if not f.name.endswith("_ocr.pdf") and not _pdf_has_text_sidecar(f):
+                report["unsearched"].append(str(f.relative_to(matter)))
+        elif any(f.match(g) for g in FIND_GLOBS):
+            n_text += 1
+    report["searched_files"] = n_text
+    report["unsearched"].sort()
+    return report
+
+
+def format_find(report: dict, show_unsearched: int = 40) -> str:
+    lines: list[str] = []
+    for term, hits in report["terms"].items():
+        total = sum(len(v) for v in hits.values())
+        lines.append(f"## {term!r}: {total} hit line(s) in {len(hits)} file(s)")
+        for path in sorted(hits):
+            lines.append(f"- {path}")
+            for h in hits[path]:
+                lines.append(f"    {h}")
+        lines.append("")
+    un = report["unsearched"]
+    lines.append(f"Searched {report['searched_files']} text file(s) with {report['tool']}. "
+                 f"UNSEARCHED: {len(un)} PDF(s) with no text sidecar"
+                 + (":" if un else "."))
+    for u in un[:show_unsearched]:
+        lines.append(f"  - {u}")
+    if len(un) > show_unsearched:
+        lines.append(f"  ... and {len(un) - show_unsearched} more")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_find(args: argparse.Namespace) -> int:
+    matter = _matter_root(Path(args.matter_dir))
+    report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed)
+    sys.stdout.write(format_find(report))
+    return 0 if any(report["terms"].values()) else 1
+
+
+def cmd_brief(args: argparse.Namespace) -> int:
+    matter = _matter_root(Path(args.matter_dir))
+    sys.stdout.write(render_brief(matter, todo_limit=args.todo, dates_limit=args.dates))
+    return 0
+
+
+def _opener() -> list[str]:
+    if _platform().startswith(("darwin", "Darwin")):
+        return ["open"]
+    return ["xdg-open"]
+
+
+def outputs_for(matter: Path, target: str, variant: str | None = None) -> list[Path]:
+    """PDFs to open for an envelope name (or a path). Newest first."""
+    cand = Path(target).expanduser()
+    if cand.is_file():
+        return [cand.resolve()]
+    if cand.is_dir():
+        base = cand.resolve()
+    else:
+        base = matter / "out" / target
+        if not base.is_dir():
+            raise SystemExit(f"sc open: no out/{target}/ --- build it first (`sc build {target}`)")
+    if variant:
+        base = base / variant
+        if not base.is_dir():
+            raise SystemExit(f"sc open: no variant directory {base}")
+    pdfs = [p for p in base.rglob("*.pdf") if not p.name.startswith(".")]
+    if variant is None and any(p.parent != base for p in pdfs):
+        # Variant subdirectories present: open the newest variant's set,
+        # plus anything at the envelope root, rather than every variant.
+        by_dir: dict[Path, float] = {}
+        for p in pdfs:
+            by_dir[p.parent] = max(by_dir.get(p.parent, 0.0), p.stat().st_mtime)
+        newest = max(by_dir, key=by_dir.get)
+        pdfs = [p for p in pdfs if p.parent in (base, newest)]
+    return sorted(pdfs, key=lambda p: p.stat().st_mtime, reverse=True)
+
+
+def cmd_open(args: argparse.Namespace) -> int:
+    matter = _matter_root(Path(args.matter_dir))
+    paths: list[Path] = []
+    for t in args.targets:
+        paths += outputs_for(matter, t, args.variant)
+    if not paths:
+        print("sc open: nothing to open", file=sys.stderr)
+        return 1
+    for p in paths:
+        print(p)
+    if args.print_only:
+        return 0
+    return subprocess.run([*_opener(), *map(str, paths)]).returncode
+
 #: Git remote a matter backs itself up to. Never "origin": a matter has
 #: no upstream it was cloned from, and reusing the name invites the
 #: muscle memory of `git push` reaching somewhere it should not.
@@ -808,6 +1168,31 @@ def main() -> int:
     sp = sub.add_parser("paths", help="print an application directory")
     sp.add_argument("kind", choices=PATH_KINDS)
     sp.set_defaults(func=cmd_paths)
+
+    sp = sub.add_parser("harness", help="install the coding-agent harness bundle (.claude/) in a matter")
+    sp.add_argument("action", choices=("install",))
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.set_defaults(func=cmd_harness)
+
+    sp = sub.add_parser("find", help="grep the record for terms; list PDFs that could not be searched")
+    sp.add_argument("terms", nargs="+")
+    sp.add_argument("--matter-dir", default=".", dest="matter_dir")
+    sp.add_argument("--per-file", type=int, default=12, help="max hit lines shown per file")
+    sp.add_argument("-F", "--fixed", action="store_true", help="literal terms, not regex")
+    sp.set_defaults(func=cmd_find)
+
+    sp = sub.add_parser("brief", help="print a short matter brief for a session start")
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--todo", type=int, default=8, help="TODO items to show")
+    sp.add_argument("--dates", type=int, default=10, help="calendar lines to show")
+    sp.set_defaults(func=cmd_brief)
+
+    sp = sub.add_parser("open", help="open an envelope's built PDFs (or paths) in the viewer")
+    sp.add_argument("targets", nargs="+", help="envelope name(s) or file/dir path(s)")
+    sp.add_argument("--variant", help="open this variant subdirectory only")
+    sp.add_argument("--matter-dir", default=".", dest="matter_dir")
+    sp.add_argument("--print-only", action="store_true", help="list paths, do not launch a viewer")
+    sp.set_defaults(func=cmd_open)
 
     sp = sub.add_parser("clean", help="report stale files in out/ (--apply removes)")
     sp.add_argument("matter_dir", nargs="?", default=".")
