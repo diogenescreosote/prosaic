@@ -13,6 +13,42 @@ they reviewed.
 | `/oppo <env>` | opposing counsel | Fable | sources, the record, `knowledge/topics/opposing-counsel-profile.md` |
 | `/preflight <env>` | collator | Sonnet | the four current reports |
 
+## `/judgereview` sees only what the court sees
+
+The bench persona reads this filing, its exhibits and the filed record
+under `pleadings/`, and nothing else: no knowledge notes, memos, TODO,
+assets or discovery. `sc find --scope pleadings <term>` restricts a
+search to the filed record for the same reason.
+
+## `/secondopinion`: a different mind, then integration
+
+`/secondopinion <envelope> -- <one paragraph on what the draft must
+achieve>` sends the draft and the brief to the `second-opinion` role,
+normally another vendor's model, through `sc review second-opinion`,
+which writes the raw numbered suggestions as a report. The drafting
+model then weighs every suggestion against the sources, the record and
+the vault and writes an integration report in three lists: accepted
+(with the exact before/after edit and its source), rejected (with the
+reason), and needs your input (as a question). It applies nothing until
+you say apply.
+
+The role is configured in `matter.yaml`:
+
+```yaml
+agent:
+  roles:
+    second-opinion:
+      cmd: <prosaic>/sync/second_opinion_openai.sh   # any stdin-to-stdout command works
+      credential: prosaic.openai                     # Keychain item, exported as OPENAI_API_KEY
+      model: gpt-5                                   # exported as AGENT_RUN_MODEL
+```
+
+The bundled script posts to any OpenAI-compatible endpoint
+(`OPENAI_BASE_URL`), local servers included. The key lives in Keychain
+(`security add-generic-password -a "$USER" -s prosaic.openai -w`), never
+in a file. Whether a given draft may leave the machine is the matter's
+decision.
+
 ## Plumbing
 
 ```

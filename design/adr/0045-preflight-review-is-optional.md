@@ -51,7 +51,20 @@ cold.
    custom command when it wants a different mind (the owner's decision
    4 allows any vendor for his own matters). Personas do not read each
    other's reports; only the collator does.
-7. **The opposing-counsel profile is knowledge.** A topic note,
+7. **The bench sees only what the court sees.** `/judgereview` reads
+   the filing, its exhibits and the filed record under `pleadings/`,
+   and nothing else; `sc find --scope` restricts a search to named
+   directories for the same reason. A finding that rests on the
+   drafter's notes is not one a judge could make.
+8. **A second opinion from a different mind is a fifth command.**
+   `/secondopinion` sends the draft and a one-paragraph brief to the
+   `second-opinion` role, normally another vendor's model reached
+   through a role-level command with a Keychain-resolved credential,
+   and the drafting model then weighs every suggestion against the
+   sources and the record into accepted, rejected and needs-the-human,
+   applying nothing until told. The other model sees the draft and the
+   brief only; the integration stays with the model that has the file.
+9. **The opposing-counsel profile is knowledge.** A topic note,
    `knowledge/topics/opposing-counsel-profile.md`, records how opposing
    counsel argues, what they move to strike, what they call misleading,
    with cites to their filings; the nightly refinement proposes updates

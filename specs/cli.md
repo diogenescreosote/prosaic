@@ -240,8 +240,10 @@ agent CLI is named (ADR-0020). Its promises:
   authority-cache status of each; `report --check NAME` creates the
   report file with a header carrying the combined and per-file source
   hashes; `status` marks reports whose sources changed as stale and
-  `--tidy` moves them into `superseded/`. Nothing here gates a build or a
-  signature. *(tested: tests/test_review)*
+  `--tidy` moves them into `superseded/`; `second-opinion --brief` runs the
+  `second-opinion` role over the draft and writes its suggestions as a
+  report. Nothing here gates a build or a signature. *(tested:
+  tests/test_review)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without
