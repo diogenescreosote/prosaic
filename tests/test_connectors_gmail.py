@@ -883,7 +883,9 @@ def test_capture_passes_a_timeout_and_retries_a_transient_failure() -> None:
           messages: { get: async (p, o) => {
             opts.push(o);
             if (failures-- > 0) {
-              const e = new Error('socket hang up'); e.code = 'ECONNRESET'; throw e;
+              // as the OAuth layer reports a DNS outage: no code, message only
+              throw new Error('request to https://oauth2.example.com/token failed, '
+                + 'reason: getaddrinfo ENOTFOUND oauth2.example.com');
             }
             return { data: { id: 'm1', raw: raw.toString('base64url') } };
           } },

@@ -131,10 +131,17 @@ async function apiCall(fn, label) {
     } catch (err) {
       lastErr = err;
       const status = err && err.code;
+      const text = String((err && err.message) || '');
       const transient =
         !status ||
         status === 'ETIMEDOUT' ||
         status === 'ECONNRESET' ||
+        status === 'ECONNREFUSED' ||
+        status === 'ENOTFOUND' ||
+        status === 'EAI_AGAIN' ||
+        //: the OAuth refresh runs inside the client and surfaces a DNS
+        //: or socket failure as a plain FetchError; treat it the same.
+        /ENOTFOUND|EAI_AGAIN|ECONNRESET|ETIMEDOUT|socket hang up/.test(text) ||
         status === 429 ||
         (Number(status) >= 500 && Number(status) < 600);
       if (!transient || attempt === API_ATTEMPTS) break;
