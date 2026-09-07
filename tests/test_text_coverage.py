@@ -220,3 +220,14 @@ def test_symlinked_document_gets_its_own_derived_files(matter: Path, monkeypatch
     assert st["assets/orig.pdf"] == "searchable" and st["processed_files/orig.pdf"] == "searchable"
     assert (matter / "derived" / "text" / "assets" / "orig.pdf.txt").exists()
     assert (matter / "derived" / "text" / "processed_files" / "orig.pdf.txt").exists()
+
+
+def test_migrate_removes_a_redundant_tool_legacy_file(matter: Path, monkeypatch):
+    monkeypatch.setattr(tc, "_tool", lambda name: None)
+    tc.ensure(matter, jobs=1)                                     # derived text exists
+    legacy = matter / "assets" / "letter.txt"
+    tc.write_pdf_sidecar(matter, matter / "assets" / "letter.pdf", matter / "assets" / "letter.pdf", legacy)
+    moves = tc.migrate(matter)
+    assert any(m.startswith("rm assets/letter.txt (redundant") for m in moves), moves
+    assert not legacy.exists()
+    assert (matter / "derived" / "text" / "assets" / "letter.pdf.txt").exists()

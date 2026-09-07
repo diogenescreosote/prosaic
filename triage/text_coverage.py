@@ -585,7 +585,16 @@ def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = Fals
             except OSError:
                 pass
             if target_txt.exists():
-                moves.append(f"skip {_rel(matter, legacy_txt)}: {_rel(matter, target_txt)} exists")
+                # Both are the tool's; the derived one is authoritative, so
+                # the legacy copy is redundant and goes (git rm if tracked).
+                how = "git rm" if _tracked(matter, legacy_txt) else "rm"
+                if not dry_run:
+                    if how == "git rm":
+                        subprocess.run(["git", "rm", "-q", "--force", str(_rel(matter, legacy_txt))],
+                                       cwd=matter, check=True, capture_output=True)
+                    else:
+                        legacy_txt.unlink()
+                moves.append(f"{how} {_rel(matter, legacy_txt)} (redundant; {_rel(matter, target_txt)} exists)")
             else:
                 moves.append(_move(matter, legacy_txt, target_txt, dry_run))
         if doc.suffix.lower() in PDF_EXT:
