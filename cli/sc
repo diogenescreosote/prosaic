@@ -274,7 +274,7 @@ def cmd_ocr(args: argparse.Namespace) -> int:
 #: Directories whose contents are regenerable or disposable by age: rendered
 #: output, flow run directories, and search checklists. Never assets/,
 #: pleadings/, discovery/, processed_files/ or derived/text/.
-AGE_CLEAN_DIRS = ("out", ".flow", "derived/find", "derived/refine", "derived/standup")
+AGE_CLEAN_DIRS = ("out", ".flow", "derived/find", "derived/refine", "derived/standup", "derived/review")
 
 
 def _clean_older_than(matter: Path, days: int, apply: bool) -> int:
@@ -819,6 +819,252 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     else:
         print("Nothing left that a tool can do; the matter is on current conventions.")
     return 0
+
+
+# ---------------------------------------------------------------------------
+# review: optional preflight checks, never a gate (ADR-0045)
+# ---------------------------------------------------------------------------
+
+import hashlib
+import re as _re
+
+#: Citation forms the extractor recognizes. Deterministic and deliberately
+#: over-inclusive: a false positive costs one row a reader dismisses; a
+#: missed cite is the failure the check exists to prevent.
+CITE_PATTERNS = [
+    ("statute", _re.compile(r"\b((?:Fam\.|Civ\.|Evid\.|Pen\.|Prob\.|Gov\.|Bus\. & Prof\.|Health & Saf\.|Welf\. & Inst\.|Ins\.|Lab\.|Veh\.)\s*Code,?\s*(?:§§?|sections?|secs?\.)\s*[\d.]+(?:\([a-z0-9]+\))*(?:\s*(?:-|--|–|—|through|to|and|,)\s*[\d.]+(?:\([a-z0-9]+\))*)*)")),
+    ("statute", _re.compile(r"\b(Code\s+(?:of\s+)?Civ\.\s*Proc\.,?\s*(?:§§?|sections?|secs?\.)\s*[\d.]+(?:\([a-z0-9]+\))*(?:\s*(?:-|--|–|—|through|to|and|,)\s*[\d.]+(?:\([a-z0-9]+\))*)*)")),
+    ("statute", _re.compile(r"\b((?:CCP|Fam\s*C|Evid\s*C|Civ\s*C)\s*(?:§§?)\s*[\d.]+(?:\([a-z0-9]+\))*)")),
+    ("rule", _re.compile(r"\b((?:Cal\.\s*Rules\s+of\s+Court|CRC|Cal\.\s*R\.\s*Ct\.),?\s*(?:rules?|r\.)?\s*\d+\.\d+(?:\([a-z0-9]+\))*(?:\s*(?:-|--|–|—|through|to|and|,)\s*\d+\.\d+(?:\([a-z0-9]+\))*)*)", _re.I)),
+    ("rule", _re.compile(r"\b((?:Local\s+Rules?|LR|Sonoma\s+County\s+Local\s+Rules?),?\s*(?:rule\s*)?\d+(?:\.\d+)*[A-Z]?(?:\([a-z0-9]+\))*)")),
+    ("federal", _re.compile(r"\b(\d+\s+(?:U\.S\.C\.|C\.F\.R\.)\s*(?:§§?|sections?)\s*[\d.]+[a-z]?(?:-\d+[a-z]?)?(?:\([a-z0-9]+\))*(?:\s*(?:--|–|—|through|to|and|,)\s*[\d.]+[a-z]?(?:-\d+)?(?:\([a-z0-9]+\))*)*)")),
+    ("case", _re.compile(r"((?:In\s+re\s+(?:Marriage\s+of\s+)?)?[A-Z][A-Za-z.'&\- ]{1,60}?\s+v\.\s+[A-Z][A-Za-z.'&\- ]{1,60}?\s*\((?:19|20)\d{2}\)\s*\d+\s+(?:Cal\.\s*(?:App\.\s*)?(?:\dth|\dd|Supp\.)?|Cal\.\s*Rptr\.\s*\dd|U\.S\.|S\.\s*Ct\.|F\.\s*(?:\dd|Supp\.\s*\dd)|L\.\s*Ed\.\s*\dd)\s*\d+(?:,\s*\d+(?:-\d+)?)?)")),
+    ("case", _re.compile(r"((?:In\s+re\s+(?:Marriage\s+of\s+)?)[A-Z][A-Za-z.'&\- ]{1,60}?\s*\((?:19|20)\d{2}\)\s*\d+\s+Cal\.\s*(?:App\.\s*)?(?:\dth|\dd)\s*\d+(?:,\s*\d+)?)")),
+]
+
+
+def _cite_key(kind: str, text: str) -> str:
+    t = _re.sub(r"\s+", " ", text.strip())
+    t = t.replace("§§", "§").replace("sections", "§").replace("section", "§").replace("secs.", "§").replace("sec.", "§")
+    return f"{kind}:{t.lower()}"
+
+
+def envelope_sources(matter: Path, target: str) -> list[Path]:
+    """Source files for an envelope name, or a single source path."""
+    import yaml
+    cand = (matter / target)
+    if cand.is_file():
+        return [cand]
+    env_file = matter / "envelopes.yaml"
+    envs = (yaml.safe_load(env_file.read_text()) or {}).get("envelopes") or {} if env_file.is_file() else {}
+    spec = envs.get(target)
+    if spec is None:
+        raise SystemExit(f"sc review: {target!r} is neither an envelope in envelopes.yaml nor a source file")
+    out: list[Path] = []
+    for item in spec.get("sources") or []:
+        f = item.get("file") if isinstance(item, dict) else item
+        if f:
+            out.append(matter / "src" / f)
+    return out
+
+
+def source_hash(paths: list[Path]) -> tuple[str, dict[str, str]]:
+    """Combined and per-file sha256 of the sources under review."""
+    per: dict[str, str] = {}
+    h = hashlib.sha256()
+    for p in sorted(paths):
+        d = hashlib.sha256(p.read_bytes()).hexdigest() if p.exists() else "missing"
+        per[str(p)] = d
+        h.update(f"{p}:{d}\n".encode())
+    return h.hexdigest(), per
+
+
+def extract_cites(paths: list[Path], matter: Path) -> list[dict]:
+    rows: list[dict] = []
+    seen: set[tuple[str, str, int]] = set()
+    for p in paths:
+        if not p.exists():
+            continue
+        for lno, line in enumerate(p.read_text(encoding="utf-8", errors="replace").splitlines(), 1):
+            if line.lstrip().startswith(("#", "<!--")):
+                pass
+            for kind, rx in CITE_PATTERNS:
+                for m in rx.finditer(line):
+                    text = m.group(1).strip().rstrip(".,;")
+                    key = (kind, _cite_key(kind, text), lno)
+                    if key in seen:
+                        continue
+                    seen.add(key)
+                    rows.append({"kind": kind, "cite": text, "file": str(p.relative_to(matter)), "line": lno,
+                                 "key": _cite_key(kind, text)})
+    return rows
+
+
+def load_authorities(matter: Path) -> dict:
+    """knowledge/authorities.yaml: cites a human has verified, with notes.
+    Keys are normalized cite strings; a value carries status (verified |
+    bad | superseded), a proposition, a checked date and a source."""
+    import yaml
+    p = matter / "knowledge" / "authorities.yaml"
+    if not p.is_file():
+        return {}
+    data = yaml.safe_load(p.read_text()) or {}
+    out = {}
+    for k, v in (data.get("authorities") or {}).items():
+        out[_re.sub(r"\s+", " ", str(k)).strip().lower()] = v or {}
+    return out
+
+
+def review_dir(matter: Path, target: str) -> Path:
+    name = _re.sub(r"[^A-Za-z0-9_.-]+", "-", target.replace("src/", "")).strip("-")
+    d = matter / "derived" / "review" / name
+    d.mkdir(parents=True, exist_ok=True)
+    return d
+
+
+def report_path(matter: Path, target: str, check: str, short_hash: str) -> Path:
+    import datetime as dt
+    return review_dir(matter, target) / f"{dt.date.today().isoformat()}_{check}_{short_hash}.md"
+
+
+def report_header(target: str, check: str, combined: str, per: dict[str, str], matter: Path) -> str:
+    import datetime as dt
+    lines = ["---", f"check: {check}", f"target: {target}", f"reviewed: {dt.datetime.now().isoformat(timespec='seconds')}",
+             f"source_hash: {combined}", "sources:"]
+    for p, h in per.items():
+        try:
+            rel = str(Path(p).relative_to(matter))
+        except ValueError:
+            rel = p
+        lines.append(f"  - path: {rel}")
+        lines.append(f"    sha256: {h}")
+    head = _git_lines(matter, "rev-parse", "--short", "HEAD")
+    if head:
+        lines.append(f"commit: {head[0]}")
+    lines.append("status: current   # `sc review status` rewrites this to stale when a source changes")
+    lines.append("---")
+    return "\n".join(lines) + "\n"
+
+
+def review_status(matter: Path, target: str | None = None, tidy: bool = False) -> list[dict]:
+    """Every report under derived/review/ compared with its sources now.
+    A report whose recorded source_hash differs from the sources' current
+    hash is stale: it critiqued a superseded revision. --tidy moves stale
+    reports into superseded/ so nothing quotes them by accident."""
+    root = matter / "derived" / "review"
+    rows: list[dict] = []
+    if not root.is_dir():
+        return rows
+    dirs = [review_dir(matter, target)] if target else [d for d in root.iterdir() if d.is_dir()]
+    for d in dirs:
+        for rp in sorted(d.glob("*.md")):
+            meta, _, err = _split_fm(rp.read_text(encoding="utf-8", errors="replace"))
+            if err or "source_hash" not in meta:
+                rows.append({"report": str(rp.relative_to(matter)), "state": "unknown", "why": err or "no source_hash"})
+                continue
+            srcs = [matter / str(x.get("path")) for x in (meta.get("sources") or []) if isinstance(x, dict)]
+            now, _ = source_hash(srcs)
+            state = "current" if now == meta["source_hash"] else "stale"
+            row = {"report": str(rp.relative_to(matter)), "state": state, "check": meta.get("check"),
+                   "target": meta.get("target"), "reviewed": meta.get("reviewed")}
+            if state == "stale":
+                changed = [str(x.get("path")) for x in (meta.get("sources") or [])
+                           if isinstance(x, dict) and (not (matter / str(x.get("path"))).exists()
+                           or hashlib.sha256((matter / str(x.get("path"))).read_bytes()).hexdigest() != x.get("sha256"))]
+                row["why"] = "changed since review: " + ", ".join(changed)
+                text = rp.read_text(encoding="utf-8", errors="replace")
+                if "status: current" in text:
+                    rp.write_text(text.replace("status: current   # `sc review status` rewrites this to stale when a source changes",
+                                               "status: stale   # sources changed after this review; do not quote as current", 1), encoding="utf-8")
+                if tidy:
+                    sup = rp.parent / "superseded"
+                    sup.mkdir(exist_ok=True)
+                    rp.rename(sup / rp.name)
+                    row["moved"] = str((sup / rp.name).relative_to(matter))
+            rows.append(row)
+    return rows
+
+
+def _split_fm(text: str):
+    if not text.startswith("---\n"):
+        return {}, text, "no front matter"
+    end = text.find("\n---", 4)
+    if end == -1:
+        return {}, text, "unterminated front matter"
+    import yaml
+    try:
+        meta = yaml.safe_load(text[4:end]) or {}
+    except yaml.YAMLError as exc:
+        return {}, text, f"bad front matter: {exc}"
+    return meta, text[end + 4:], None
+
+
+def cmd_review(args: argparse.Namespace) -> int:
+    matter = _matter_root(Path(args.matter_dir))
+    if args.action == "status":
+        rows = review_status(matter, args.target, tidy=args.tidy)
+        if not rows:
+            print("no review reports")
+            return 0
+        for r in rows:
+            extra = f" --- {r['why']}" if r.get("why") else ""
+            moved = f" -> {r['moved']}" if r.get("moved") else ""
+            print(f"{r['state']:<8} {r['report']}{extra}{moved}")
+        stale = sum(1 for r in rows if r["state"] == "stale")
+        print(f"{len(rows)} report(s), {stale} stale" + (" (moved to superseded/)" if args.tidy and stale else ""))
+        return 0
+    if not args.target:
+        print("sc review <paths|cites|report|status> <envelope|source> [--check NAME]", file=sys.stderr)
+        return 2
+    srcs = envelope_sources(matter, args.target)
+    combined, per = source_hash(srcs)
+    if args.action == "paths":
+        print(f"# review target: {args.target}")
+        print(f"source_hash: {combined}")
+        print("## sources")
+        for p in srcs:
+            print(f"- {p.relative_to(matter)}" + ("" if p.exists() else "  (MISSING)"))
+        out = matter / "out" / args.target
+        if out.is_dir():
+            print("## built outputs")
+            for p in sorted(out.rglob("*")):
+                if p.is_file() and not p.name.startswith(".") and p.suffix in (".pdf", ".docx", ".json", ".txt"):
+                    print(f"- {p.relative_to(matter)}")
+        prof = matter / "knowledge" / "topics" / "opposing-counsel-profile.md"
+        print("## opposing-counsel profile")
+        print(f"- {prof.relative_to(matter)}" if prof.exists() else "- none yet (knowledge/topics/opposing-counsel-profile.md; the refinement loop proposes it)")
+        prior = [r for r in review_status(matter, args.target) if r["state"] == "current"]
+        print(f"## current reports for this target: {len(prior)}")
+        for r in prior:
+            print(f"- {r['report']} ({r.get('check')})")
+        stale = [r for r in review_status(matter, args.target) if r["state"] == "stale"]
+        if stale:
+            print(f"## STALE reports (sources changed since; do not quote): {len(stale)}")
+            for r in stale:
+                print(f"- {r['report']}")
+        return 0
+    if args.action == "cites":
+        rows = extract_cites(srcs, matter)
+        auth = load_authorities(matter)
+        print(f"# citations in {args.target}: {len(rows)} (source_hash {combined[:12]})")
+        print("| # | kind | cite | where | authority cache |")
+        print("|---|---|---|---|---|")
+        for i, r in enumerate(rows, 1):
+            a = auth.get(r["key"].split(":", 1)[1])
+            status = (a.get("status", "verified") if a else "unverified")
+            note = f" ({a.get('proposition', '')[:60]})" if a and a.get("proposition") else ""
+            print(f"| {i} | {r['kind']} | {r['cite']} | {r['file']}:{r['line']} | {status}{note} |")
+        if not rows:
+            print("(no citations recognized; if the draft has cites, the extractor needs a pattern for them)")
+        return 0
+    if args.action == "report":
+        check = args.check or "review"
+        rp = report_path(matter, args.target, check, combined[:7])
+        if not rp.exists():
+            rp.write_text(report_header(args.target, check, combined, per, matter), encoding="utf-8")
+        print(rp)
+        return 0
+    return 2
 
 
 # ---------------------------------------------------------------------------
@@ -1921,6 +2167,14 @@ def main() -> int:
     sp.add_argument("--dry-run", action="store_true")
     sp.add_argument("--jobs", type=int, default=2)
     sp.set_defaults(func=cmd_upgrade)
+
+    sp = sub.add_parser("review", help="preflight review plumbing: paths, cites, report, status (ADR-0045; optional, never a gate)")
+    sp.add_argument("action", choices=("paths", "cites", "report", "status"))
+    sp.add_argument("target", nargs="?", help="envelope name or src/ path")
+    sp.add_argument("--matter-dir", default=".", dest="matter_dir")
+    sp.add_argument("--check", help="report: the check name (citecheck, clerkreview, judgereview, oppo, preflight)")
+    sp.add_argument("--tidy", action="store_true", help="status: move stale reports into superseded/")
+    sp.set_defaults(func=cmd_review)
 
     sp = sub.add_parser("refine", help="nightly knowledge refinement: proposals and questions, never edits (ADR-0044)")
     sp.add_argument("matter_dir", nargs="?", default=".")
