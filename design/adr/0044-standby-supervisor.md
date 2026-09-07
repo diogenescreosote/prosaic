@@ -18,14 +18,18 @@ their own and puts one thirty-minute human loop on top.
 
 ## Decision
 
-1. **Four launchd agents per matter**, installed by `sc schedule`:
-   `sync` (connectors plus triage, twice daily and at load, as before);
-   `watch` (`WatchPaths` on `inbox/` and its subdirectories, throttled
-   to one run a minute, running `matter_sync.sh --watch`: no connectors,
-   triage of whatever landed and has stopped changing); `refine`
-   (02:30, `sc refine --scheduled`); `standup` (08:50 by default,
-   `sc standup agenda --notify`). A legacy `com.slopcannon.sync` agent
-   is unloaded when found.
+1. **One launchd agent per matter**, `com.prosaic.supervisor.<matter>`,
+   installed by `sc schedule`. It fires on any change under `inbox/`
+   (throttled to one run a minute), at the two sync times, at 02:30, at
+   the standup time (08:50 by default), and at load, and runs
+   `sync/matter_supervisor.sh`, which decides what is due: inbox triage
+   of files that landed and stopped changing (`matter_sync.sh --watch`,
+   no connectors); the guarded connector sync; `sc refine --scheduled`
+   once a day after 02:30; `sc standup agenda --notify` once a day after
+   the standup time. One job means one background item in System
+   Settings rather than one per task, which an earlier layout produced.
+   Earlier per-task agents and the legacy `com.slopcannon.sync` label
+   are unloaded and removed on install.
 2. **Every run writes a summary.** `matter_sync.sh` records mode,
    outcome, new-file count, triage result and per-connector status in
    `.state/sync_last_run.json`; the brief and the agenda read it, so a
@@ -66,10 +70,9 @@ their own and puts one thirty-minute human loop on top.
   triage, never unattended overnight.
 - Failures surface where the human looks: the brief and the agenda,
   not a log.
-- Four launchd agents per matter instead of one; the legacy label is
-  retired. The Full Disk Access grant is per binary and the installer
-  reuses a legacy shim that already holds it rather than installing an
-  ungranted one.
+- One launchd agent per matter; the legacy label is retired. The Full
+  Disk Access grant is per binary and the installer reuses a legacy shim
+  that already holds it rather than installing an ungranted one.
 - Model routing lives in matter configuration, not in prosaic; the
   same deployment can run triage on one vendor and the judge on
   another, which is the precondition for W5.

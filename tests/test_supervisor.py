@@ -112,3 +112,28 @@ def test_clean_older_than_reports_only_disposable_trees(matter: Path):
     assert (matter / "out" / "env" / "old.pdf").exists(), "report only without --apply"
     proc = sc("clean", str(matter), "--older-than", "30", "--apply", cwd=matter)
     assert not (matter / "out" / "env" / "old.pdf").exists() and (matter / "assets" / "keep.pdf").exists()
+
+
+def test_supervisor_dispatches_only_what_is_due(matter: Path, tmp_path: Path):
+    """One launchd job, one script: inbox triage always looks, sync is
+    guarded, refine and standup run once a day after their hours."""
+    seen = tmp_path / "seen.txt"
+    fake = tmp_path / "agent.sh"; fake.write_text(f"#!/bin/bash\ncat > {seen}\n"); fake.chmod(0o755)
+    env = {**os.environ, "PROSAIC_AGENT_CMD": str(fake), "PROSAIC_ROOT": str(REPO_ROOT),
+           "PROSAIC_NOW": "01:00", "PROSAIC_MIN_INTERVAL_HOURS": "999"}
+    (matter / ".state").mkdir(exist_ok=True)
+    (matter / ".state" / "sync_last_success").write_text(str(int(time.time())))
+    sup = REPO_ROOT / "sync" / "matter_supervisor.sh"
+    proc = subprocess.run(["/bin/bash", str(sup), str(matter)], env=env, capture_output=True, text=True, timeout=600)
+    assert proc.returncode == 0, proc.stderr
+    assert not (matter / "derived" / "standup").exists(), "01:00 is before the standup hour"
+    assert not list((matter / "derived").glob("refine/*.md")) if (matter / "derived" / "refine").exists() else True
+    env["PROSAIC_NOW"] = "09:00"
+    proc = subprocess.run(["/bin/bash", str(sup), str(matter)], env=env, capture_output=True, text=True, timeout=600)
+    assert proc.returncode == 0, proc.stderr
+    agendas = list((matter / "derived" / "standup").glob("*.md"))
+    assert len(agendas) == 1, "agenda written once after 08:50"
+    inputs = list((matter / "derived" / "refine").glob("*_inputs.md"))
+    assert inputs, "refine ran after 02:30 (the fake agent stands in for the model)"
+    proc = subprocess.run(["/bin/bash", str(sup), str(matter)], env=env, capture_output=True, text=True, timeout=600)
+    assert len(list((matter / "derived" / "standup").glob("*.md"))) == 1, "not written twice in a day"

@@ -85,26 +85,32 @@ semantics; contributions welcome.
 
 ## The standby supervisor (ADR-0044)
 
-`sc schedule <matter>` installs four agents, all through the same
-Full Disk Access shim:
+`sc schedule <matter>` installs one agent, `com.prosaic.supervisor.<matter>`,
+through the Full Disk Access shim. It fires on any change under `inbox/`
+(throttle 60 s), at 08:00 and 20:00, at 02:30, at 08:50
+(`PROSAIC_STANDUP_TIME`), and at load, and runs
+`sync/matter_supervisor.sh`, which does only what is due:
 
-| Label | Trigger | Runs |
-|---|---|---|
-| `com.prosaic.sync.<matter>` | 08:00, 20:00, and at load | connectors, `sc text ensure`, triage |
-| `com.prosaic.watch.<matter>` | any change under `inbox/` (throttle 60 s) | `matter_sync.sh --watch`: triage of files that landed and stopped changing |
-| `com.prosaic.refine.<matter>` | 02:30 | `sc refine --scheduled`: proposals and questions to `derived/refine/<date>.md` |
-| `com.prosaic.standup.<matter>` | 08:50 (`PROSAIC_STANDUP_TIME`) | `sc standup agenda --notify` |
+| Piece | When it actually runs |
+|---|---|
+| inbox triage (`matter_sync.sh --watch`) | files under `inbox/` that landed and have not changed for 20 s and were not already listed |
+| connector sync + triage (`matter_sync.sh --scheduled`) | when the 11-hour guard says so |
+| `sc refine --scheduled` | once a day after 02:30 (`PROSAIC_REFINE_AFTER`) |
+| `sc standup agenda --notify` | once a day after the standup time |
+
+One job means one background item in System Settings per matter. Earlier
+per-task agents and the legacy `com.slopcannon.sync.<matter>` agent are
+unloaded and removed on install. If `~/.local/bin/gmail-pull-runner`
+already holds the FDA grant and no `prosaic-runner` exists, the installer
+keeps using it.
 
 Every sync or watch run writes `.state/sync_last_run.json` (mode,
 outcome, new files, triage result, per-connector status); `sc brief`
-and the standup agenda read it. A legacy `com.slopcannon.sync.<matter>`
-agent is unloaded and renamed `.disabled` on install. If
-`~/.local/bin/gmail-pull-runner` already holds the FDA grant and no
-`prosaic-runner` exists, the installer keeps using it.
+and the standup agenda read it.
 
-Headless jobs run under a role: `matter_sync.sh` triages with
-`agent-run --role triage`, `sc refine` with `--role refine`. A role's
-model and turn cap come from the matter's `matter.yaml`:
+Headless jobs run under a role: triage as `agent-run --role triage`,
+refinement as `--role refine`. A role's model and turn cap come from the
+matter's `matter.yaml`:
 
 ```yaml
 agent:
@@ -115,4 +121,3 @@ agent:
 ```
 
 Unset means the harness default, uncapped.
-

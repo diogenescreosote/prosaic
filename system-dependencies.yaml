@@ -233,6 +233,13 @@ dependencies:
     brew: gh
     in_container: false
 
+  - binary: osascript
+    why: the standup agenda posts a desktop notification so the morning loop is noticed (ADR-0044); absent, the agenda is still written
+    used_by: [cli/sc]
+    required: false
+    platforms: [darwin]
+    in_container: false
+    no_package_reason: ships with macOS
   - binary: rg
     why: the matter conventions have agents verify em-dash spacing with it; Phase 3 search is built on it
     used_by: [templates/matter/AGENTS.md, docs/writing-style.md]

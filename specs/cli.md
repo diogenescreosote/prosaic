@@ -229,8 +229,9 @@ agent CLI is named (ADR-0020). Its promises:
 - **`sc clean --older-than DAYS [--apply]`** reports (or removes)
   regenerable files older than DAYS under `out/`, `.flow/` and
   `derived/{find,refine,standup}` only. *(tested)*
-- **`sc schedule <matter>`** installs the four standby agents (ADR-0044).
-  *(untested: launchd)*
+- **`sc schedule <matter>`** installs the one supervisor agent per matter
+  (ADR-0044); `sync/matter_supervisor.sh` dispatches what is due. *(tested:
+  the dispatcher; launchd itself untested)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without
