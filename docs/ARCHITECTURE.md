@@ -43,7 +43,7 @@ templates/      what `sc init` writes into a new matter, including the
 There is no importable Python package. The scripts are run by path and the
 CLI is the supported command surface. Matters contain no build Makefile;
 envelope and single-document builds run through `sc build` and
-`sc build-doc` (ADR-0038).
+`sc build-doc` (ADR-0039).
 
 ## Data flow
 

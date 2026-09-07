@@ -67,7 +67,7 @@ checkable state).
 - Dated documents: `YYYY-MM-DD_what_it_is.pdf` (ISO dates sort).
 - Undated evidence: literate snake_case that a stranger could
   understand — `sms_apology_demand_jul8_jul13.pdf`, not `IMG_4021.pdf`.
-- Derived artifacts live in `derived/<kind>/<same relative path>` (ADR-0041):
+- Derived artifacts live in `derived/<kind>/<same relative path>` (ADR-0042):
   `derived/text/<path>.txt` page-marked text (tracked), `derived/ocr/<path>` the
   OCR'd copy (ignored, regenerable). Legacy `<stem>_ocr.pdf` / `<stem>.txt`
   siblings are still read; `sc text migrate` moves the tool's own into the tree.

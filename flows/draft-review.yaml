@@ -1,7 +1,7 @@
 # Adversarial drafting loop: review as the opponent, revise, judge,
 # and only a human clears the result for use. Judgment work in a
 # graph (ADR-0024); the deterministic build that follows stays in
-# `sc build` where it belongs (ADR-0038).
+# `sc build` where it belongs (ADR-0039).
 #
 #   sc flow run flows/draft-review.yaml --input source=src/Declaration.md
 #

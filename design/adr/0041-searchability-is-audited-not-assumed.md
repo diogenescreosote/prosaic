@@ -1,10 +1,10 @@
-# ADR-0040: Searchability is audited and repaired, never assumed
+# ADR-0041: Searchability is audited and repaired, never assumed
 
 **Status:** Accepted (September 6, 2026)
 
 ## Context
 
-The record search added under ADR-0039 (`sc find`) greps text files.
+The record search added under ADR-0040 (`sc find`) greps text files.
 A PDF is searchable only through a text sidecar, and the first version
 counted a PDF as searched when an `_ocr.pdf` sibling existed --- which
 ripgrep cannot read. Measured on the largest live matter: 1,039 PDFs,

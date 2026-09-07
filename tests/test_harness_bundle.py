@@ -1,4 +1,4 @@
-"""The coding-agent harness bundle (ADR-0039): routine operations are
+"""The coding-agent harness bundle (ADR-0040): routine operations are
 slash commands that run the CLI and relay, sessions start from a brief,
 and `sc find` never skips a document silently.
 """

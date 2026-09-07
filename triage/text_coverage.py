@@ -36,7 +36,7 @@ useless text: image-bodied, garbled), then writes a text file from the
 best available source with `[[[ page k of N ]]]` markers so a hit
 carries a page cite. Images go through tesseract; DOCX through pandoc.
 
-Layout (ADR-0041): derived artifacts live in a parallel tree that
+Layout (ADR-0042): derived artifacts live in a parallel tree that
 mirrors the matter, never beside the original:
 
     derived/text/<relative path>.txt     page-marked text (tracked)

@@ -1,4 +1,4 @@
-# ADR-0038: CLI-first document builds with mode-aware freshness
+# ADR-0039: CLI-first document builds with mode-aware freshness
 
 **Status:** Accepted (August 29, 2026)
 

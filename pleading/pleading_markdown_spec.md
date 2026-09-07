@@ -1792,7 +1792,7 @@ unscoped output directory `out/<envelope>/`.
 
 ### Incremental rebuilds
 
-Build freshness is **mode-aware** (ADR-0038). Each rendered source records a
+Build freshness is **mode-aware** (ADR-0039). Each rendered source records a
 manifest entry in `out/<envelope>/.build_manifest.json` holding the render
 options (final/draft, variant, signer, date) and the dependency set. An output
 is rebuilt when any of those change — a draft PDF is never "up to date" for a

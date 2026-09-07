@@ -186,7 +186,7 @@ Every document moved from `inbox/` into `assets/`:
    `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>`.
    Supplements, never replaces: `foo.pdf` → `foo_ocr.pdf`, side by
    Already-searchable PDFs get no OCR copy — note that in INDEX.md
-   instead. Derived artifacts never sit beside originals (ADR-0041):
+   instead. Derived artifacts never sit beside originals (ADR-0042):
    the OCR'd copy is `derived/ocr/<same path>`, the page-marked text is
    `derived/text/<same path>.txt`, and `sc text ensure` writes both
    mechanically (the sync runs it), so check `sc text audit` rather

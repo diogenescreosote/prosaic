@@ -26,7 +26,7 @@ identical to a form or key that was never asked for.
 ## The deployment path is permanent
 
 A matter carries no build entry point of its own: every build runs
-through the deployment's `sc` (`sc build`, `sc build-doc`; ADR-0038),
+through the deployment's `sc` (`sc build`, `sc build-doc`; ADR-0039),
 so every matter's shell history, scheduled sync job, and agent contract
 names the deployment by absolute path, and moving the deployment later
 breaks all of them at once. Choose the location before cloning.

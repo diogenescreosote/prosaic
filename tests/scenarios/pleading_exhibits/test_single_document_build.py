@@ -1,4 +1,4 @@
-"""Single-document builds and mode-aware freshness (ADR-0038).
+"""Single-document builds and mode-aware freshness (ADR-0039).
 
 The build manifest records the render options that change the artifact —
 final/draft, variant, signer, date — so a draft PDF is never "up to date"
@@ -56,7 +56,7 @@ def test_envelope_build_writes_mode_aware_manifest(tmp_path):
 
 
 def test_mode_change_rebuilds_despite_fresh_mtimes(tmp_path):
-    """The ADR-0038 regression: draft build, then --final with untouched
+    """The ADR-0039 regression: draft build, then --final with untouched
     sources. Timestamp-only freshness calls this 'up to date' and ships a
     bannered PDF."""
     m = util.load_matter(tmp_path)
@@ -164,7 +164,7 @@ def test_build_doc_respects_notreal_and_sent_guards(tmp_path):
     assert forced.returncode == 0, forced.stderr[-2000:]
 
 def test_sc_build_all_and_check_stale_replace_the_make_targets(tmp_path):
-    """ADR-0038 removed the Makefile; what `make all` and `make check-stale`
+    """ADR-0039 removed the Makefile; what `make all` and `make check-stale`
     did must survive as `sc build --all` and `sc build --check-stale`."""
     m = util.load_matter(tmp_path)
     neither = run_sc(m, "build")

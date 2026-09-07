@@ -1,4 +1,4 @@
-# ADR-0039: Routine operations are harness commands, not deliberation
+# ADR-0040: Routine operations are harness commands, not deliberation
 
 **Status:** Accepted (September 6, 2026)
 
@@ -25,7 +25,7 @@ the whole knowledge file.
 
 ADR-0020 made `cli/agent-run` the one seam to a headless agent and asked
 that harness-specific files be labeled as such. ADR-0021 and ADR-0029
-made skills the home of agent-facing procedure. ADR-0038 made `sc` the
+made skills the home of agent-facing procedure. ADR-0039 made `sc` the
 only build interface.
 
 ## Decision

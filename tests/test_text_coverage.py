@@ -1,4 +1,4 @@
-"""Searchability is audited and repaired, never assumed (ADR-0040).
+"""Searchability is audited and repaired, never assumed (ADR-0041).
 
 Fixtures are generated: a born-digital PDF, an image-only PDF (a
 rendered page re-embedded as a raster), a PNG, and a DOCX. OCR steps are

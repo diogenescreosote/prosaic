@@ -88,5 +88,5 @@ guesses confidently is expensive.
   sidecar (and an `_ocr` sibling where pages lacked text) before anyone
   reads or searches it. The audit (`sc text audit`) is the check; the
   triage prompt tells the agent sidecars exist rather than asking it to
-  write them (ADR-0040). *(tested: tests/test_text_coverage; the sync
+  write them (ADR-0041). *(tested: tests/test_text_coverage; the sync
   hook itself is untested, like the rest of matter_sync.sh)*

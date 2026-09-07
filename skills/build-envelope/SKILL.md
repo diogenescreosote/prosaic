@@ -6,7 +6,7 @@ description: Build a filing packet (28-line pleading PDF/DOCX, exhibits, cover f
 # Build a filing envelope
 
 Run from the matter directory (it has `envelopes.yaml`); the `sc` CLI
-drives the build (ADR-0038).
+drives the build (ADR-0039).
 
 ## The loop
 

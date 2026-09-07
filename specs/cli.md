@@ -27,7 +27,7 @@ subcommand's real promises live in that component's spec.
   per-invocation act, never a property of the source. `sc build --all`
   builds every envelope not marked sent; `--check-stale` builds nothing
   and fails when any output in scope is missing or stale. `sc` is the
-  only build interface — there is no Makefile (ADR-0038). *(tested:
+  only build interface — there is no Makefile (ADR-0039). *(tested:
   pleading/tests/test_draft_banner.py; --all, --check-stale and the
   sent-envelope guard in tests/scenarios/pleading_exhibits)*
 - **`sc build-doc <source.md>`** builds exactly one envelope-owned
@@ -36,7 +36,7 @@ subcommand's real promises live in that component's spec.
   from `envelopes.yaml`; a source owned by zero or multiple envelopes is
   an error. Freshness is mode-aware: a draft output is stale for
   `--final`, and signer, date, or variant changes also rebuild
-  (ADR-0038). *(tested:
+  (ADR-0039). *(tested:
   tests/scenarios/pleading_exhibits/test_single_document_build.py)*
 - **`sc ocr <pdf> <outdir>`** OCR-supplements one PDF under the
   originals-are-sacred rules (adds text only to pages lacking it,
@@ -154,7 +154,7 @@ agent CLI is named (ADR-0020). Its promises:
   TODO.md, recent `docket` commits, sync and inbox state, and the routine
   commands --- the SessionStart hook installed by the harness bundle runs
   it, so a session begins from the brief rather than the knowledge file
-  (ADR-0039). *(tested: tests/test_harness_bundle)*
+  (ADR-0040). *(tested: tests/test_harness_bundle)*
 - **`sc open <envelope|path…> [--variant V] [--print-only]`** opens an
   envelope's built PDFs in the system viewer (newest variant plus the
   envelope root when variants exist) and prints the paths; a missing
@@ -168,9 +168,9 @@ agent CLI is named (ADR-0020). Its promises:
   document exists (hits or not); 1 means searched everything and found
   nothing; 0 means hits and full coverage. `--ensure` runs
   `sc text ensure` first. A document that was not searched is reported,
-  never silently skipped (ADR-0040). *(tested)*
+  never silently skipped (ADR-0041). *(tested)*
 - **`sc text audit|ensure|migrate [matter] [--json] [--include-inbox] [--dry-run] [--redo-ocr] [--jobs N] [--include-legacy-ocr]`**
-  writes under `derived/text/` and `derived/ocr/` (ADR-0041), reads legacy
+  writes under `derived/text/` and `derived/ocr/` (ADR-0042), reads legacy
   siblings, and `migrate` moves the tool's own siblings into the tree;
   classifies every PDF, image, DOCX and audio file as searchable,
   unverified-sidecar, needs-sidecar, stale-sidecar, needs-ocr,

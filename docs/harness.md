@@ -7,7 +7,7 @@ so). The commands they wrap --- `sc brief`, `sc open`, `sc find`,
 
 ## Why it exists
 
-ADR-0039 records the measurement: routine requests were costing a
+ADR-0040 records the measurement: routine requests were costing a
 frontier model a round of thought inside a several-hundred-thousand-
 token session, and "rebuild" often turned into unrequested source
 edits. The bundle makes each routine operation a slash command that
@@ -86,7 +86,7 @@ fifths of all calls.
 cheap reader) described in the v2 proposal. It greps every `.md`,
 `.txt`, `.yaml`, `.json`, `.csv`, `.srt`, `.eml` and `.html` under the
 matter except `out/`, `.state/`, `.git/`, `.flow/`. Its UNSEARCHED list
-comes from the text-coverage audit (ADR-0040): anything not provably
+comes from the text-coverage audit (ADR-0041): anything not provably
 covered by a current sidecar is listed with its reason, and the exit
 status is 2 whenever that list is non-empty, hits or not. A hit in
 `derived/text/` is printed as the original document and page. The `/find`

@@ -92,7 +92,7 @@ sent to a court.
    written, or when the render options that shape the artifact
    (final/draft, variant, signer, date) differ from the ones recorded
    for it in `out/<envelope>/.build_manifest.json` — a draft PDF is
-   never "up to date" for a `--final` request (ADR-0038). Otherwise it
+   never "up to date" for a `--final` request (ADR-0039). Otherwise it
    skips; `--check-stale` fails loudly when outputs lag dependencies or
    options; a forced rebuild is always available. The manifest is
    build state, not evidence: deleting it costs one clean rebuild.

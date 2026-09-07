@@ -1,4 +1,4 @@
-# ADR-0041: Derived artifacts live in parallel directories, not beside originals
+# ADR-0042: Derived artifacts live in parallel directories, not beside originals
 
 **Status:** Accepted (September 6, 2026)
 
@@ -6,7 +6,7 @@
 
 Every derived artifact the system produced for a document was placed
 beside it: `<stem>_ocr.pdf`, `<stem>.txt`, `<stem>.srt`, `<stem>.ocr.txt`.
-ADR-0040's coverage pass made the cost visible at scale. On the largest
+ADR-0041's coverage pass made the cost visible at scale. On the largest
 live matter it wrote 1,067 files into evidence directories in one run,
 and 58 OCR'd copies of court-filed documents landed in `pleadings/`,
 which the workspace contract reserves for the court's copy and nothing

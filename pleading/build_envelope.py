@@ -223,7 +223,7 @@ def _staleness_reason(outputs: List[Path], deps: List[Path]) -> Optional[str]:
     return None
 
 
-# --- Mode-aware build manifest (ADR-0038) ----------------------------------
+# --- Mode-aware build manifest (ADR-0039) ----------------------------------
 #
 # Timestamps alone cannot answer "is this output what this invocation would
 # produce?" A draft PDF is byte-identical-fresh to mtime but wrong for a
@@ -301,7 +301,7 @@ def _manifest_staleness_reason(out_dir: Path, source_rel: str,
     entry = _load_manifest(out_dir).get("documents", {}).get(
         _manifest_key(source_rel))
     if entry is None:
-        # No manifest record (pre-ADR-0038 output): fall back to mtimes,
+        # No manifest record (pre-ADR-0039 output): fall back to mtimes,
         # and let the build write the manifest on the next render.
         return _staleness_reason(outputs, deps)
     if entry.get("options") != options:
@@ -793,7 +793,7 @@ def build_doc_source(
     force_rebuild: bool = False,
     jobs: Optional[int] = None,
 ) -> bool:
-    """Build exactly one envelope-owned Markdown source (ADR-0038).
+    """Build exactly one envelope-owned Markdown source (ADR-0039).
 
     The owning envelope determines the output directory and whether a DOCX
     companion renders. Zero or multiple owners is an error: the location

@@ -136,7 +136,7 @@ def cmd_harness(args: argparse.Namespace) -> int:
     The bundle is templates/matter/.claude: a SessionStart hook that
     prints `sc brief`, and the routine slash commands (build, build-doc,
     open, clean, status, commit, find). Each command runs the CLI and
-    relays; none deliberates (ADR-0039). Existing files are overwritten,
+    relays; none deliberates (ADR-0040). Existing files are overwritten,
     because the bundle is prosaic's, not the matter's: a matter
     customizes through .claude/settings.local.json and its own skills
     under other names. A matter's own settings.local.json is never
@@ -613,7 +613,7 @@ def cmd_hooks(args: argparse.Namespace) -> int:
 
 # ---------------------------------------------------------------------------
 # Session brief and open: the deterministic paths behind the routine
-# harness commands (ADR-0039). Neither asks a model anything.
+# harness commands (ADR-0040). Neither asks a model anything.
 # ---------------------------------------------------------------------------
 
 def _matter_root(start: Path) -> Path:
@@ -779,7 +779,7 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
 
 
 # ---------------------------------------------------------------------------
-# text: searchability is audited and repaired, never assumed (ADR-0040)
+# text: searchability is audited and repaired, never assumed (ADR-0041)
 # ---------------------------------------------------------------------------
 
 def _text_coverage():
@@ -1192,7 +1192,7 @@ def main() -> int:
 
     sp = sub.add_parser("build-doc",
                         help="build exactly one envelope-owned Markdown source "
-                             "(run from the matter dir; ADR-0038)")
+                             "(run from the matter dir; ADR-0039)")
     sp.add_argument("source",
                     help="source path, e.g. src/declaration.md")
     sp.add_argument("--final", action="store_true",
