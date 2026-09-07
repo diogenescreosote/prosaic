@@ -1172,11 +1172,11 @@ def test_backfill_selection_skips_gone_threads_and_finds_missing_pdfs() -> None:
         fs.writeFileSync(path.join(outDir, 'mbox', 'c.mbox'), 'x');
         fs.writeFileSync(path.join(outDir, 'c.pdf'), 'x');
         const ledger = { threads: {
-          a: { filename: 'a.pdf' },                                  // owed an mbox
-          b: { filename: 'b.pdf', mbox: 'mbox/b.mbox' },             // has mbox, no PDF
-          c: { filename: 'c.pdf', mbox: 'mbox/c.mbox' },             // complete
-          d: { filename: 'd.pdf', gone: '2024-01-01T00:00:00Z' },    // deleted in Gmail
-          e: { filename: 'e.pdf', mbox: 'mbox/missing.mbox' },       // ledger says mbox, file absent
+          a: { filename: 'a.pdf' }, // owed an mbox
+          b: { filename: 'b.pdf', mbox: 'mbox/b.mbox' }, // has mbox, no PDF
+          c: { filename: 'c.pdf', mbox: 'mbox/c.mbox' }, // complete
+          d: { filename: 'd.pdf', gone: '2024-01-01T00:00:00Z' }, // deleted in Gmail
+          e: { filename: 'e.pdf', mbox: 'mbox/missing.mbox' }, // ledger says mbox, file absent
         } };
         console.log(JSON.stringify({
           pending: pull.pendingBackfill(ledger).map(([id]) => id),
