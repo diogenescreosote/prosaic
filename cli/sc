@@ -248,6 +248,43 @@ def cmd_ocr(args: argparse.Namespace) -> int:
     ).returncode
 
 
+#: Directories whose contents are regenerable or disposable by age: rendered
+#: output, flow run directories, and search checklists. Never assets/,
+#: pleadings/, discovery/, processed_files/ or derived/text/.
+AGE_CLEAN_DIRS = ("out", ".flow", "derived/find", "derived/refine", "derived/standup")
+
+
+def _clean_older_than(matter: Path, days: int, apply: bool) -> int:
+    """Report (or with --apply remove) regenerable files older than N days
+    in the disposable trees. Tracked files are called out separately."""
+    import time
+    cutoff = time.time() - days * 86400
+    tracked = set(_git_lines(matter, "ls-files", *AGE_CLEAN_DIRS))
+    old: list[tuple[str, bool]] = []
+    for d in AGE_CLEAN_DIRS:
+        root = matter / d
+        if not root.is_dir():
+            continue
+        for p in root.rglob("*"):
+            if p.is_file() and not p.name.startswith(".build_manifest") and p.stat().st_mtime < cutoff:
+                rel = str(p.relative_to(matter))
+                old.append((rel, rel in tracked))
+    if not old:
+        print(f"nothing older than {days} days under {', '.join(AGE_CLEAN_DIRS)}")
+        return 0
+    for rel, t in sorted(old):
+        print(f"  {'tracked  ' if t else 'untracked'}  {rel}")
+    print(f"\n{len(old)} file(s) older than {days} days; {sum(1 for _, t in old if t)} tracked.")
+    if not apply:
+        print("Nothing deleted. Re-run with --apply to remove them. A hand-assembled packet or a "
+              "timestamp token in out/ is not regenerable: check the list before you do.")
+        return 0
+    for rel, _ in old:
+        (matter / rel).unlink()
+    print(f"Removed {len(old)} file(s). Commit the deletions to record them.")
+    return 0
+
+
 def cmd_clean(args: argparse.Namespace) -> int:
     """Report — and optionally remove — files in out/ the config cannot produce.
 
@@ -263,6 +300,8 @@ def cmd_clean(args: argparse.Namespace) -> int:
     give those back, and nothing else can.
     """
     matter = Path(args.matter_dir).expanduser().resolve()
+    if getattr(args, "older_than", None):
+        return _clean_older_than(matter, args.older_than, args.apply)
     out_root = matter / "out"
     if not out_root.is_dir():
         print(f"No out/ directory in {matter}.")
@@ -760,6 +799,187 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# refine and standup: the nightly proposal and the morning agenda (ADR-0044)
+# ---------------------------------------------------------------------------
+
+def _git_since(matter: Path, since: str, fmt: str = "%h %ad %s", n: int = 60) -> list[str]:
+    return _git_lines(matter, "log", f"--since={since}", f"--format={fmt}", "--date=short", f"-{n}")
+
+
+def _last_run(matter: Path) -> dict:
+    p = matter / ".state" / "sync_last_run.json"
+    if not p.is_file():
+        return {}
+    try:
+        return json.loads(p.read_text())
+    except json.JSONDecodeError:
+        return {}
+
+
+def refine_inputs(matter: Path, since_days: int = 1) -> str:
+    """Everything the refinement agent may read, gathered deterministically
+    so the agent starts from facts rather than from a scan of the tree."""
+    import datetime as dt
+    since = (dt.date.today() - dt.timedelta(days=since_days)).isoformat()
+    parts = [f"# refine inputs for {matter.name}, changes since {since}", ""]
+    parts.append("## Commits")
+    parts += [f"- {ln}" for ln in _git_since(matter, since)] or ["- none"]
+    parts.append("")
+    parts.append("## Files changed")
+    changed = _git_lines(matter, "log", f"--since={since}", "--name-only", "--format=")
+    seen: list[str] = []
+    for c in changed:
+        if c not in seen:
+            seen.append(c)
+    parts += [f"- {c}" for c in seen[:200]] or ["- none"]
+    parts.append("")
+    if (matter / "knowledge").is_dir():
+        kv = _knowledge()
+        notes = kv.check(matter)
+        errs = [f"{n.path.name}: {p}" for n in notes for p in n.problems]
+        parts.append(f"## Knowledge vault: {len(notes)} notes, {len(errs)} lint errors, "
+                     f"{sum(1 for n in notes if n.staging)} staging")
+        parts += [f"- ERROR {e}" for e in errs[:40]]
+        # notes touched by the changed documents: any note whose sources name a changed path
+        touched = []
+        for n in notes:
+            for src in (n.meta.get("sources") or []):
+                if isinstance(src, dict) and str(src.get("path")) in seen:
+                    touched.append(f"[[{n.stem}]] cites changed {src.get('path')}")
+        parts += [f"- {t}" for t in touched[:60]]
+        stale = [n for n in notes if not n.staging and str(n.meta.get("updated", "")) < (dt.date.today() - dt.timedelta(days=30)).isoformat()]
+        parts.append(f"- {len(stale)} note(s) not updated in 30 days" + (": " + ", ".join(f"[[{n.stem}]]" for n in stale[:20]) if stale else ""))
+        parts.append("")
+    tc = _text_coverage()
+    docs = tc.audit(matter)
+    parts.append("## Text coverage")
+    parts.append("- " + tc.coverage_line(docs))
+    parts += [f"- [{d.state}] {d.path}" for d in docs if not d.searched and d.state != "untriaged"][:20]
+    parts.append("")
+    run = _last_run(matter)
+    if run:
+        parts.append("## Last sync")
+        parts.append(f"- {run.get('mode')} run, outcome {run.get('outcome')}, {run.get('new_files', 0)} new file(s), triage {run.get('triage')}"
+                     + (f", failed connectors: {', '.join(run['failed_connectors'])}" if run.get("failed_connectors") else ""))
+        parts.append("")
+    q = _list_items(matter / "QUESTIONS.md", 50)
+    parts.append(f"## QUESTIONS.md ({len(q)} open)")
+    parts += [f"- {x[:200]}" for x in q]
+    parts.append("")
+    todo = _list_items(matter / "TODO.md", 12)
+    parts.append("## TODO.md (top)")
+    parts += [f"- {x[:200]}" for x in todo]
+    return "\n".join(parts) + "\n"
+
+
+def cmd_refine(args: argparse.Namespace) -> int:
+    """Nightly: gather inputs deterministically, then one agent pass that
+    writes proposals and questions to derived/refine/<date>.md and nothing
+    else. Notes change only through the standup, with a human."""
+    import datetime as dt
+    matter = _matter_root(Path(args.matter_dir))
+    out_dir = matter / "derived" / "refine"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    today = dt.date.today().isoformat()
+    inputs = out_dir / f"{today}_inputs.md"
+    proposal = out_dir / f"{today}.md"
+    inputs.write_text(refine_inputs(matter, since_days=args.since_days), encoding="utf-8")
+    print(f"wrote {inputs.relative_to(matter)}")
+    if args.inputs_only:
+        return 0
+    if args.scheduled and proposal.exists():
+        print(f"{proposal.relative_to(matter)} exists; not rerunning")
+        return 0
+    agent_run = ROOT / "cli" / "agent-run"
+    if subprocess.run([str(agent_run), "--check"], capture_output=True).returncode != 0:
+        print("no agent CLI available; inputs written, no proposal", file=sys.stderr)
+        return 1
+    template = (ROOT / "triage" / "prompts" / "refine.md").read_text(encoding="utf-8")
+    prompt = template.replace("{inputs}", str(inputs.relative_to(matter))).replace(
+        "{proposal}", str(proposal.relative_to(matter))).replace("{date}", today)
+    before = set(_git_lines(matter, "status", "--porcelain"))
+    proc = subprocess.run([str(agent_run), "--yolo", "--role", "refine"], input=prompt, text=True,
+                          cwd=matter, capture_output=True)
+    after = set(_git_lines(matter, "status", "--porcelain"))
+    strays = sorted(x for x in after - before if "derived/refine" not in x)
+    if strays:
+        print("WARNING: refine touched files outside derived/refine (left in place, review them):", file=sys.stderr)
+        for x in strays:
+            print(f"  {x}", file=sys.stderr)
+    if proc.returncode != 0:
+        print(f"refine agent failed ({proc.returncode}): {proc.stderr[-500:]}", file=sys.stderr)
+        return 1
+    if not proposal.exists():
+        proposal.write_text(f"# refine {today}\n\n(the agent produced no proposal file; its output follows)\n\n{proc.stdout}", encoding="utf-8")
+    print(f"wrote {proposal.relative_to(matter)}")
+    return 0
+
+
+def standup_agenda(matter: Path) -> str:
+    import datetime as dt
+    today = dt.date.today().isoformat()
+    lines = [f"# Standup agenda: {matter.name}, {today}", ""]
+    lines.append(render_brief(matter, todo_limit=6, dates_limit=8).split("\n", 1)[1])
+    run = _last_run(matter)
+    lines.append("## Sync")
+    if run:
+        fin = dt.datetime.fromtimestamp(run.get("finished", 0)).strftime("%Y-%m-%d %H:%M")
+        lines.append(f"- last {run.get('mode')} run {fin}: outcome {run.get('outcome')}, "
+                     f"{run.get('new_files', 0)} new file(s), triage {run.get('triage')}")
+        if run.get("failed_connectors"):
+            lines.append(f"- FAILED connectors: {', '.join(run['failed_connectors'])}")
+    else:
+        lines.append("- no run recorded yet")
+    lines.append("")
+    refine_dir = matter / "derived" / "refine"
+    props = sorted(refine_dir.glob("????-??-??.md")) if refine_dir.is_dir() else []
+    lines.append("## Refinement proposals")
+    if props:
+        latest = props[-1]
+        lines.append(f"- latest: `{latest.relative_to(matter)}` ({sum(1 for _ in latest.open())} lines); "
+                     "accept, amend or reject each item during standup")
+    else:
+        lines.append("- none yet (`sc refine .` produces one)")
+    lines.append("")
+    q = _list_items(matter / "QUESTIONS.md", 40)
+    lines.append(f"## Open questions ({len(q)})")
+    lines += [f"- {x[:220]}" for x in q] or ["- none"]
+    lines.append("")
+    if (matter / "knowledge").is_dir():
+        kv = _knowledge()
+        notes = kv.check(matter)
+        staging = sum(1 for n in notes if n.staging)
+        errs = sum(len(n.problems) for n in notes)
+        unsourced = [n for n in notes if not n.staging and not (n.meta.get("sources") or [])]
+        lines.append("## Knowledge vault")
+        lines.append(f"- {len(notes)} notes, {errs} lint error(s), {staging} in migration staging, "
+                     f"{len(unsourced)} note(s) without sources")
+        lines.append("")
+    lines.append("## How to run this standup")
+    lines.append("Open the matter in a session and run `/standup`. Thirty minutes: answer questions, "
+                 "decide proposals, correct notes. Answers land in the vault as `verified: human`; "
+                 "resolved questions leave QUESTIONS.md; the session ends with `record(standup)`.")
+    return "\n".join(lines) + "\n"
+
+
+def cmd_standup(args: argparse.Namespace) -> int:
+    import datetime as dt
+    matter = _matter_root(Path(args.matter_dir))
+    if args.action != "agenda":
+        return 2
+    out_dir = matter / "derived" / "standup"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    p = out_dir / f"{dt.date.today().isoformat()}.md"
+    p.write_text(standup_agenda(matter), encoding="utf-8")
+    print(p)
+    if args.notify and _platform().startswith(("darwin", "Darwin")):
+        msg = f"Standup agenda ready for {matter.name}: run /standup"
+        subprocess.run(["osascript", "-e", f'display notification "{msg}" with title "prosaic"'],
+                       capture_output=True)
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Session brief and open: the deterministic paths behind the routine
 # harness commands (ADR-0040). Neither asks a model anything.
 # ---------------------------------------------------------------------------
@@ -918,6 +1138,16 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     guard = matter / ".state" / "sync_last_success"
     if guard.is_file():
         lines.append(f"- last successful sync: {_age(guard.stat().st_mtime)}")
+    run = _last_run(matter)
+    if run:
+        bad = run.get("failed_connectors") or []
+        lines.append(f"- last {run.get('mode')} run: {run.get('outcome')}, {run.get('new_files', 0)} new, "
+                     f"triage {run.get('triage')}" + (f"; FAILED connectors: {', '.join(bad)}" if bad else ""))
+    rdir = matter / "derived" / "refine"
+    if rdir.is_dir():
+        props = sorted(rdir.glob("????-??-??.md"))
+        if props:
+            lines.append(f"- refinement proposal pending: `{props[-1].relative_to(matter)}` (decide it in `/standup`)")
     conns = list((cfg.get("connectors") or {}).keys())
     if conns:
         lines.append(f"- connectors: {', '.join(conns)}")
@@ -1669,6 +1899,19 @@ def main() -> int:
     sp.add_argument("--jobs", type=int, default=2)
     sp.set_defaults(func=cmd_upgrade)
 
+    sp = sub.add_parser("refine", help="nightly knowledge refinement: proposals and questions, never edits (ADR-0044)")
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--since-days", type=int, default=1)
+    sp.add_argument("--inputs-only", action="store_true", help="gather inputs; run no agent")
+    sp.add_argument("--scheduled", action="store_true", help="skip if today's proposal exists")
+    sp.set_defaults(func=cmd_refine)
+
+    sp = sub.add_parser("standup", help="write the morning standup agenda (derived/standup/<date>.md)")
+    sp.add_argument("action", choices=("agenda",))
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--notify", action="store_true", help="post a desktop notification (macOS)")
+    sp.set_defaults(func=cmd_standup)
+
     sp = sub.add_parser("brief", help="print a short matter brief for a session start")
     sp.add_argument("matter_dir", nargs="?", default=".")
     sp.add_argument("--todo", type=int, default=8, help="TODO items to show")
@@ -1686,6 +1929,8 @@ def main() -> int:
     sp.add_argument("matter_dir", nargs="?", default=".")
     sp.add_argument("--apply", action="store_true",
                     help="actually delete them (default: report only)")
+    sp.add_argument("--older-than", type=int, metavar="DAYS", dest="older_than",
+                    help="instead: files older than DAYS under out/, .flow/, derived/find|refine|standup")
     sp.set_defaults(func=cmd_clean)
 
     sp = sub.add_parser("backup", help="back a matter up to its configured upstream")
@@ -1713,7 +1958,7 @@ def main() -> int:
     )
     sp.set_defaults(func=cmd_deps)
 
-    sp = sub.add_parser("schedule", help="install the 12-hourly background sync (macOS)")
+    sp = sub.add_parser("schedule", help="install the standby supervisor: sync, inbox watcher, nightly refine, standup agenda (macOS)")
     sp.add_argument("matter_dir")
     sp.add_argument("times", nargs="*", help="two HH:MM firing times (default 08:00 20:00)")
     sp.set_defaults(func=cmd_schedule)

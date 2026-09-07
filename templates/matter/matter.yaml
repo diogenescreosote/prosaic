@@ -22,6 +22,16 @@ backup:
 # related_matters:
 #   - ../other-matter
 
+# Agent roles (ADR-0044): which model runs each headless job, and a turn
+# cap. Unset means the harness's default model, uncapped. Triage and
+# refine integrate new material and belong on the strongest model; the
+# judge reads and scores and can be cheaper.
+# agent:
+#   roles:
+#     triage: {max_turns: 80}
+#     refine: {max_turns: 40}
+#     judge:  {model: claude-sonnet-5, max_turns: 20}
+
 # Source connectors. Only configured connectors run during `sc sync`.
 # See prosaic docs/connectors.md for each connector's options.
 #

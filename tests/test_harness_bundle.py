@@ -17,7 +17,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SC = REPO_ROOT / "cli" / "sc"
 BUNDLE = REPO_ROOT / "templates" / "matter" / ".claude"
-EXPECTED_COMMANDS = {"build", "build-doc", "open", "clean", "status", "commit", "find"}
+EXPECTED_COMMANDS = {"build", "build-doc", "open", "clean", "status", "commit", "find", "standup"}
 
 
 def frontmatter(text: str) -> dict[str, str]:
