@@ -207,8 +207,12 @@ def classify_pdf(matter: Path, pdf: Path) -> Doc:
     d.pages, d.uncovered = pages, unc
     if unc:
         d.state = "needs-ocr"
-        d.note = (f"{len(unc)} of {pages} page(s) lack a usable text layer"
-                  + (" in the _ocr sibling too" if best is sib else ""))
+        if best is sib:
+            d.note = (f"OCR ran and found no text on {len(unc)} of {pages} page(s): "
+                      "likely a photo, graphic or blank scan; describe it in a "
+                      "human .txt sidecar if its content matters")
+        else:
+            d.note = f"{len(unc)} of {pages} page(s) lack a usable text layer"
         return d
     if not side.exists():
         d.state = "needs-sidecar"
@@ -374,7 +378,9 @@ def ocr_pdf(original: Path, pages_to_force: list[int], redo: bool = False) -> tu
     sib = ocr_sibling(original)
     if sib.exists() and not redo:
         raise FileExistsError(f"{sib.name} exists; pass --redo-ocr to regenerate it")
-    cmd = [exe, "-l", "eng", "-q"]
+    # The sibling is derived output; the signed original is untouched, so
+    # invalidating the signature on the copy is correct, not destructive.
+    cmd = [exe, "-l", "eng", "-q", "--invalidate-digital-signatures"]
     if pages_to_force:
         cmd += ["--force-ocr", "--pages", ",".join(map(str, pages_to_force))]
         note = f"ocrmypdf --force-ocr --pages {','.join(map(str, pages_to_force))}"
@@ -444,6 +450,9 @@ def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) 
     return d
 
 
+FAILURES_NAME = "text_ensure_failures.json"
+
+
 def ensure(matter: Path, include_inbox: bool = False, dry_run: bool = False,
            redo_ocr: bool = False, jobs: int = 2) -> list[Doc]:
     docs = audit(matter, include_inbox=include_inbox)
@@ -451,10 +460,21 @@ def ensure(matter: Path, include_inbox: bool = False, dry_run: bool = False,
     if not todo:
         return docs
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
-        list(ex.map(lambda d: repair(matter, d, dry_run=dry_run, redo_ocr=redo_ocr), todo))
+        results = list(ex.map(lambda d: repair(matter, d, dry_run=dry_run, redo_ocr=redo_ocr), todo))
     if dry_run:
         return docs
-    return audit(matter, include_inbox=include_inbox)
+    # Why a repair did not take is otherwise lost when the tree is
+    # re-audited; keep it beside the cache and surface it on the row.
+    failures = {r.path: r.note for r in results if r.note.startswith("repair failed")
+                or "not installed" in r.note or "leaving it" in r.note}
+    fpath = matter.resolve() / ".state" / FAILURES_NAME
+    fpath.parent.mkdir(parents=True, exist_ok=True)
+    fpath.write_text(json.dumps(failures, indent=1, sort_keys=True))
+    final = audit(matter, include_inbox=include_inbox)
+    for d in final:
+        if not d.searched and d.path in failures:
+            d.note = (d.note + " | " if d.note else "") + failures[d.path]
+    return final
 
 
 # ---------------------------------------------------------------------------
