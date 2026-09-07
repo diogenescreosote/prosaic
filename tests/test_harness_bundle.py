@@ -147,3 +147,19 @@ def test_find_reports_hits_and_unsearched_pdfs(matter: Path):
     assert "text coverage:" in out
     miss = sc("find", "zzz-not-there", "--matter-dir", str(matter))
     assert miss.returncode == 2 and "0 hit line(s)" in miss.stdout
+
+
+def test_find_summarizes_a_broad_term(matter: Path):
+    import pymupdf as fitz
+    (matter / "assets").mkdir(exist_ok=True)
+    for i in range(45):  # more files than the summary threshold
+        (matter / "assets" / f"note{i:02d}.txt").write_text(f"Quill wrote on day {i}. Quill again.\n")
+    proc = sc("find", "Quill", "--matter-dir", str(matter))
+    out = proc.stdout
+    assert "in 45 file(s)" in out and "files by directory: assets 45" in out
+    assert "(summary: broad term" in out and "Quill wrote" not in out, "no snippets in summary mode"
+    assert len(out) < 6000, f"summary output should stay small, got {len(out)} chars"
+    full = sc("find", "Quill", "--full", "--per-file", "1", "--matter-dir", str(matter)).stdout
+    assert "Quill wrote" in full
+    narrow = sc("find", "day 07", "--matter-dir", str(matter)).stdout
+    assert "note07.txt" in narrow and "Quill wrote on day 7" in narrow

@@ -17,8 +17,11 @@ You are answering "is this in the record, and where?" The failure this
 command exists to prevent is a confident "not found" after a partial
 look. Rules:
 
-1. Read every hit above in context (the file and lines named). Answer
-   with citations: file, line or page, and the quoted passage.
+1. A broad term (a surname, a place) comes back as a summary: files with
+   hit counts, no snippets. Narrow it --- add a second term, a date, a
+   first name --- and run `sc find` again until the hits are readable,
+   then read every hit in context. Answer with citations: file, page or
+   line, and the quoted passage.
 2. Treat the UNSEARCHED list as unsearched, not absent. `--ensure`
    already OCR'd and dumped what tools can; what remains is unreadable,
    unsupported, or needs a human (a transcript, a conversion). Say

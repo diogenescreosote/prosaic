@@ -1057,13 +1057,45 @@ def _page_index(text_file: Path) -> list[int]:
     return pages
 
 
-def format_find(report: dict, show_unsearched: int = 40, matter: Path | None = None) -> str:
+#: Above this many files a term is broad, and a page of snippets per file
+#: would cost the reading model tens of thousands of tokens (a party's
+#: surname on a live matter: 452 files, 59k tokens). Broad terms get a
+#: summary: files with counts, capped, and the advice to narrow.
+SUMMARY_ABOVE_FILES = 40
+
+
+def _original_of(path: str) -> str:
+    if path.startswith("derived/text/") and path.endswith(".txt"):
+        return path[len("derived/text/"):-len(".txt")]
+    return path
+
+
+def format_find(report: dict, show_unsearched: int = 40, matter: Path | None = None,
+                summary: bool | None = None, max_files: int = 60) -> str:
     """Hits under derived/text/ are shown as the original document with a
-    page number, so a hit is a cite, not a path into a cache."""
+    page number, so a hit is a cite, not a path into a cache. Broad terms
+    (more than SUMMARY_ABOVE_FILES files, or --summary) list files with hit
+    counts instead of snippets, capped at max_files."""
     lines: list[str] = []
     for term, hits in report["terms"].items():
         total = sum(len(v) for v in hits.values())
         lines.append(f"## {term!r}: {total} hit line(s) in {len(hits)} file(s)")
+        use_summary = summary if summary is not None else len(hits) > SUMMARY_ABOVE_FILES
+        if use_summary:
+            ranked = sorted(hits.items(), key=lambda kv: (-len(kv[1]), kv[0]))
+            by_dir: dict[str, int] = {}
+            for path, hs in ranked:
+                top = _original_of(path).split("/")[0]
+                by_dir[top] = by_dir.get(top, 0) + 1
+            lines.append("files by directory: " + ", ".join(f"{d} {n}" for d, n in sorted(by_dir.items(), key=lambda kv: -kv[1])))
+            for path, hs in ranked[:max_files]:
+                lines.append(f"- {_original_of(path)} ({len(hs)})")
+            if len(ranked) > max_files:
+                lines.append(f"  ... and {len(ranked) - max_files} more file(s)")
+            lines.append("(summary: broad term; narrow it, add a second term, or pass "
+                         "--per-file/--max-files to see snippets)")
+            lines.append("")
+            continue
         for path in sorted(hits):
             derived = path.startswith("derived/text/") and path.endswith(".txt")
             if derived:
@@ -1128,7 +1160,8 @@ def cmd_find(args: argparse.Namespace) -> int:
     if ents:
         sys.stdout.write("## Knowledge notes (alias index)\n" + "\n".join(ents) + "\n\n")
     report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs)
-    sys.stdout.write(format_find(report, matter=matter))
+    summary = True if args.summary else (False if args.full else None)
+    sys.stdout.write(format_find(report, matter=matter, summary=summary, max_files=args.max_files))
     if report["unsearched"]:
         return 2
     return 0 if any(report["terms"].values()) else 1
@@ -1454,6 +1487,10 @@ def main() -> int:
     sp.add_argument("-F", "--fixed", action="store_true", help="literal terms, not regex")
     sp.add_argument("--ensure", action="store_true",
                     help="run `sc text ensure` first so sidecars exist before searching")
+    sp.add_argument("--summary", action="store_true",
+                    help="files with hit counts only (automatic above %d files)" % SUMMARY_ABOVE_FILES)
+    sp.add_argument("--full", action="store_true", help="snippets even for a broad term")
+    sp.add_argument("--max-files", type=int, default=60, help="files listed in summary mode")
     sp.set_defaults(func=cmd_find)
 
     sp = sub.add_parser("text", help="text coverage: audit or ensure that every document is searchable")
