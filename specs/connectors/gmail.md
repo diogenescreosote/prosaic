@@ -103,7 +103,10 @@ what is stored, and can be produced again.
    follows the filename and a shared name would mix two threads into
    one record. The backfill repairs any such sharing it finds (first
    claimant keeps the name, the rest are renamed and rendered afresh,
-   the mixed mbox is deleted and each thread recaptured). *(tested)* The
+   the mixed mbox is deleted and each thread recaptured; PDFs are
+   rendered one at a time after the concurrent captures, because the
+   renderer shares one browser page). A thread Gmail reports as gone is
+   marked in the ledger and not retried; its PDF is its record. *(tested)* The
    ledger is written after each successful export, so a crash
    mid-batch never repeats work already done. *(untested)*
 9. **Chronological, literate names.** Output is

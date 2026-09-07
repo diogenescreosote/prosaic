@@ -1159,3 +1159,30 @@ def test_two_threads_never_share_a_filename_or_an_mbox() -> None:
     assert out["c"]["mbox"] == "mbox/20240102_other.mbox", "an unshared thread is untouched"
     assert out["mixedGone"]
     assert out["claimedByOther"] is True and out["ownName"] is False
+
+
+def test_backfill_selection_skips_gone_threads_and_finds_missing_pdfs() -> None:
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js');
+        const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'sel-'));
+        fs.mkdirSync(path.join(outDir, 'mbox'));
+        fs.writeFileSync(path.join(outDir, 'mbox', 'b.mbox'), 'x');
+        fs.writeFileSync(path.join(outDir, 'mbox', 'c.mbox'), 'x');
+        fs.writeFileSync(path.join(outDir, 'c.pdf'), 'x');
+        const ledger = { threads: {
+          a: { filename: 'a.pdf' },                                  // owed an mbox
+          b: { filename: 'b.pdf', mbox: 'mbox/b.mbox' },             // has mbox, no PDF
+          c: { filename: 'c.pdf', mbox: 'mbox/c.mbox' },             // complete
+          d: { filename: 'd.pdf', gone: '2024-01-01T00:00:00Z' },    // deleted in Gmail
+          e: { filename: 'e.pdf', mbox: 'mbox/missing.mbox' },       // ledger says mbox, file absent
+        } };
+        console.log(JSON.stringify({
+          pending: pull.pendingBackfill(ledger).map(([id]) => id),
+          needPdf: pull.threadsNeedingPdf(ledger, outDir).map(([id]) => id),
+        }));
+        """
+    )
+    assert out["pending"] == ["a"], "gone threads are not retried; captured ones are done"
+    assert out["needPdf"] == ["b"], "only a thread with a real mbox and no PDF is rendered"

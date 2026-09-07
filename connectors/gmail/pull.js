@@ -737,6 +737,27 @@ async function pullAccountListed(ctx, account) {
  * nothing and announces nothing: the PDFs it would announce are
  * already in the matter and already triaged.
  */
+/** Ledger entries still owed an mbox: exported, not yet captured, not gone from Gmail. */
+function pendingBackfill(ledger) {
+  return Object.entries(ledger.threads).filter(
+    ([, entry]) => entry && entry.filename && !entry.mbox && !entry.gone
+  );
+}
+
+/** Entries whose mbox exists but whose PDF is not on disk (a repaired collision). */
+function threadsNeedingPdf(ledger, outDir) {
+  return Object.entries(ledger.threads).filter(
+    ([, entry]) =>
+      entry &&
+      entry.mbox &&
+      entry.filename &&
+      fs.existsSync(path.join(outDir, entry.mbox)) &&
+      !fs.existsSync(path.join(outDir, entry.filename))
+  );
+}
+
+const GONE_RE = /Requested entity was not found|notFound/i;
+
 async function backfillAccount(ctx, account) {
   const { gmail, outDir, state, dryRun } = ctx;
   const key = creds.accountKey(account);
@@ -746,9 +767,7 @@ async function backfillAccount(ctx, account) {
     if (r.from !== r.to) console.error(`  [${key}] ${r.from} was also thread ${r.threadId}: now ${r.to}`);
   }
   if (renames.length && !dryRun) saveState(ctx.matterDir, 'gmail', state);
-  const pending = Object.entries(ledger.threads).filter(
-    ([, entry]) => entry && entry.filename && !entry.mbox
-  );
+  const pending = pendingBackfill(ledger);
   const limit = ctx.limit ? Math.min(ctx.limit, pending.length) : pending.length;
   console.error(
     `[${key}] backfill: ${pending.length} thread(s) without an mbox` +
@@ -774,30 +793,46 @@ async function backfillAccount(ctx, account) {
       saveState(ctx.matterDir, 'gmail', state);
       done++;
       console.error(`  ${entry.filename} ok (${result.total} msg)`);
-      // A thread whose PDF is not on disk (a repaired collision) gets its
-      // own rendering now, from the mbox just captured; that PDF is new
-      // to the matter, so it is announced.
-      const pdfPath = path.join(outDir, entry.filename);
-      if (!fs.existsSync(pdfPath)) {
-        const messages = render.loadThread(mboxPath);
-        await render.renderMboxToPdf(mboxPath, pdfPath, {
-          messages,
-          subject: render.threadSubject(messages),
-          account: ledger.identity || key,
-          quoted: ctx.quoted,
-          tmpDir: ctx.tmpDir,
-        });
-        console.log(`NEW ${pdfPath}`);
-        const written = render.extractAttachments(messages, render.attachmentsDirFor(mboxPath), {});
-        for (const file of written) if (file.created) console.log(`NEW ${file.path}`);
-        ledger.threads[threadId].exportedAt = new Date().toISOString();
-        saveState(ctx.matterDir, 'gmail', state);
-      }
     } catch (err) {
-      console.error(`  ${entry.filename} FAIL (${err.message})`);
+      if (GONE_RE.test(String(err.message))) {
+        // The thread no longer exists in the mailbox; the PDF already on
+        // disk is its only record. Remember that, so it is not retried.
+        ledger.threads[threadId] = { ...entry, gone: new Date().toISOString() };
+        saveState(ctx.matterDir, 'gmail', state);
+        console.error(`  ${entry.filename} gone from Gmail; PDF is the record`);
+      } else {
+        console.error(`  ${entry.filename} FAIL (${err.message})`);
+      }
     }
     await sleep(BACKFILL_PAUSE_MS);
   });
+
+  // Rendering shares one browser page and must run one at a time. A
+  // thread whose PDF is not on disk (a repaired collision) gets its own
+  // rendering from the mbox; that PDF is new to the matter, so it is
+  // announced.
+  for (const [threadId, entry] of threadsNeedingPdf(ledger, outDir)) {
+    const mboxPath = path.join(outDir, entry.mbox);
+    const pdfPath = path.join(outDir, entry.filename);
+    try {
+      const messages = render.loadThread(mboxPath);
+      await render.renderMboxToPdf(mboxPath, pdfPath, {
+        messages,
+        subject: render.threadSubject(messages),
+        account: ledger.identity || key,
+        quoted: ctx.quoted,
+        tmpDir: ctx.tmpDir,
+      });
+      console.log(`NEW ${pdfPath}`);
+      const written = render.extractAttachments(messages, render.attachmentsDirFor(mboxPath), {});
+      for (const file of written) if (file.created) console.log(`NEW ${file.path}`);
+      ledger.threads[threadId].exportedAt = new Date().toISOString();
+      saveState(ctx.matterDir, 'gmail', state);
+      console.error(`  ${entry.filename} rendered`);
+    } catch (err) {
+      console.error(`  ${entry.filename} RENDER FAIL (${err.message})`);
+    }
+  }
   return done;
 }
 
@@ -901,6 +936,8 @@ module.exports = {
   mapLimit,
   filenameClaimedByAnother,
   repairSharedFilenames,
+  pendingBackfill,
+  threadsNeedingPdf,
   listingQuery,
   listingPlan,
   searchThreads,
