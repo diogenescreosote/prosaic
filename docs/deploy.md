@@ -25,10 +25,11 @@ identical to a form or key that was never asked for.
 
 ## The deployment path is permanent
 
-`sc init` symlinks a matter's `Makefile` to
-`<deployment>/pleading/Makefile`. Every matter therefore points at the
-deployment by absolute path, and moving the deployment later breaks all
-of them at once. Choose the location before cloning.
+`sc init` no longer installs a build entry point: builds run through the
+`sc` CLI in the deployment (`sc build`, `sc build-doc`). Every matter
+therefore depends on the deployment by its path in shell history and
+scheduled jobs, and moving the deployment later breaks them at once.
+Choose the location before cloning.
 
 ## Why verification is a step and not a formality
 

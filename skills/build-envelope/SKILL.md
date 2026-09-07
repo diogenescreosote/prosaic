@@ -5,15 +5,17 @@ description: Build a filing packet (28-line pleading PDF/DOCX, exhibits, cover f
 
 # Build a filing envelope
 
-Run from the matter directory (it has `envelopes.yaml` and a
-`Makefile` that includes prosaic's).
+Run from the matter directory (it has `envelopes.yaml`); the `sc` CLI
+drives the build (ADR-0039).
 
 ## The loop
 
-1. `make list` — the envelopes this matter defines, and their variants.
-2. `make <envelope> VARIANT=<public|sealed|...>` — build one. Under
-   the hood this is `<prosaic>/cli/sc build`, which honors staleness:
-   an up-to-date envelope is not rebuilt (`--force` overrides).
+1. `sc list` — the envelopes this matter defines, and their variants.
+2. `sc build <envelope> --variant <public|sealed>` — build one. The
+   build is manifest-aware: an output is rebuilt when its source,
+   dependencies, or render options (`--final`, variant, signer, date)
+   change (`--force` overrides). `sc build-doc src/<source>.md` builds
+   exactly one envelope-owned source, with its configured DOCX.
 3. **Read stderr.** The build warns rather than fails on things you
    must act on:
    - `front-matter key X is not read by anything` — misspelled or

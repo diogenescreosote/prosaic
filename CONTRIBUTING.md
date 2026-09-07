@@ -43,7 +43,7 @@ Also run the demo matter end-to-end before submitting:
 
 ```bash
 ./cli/sc init /tmp/sc-demo && cp -R examples/demo-matter/src examples/demo-matter/envelopes.yaml /tmp/sc-demo/
-cd /tmp/sc-demo && make list && make demo_declaration
+cd /tmp/sc-demo && sc list && sc build demo_declaration
 ```
 
 Portal connectors can't be CI-tested against live services; include a

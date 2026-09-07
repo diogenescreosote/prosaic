@@ -59,6 +59,7 @@ project accretes decisions instead of middleware.
 - [0036](adr/0036-attest-artifacts-not-builds.md) Attest artifacts byte-for-byte; no build reproducibility
 - [0037](adr/0037-no-acroform-filling.md) AcroForm filling prohibited; overlay is the only form technology
 - [0038](adr/0038-raw-mail-is-the-record.md) Raw mail is the record; the print view is a rendering of it
+- [0039](adr/0039-cli-first-mode-aware-builds.md) CLI-first document builds with mode-aware freshness; the Makefile is gone
 
 Also:
 

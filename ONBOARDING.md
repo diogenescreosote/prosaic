@@ -55,7 +55,7 @@ layer resolved.
 ## Then: your matter
 
 If the matter already exists (it has a `matter.yaml`), you are done —
-`cd` into it and `make list` shows what it can build.
+`cd` into it and `sc list` shows what it can build.
 
 If you are starting one, ask Claude Code to use the `new-matter` skill.
 It scaffolds the layout, git repo, commit hooks and backup remote.

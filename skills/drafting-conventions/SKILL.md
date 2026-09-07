@@ -115,8 +115,8 @@ affirmative sentence cannot.
 
 ## Release discipline (enforced)
 
-Every build is DRAFT-bannered by default; `--final` (or
-`make ... FINAL=1`) is the explicit act of releasing, per invocation,
+Every build is DRAFT-bannered by default; `--final`
+is the explicit act of releasing, per invocation,
 never persisted in a source. `sc docuseal send` refuses draft-stamped
 PDFs without `--allow-draft`. `notreal:` remains for hypotheticals
 and simulations whose banner should say what they are. Never build

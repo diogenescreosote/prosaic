@@ -190,7 +190,7 @@ A build with no `--final` flag stamps a red banner on every page —
 the PDF metadata, which `sc docuseal send` refuses unless overridden.
 Rendered output is what circulates, and an unmarked draft is the
 accident waiting to happen. Suppression is per-invocation only
-(`sc build <envelope> --final`, `make <envelope> FINAL=1`); a
+(`sc build <envelope> --final`, `sc build-doc <source> --final`); a
 front-matter `_final:` is stripped, so a source can never finalize
 itself. *(tested: pleading/tests/test_draft_banner.py)*
 
@@ -1524,8 +1524,8 @@ Each entry in `sources` is either:
 Envelope-level metadata:
 
 - `sent_on` (optional) — ISO date string such as `2026-03-19`. If present, the
-  envelope is treated as already sent/filed. `make all` skips it by default,
-  and explicit rebuilds require force.
+  envelope is treated as already sent/filed. `sc build --all` skips it by
+  default, and explicit rebuilds require `--force`.
 
 ### Sent-envelope workflow
 
@@ -1535,13 +1535,13 @@ or filed without letting routine rebuilds overwrite it by accident.
 Recommended pattern:
 
 1. Draft normally with no `sent_on` key.
-2. Build with `make <envelope_name>` or `make all`.
+2. Build with `sc build <envelope_name>` or `sc build --all`.
 3. After the packet is actually sent or filed, add `sent_on: YYYY-MM-DD` to the
    envelope in `envelopes.yaml`.
 4. From that point forward:
-   - `make all` skips that envelope
-   - `make list` shows it as sent with its date
-   - `make <envelope_name>` refuses to rebuild it unless forced
+   - `sc build --all` skips that envelope
+   - `sc list` shows it as sent with its date
+   - `sc build <envelope_name>` refuses to rebuild it unless forced
 
 Example:
 
@@ -1556,7 +1556,7 @@ envelopes:
 If you intentionally want to rebuild a sent envelope, use:
 
 ```bash
-make prelitigation_364 FORCE=1
+sc build prelitigation_364 --force
 ```
 
 This is meant for exceptional cases only, because once a packet has been sent,
@@ -1772,29 +1772,32 @@ proof_of_service:
 From the case directory (where `envelopes.yaml` lives):
 
 ```bash
-make <envelope_name>                                    # build one envelope if stale/missing
-make <envelope_name> NAME="Jane Roe" DATE=2026-03-16 # signed + dated
-make <envelope_name> VARIANT=public                     # build public variant to out/<envelope>/public/ if stale/missing
-make <envelope_name> VARIANT=sealed                     # build sealed variant to out/<envelope>/sealed/ if stale/missing
-make all NAME="Jane Roe" DATE=2026-03-16             # build all draft envelopes if stale/missing
-make all VARIANT=public                                 # build all public variants if stale/missing
-make all VARIANT=sealed                                 # build all sealed variants if stale/missing
-make both                                               # run both of the above (public then sealed)
-make list                                               # show available envelopes
-make check-stale VARIANT=public                         # fail if any public output is stale
-make check-stale VARIANT=sealed                         # fail if any sealed output is stale
-make <envelope_name> FORCE=1                            # force rebuild and allow sent envelope rebuild
-make all FORCE=1                                        # include sent envelopes and force rebuild
-make clean                                              # delete out/
+sc build <envelope_name>                                      # build one envelope if stale/missing
+sc build <envelope_name> --sign "Jane Roe" --date 2026-03-16 # signed + dated
+sc build <envelope_name> --variant public                    # build public variant to out/<envelope>/public/ if stale/missing
+sc build <envelope_name> --variant sealed                    # build sealed variant to out/<envelope>/sealed/ if stale/missing
+sc build --all --sign "Jane Roe" --date 2026-03-16           # build all draft envelopes if stale/missing
+sc build --all --variant public                              # build all public variants if stale/missing
+sc build --all --variant sealed                              # build all sealed variants if stale/missing
+sc build-doc src/<source>.md                                 # build exactly one envelope-owned source (+ its configured DOCX)
+sc list                                                      # show available envelopes
+sc build --all --variant public --check-stale                # fail if any public output is stale
+sc build --all --variant sealed --check-stale                # fail if any sealed output is stale
+sc build <envelope_name> --force                             # force rebuild and allow sent envelope rebuild
+sc build --all --force                                       # include sent envelopes and force rebuild
+sc clean --apply                                             # delete out/ (reports first without --apply)
 ```
 
-If `VARIANT` is omitted, the build emits a warning and writes to the legacy
+If `--variant` is omitted, the build emits a warning and writes to the legacy
 unscoped output directory `out/<envelope>/`.
 
 ### Incremental rebuilds
 
-Normal build commands are dependency-aware. Before rebuilding a source, the
-driver checks whether its outputs are missing or older than any dependency.
+Build freshness is **mode-aware** (ADR-0039). Each rendered source records a
+manifest entry in `out/<envelope>/.build_manifest.json` holding the render
+options (final/draft, variant, signer, date) and the dependency set. An output
+is rebuilt when any of those change — a draft PDF is never "up to date" for a
+`--final` request, even if every input's mtime is older than the output.
 
 For each source, the dependency set includes:
 
@@ -1806,36 +1809,38 @@ Behavior:
 
 - if outputs are current, the source is skipped as up to date
 - if any output is missing, the source is rebuilt
-- if any dependency is newer than an output, the source is rebuilt
-- `FORCE=1` bypasses the mtime check and rebuilds everything in scope
+- if any dependency or render option changed, the source is rebuilt
+- `--force` bypasses the check and rebuilds everything in scope
 
-This means plain build commands such as `make initial_complaint VARIANT=public`
+This means plain build commands such as `sc build initial_complaint --variant public`
 should normally be enough after source edits or exhibit redactions; the driver
 will notice stale outputs and regenerate them automatically.
 
 ### Staleness checks
 
-The build driver can verify that generated outputs are not older than the files
-they depend on.
+The build driver can verify that generated outputs match the files and render
+options they were built from.
 
 Command:
 
 ```bash
-make check-stale VARIANT=public
-make check-stale VARIANT=sealed
+sc build --all --variant public --check-stale
+sc build --all --variant sealed --check-stale
 ```
 
 What it checks for each rendered source:
 
 - the output PDF exists
 - the output `.docx` exists for any `docx: true` source
-- the output file is newer than:
+- the manifest's dependency set is unchanged:
   - the source markdown file itself
   - all attached exhibit files selected for that variant
   - any `exhibit_source` markdown file used for external exhibit-letter mapping
+- the manifest's render options match the invocation (final/draft, variant,
+  signer, date)
 
-If any output is missing or older than one of those dependencies, the command
-fails and prints the stale file and the dependency that is newer.
+If any output is missing, a dependency changed, or the options differ, the
+command fails and prints the stale file and the reason.
 
 This is especially useful after:
 
@@ -1843,49 +1848,7 @@ This is especially useful after:
 - refreshing Gmail-exported exhibit sources
 - changing a canonical exhibit symlink target
 
-### Makefile
-
-Each case directory should symlink to the shared Makefile in `pleading_gen/`:
-
-```bash
-ln -sf ../pleading_gen/Makefile .    # from a case dir like roe-v-bayside/
-```
-
-The Makefile auto-detects the relative path to `build_envelope.py`.
-
 ### Gmail export helper
-
-The shared Makefile also exposes a `gmail` target for case directories that
-define `gmail_addresses:` in `envelopes.yaml`.
-
-Expected repository layout:
-
-```text
-lawyering/
-  pleading_gen/
-  gmail-mcp-server/
-  some-case/
-```
-
-By default, the Makefile resolves the Gmail export script relative to
-`pleading_gen/`:
-
-- script: `../gmail-mcp-server/gmail_to_pdf.js`
-- `NODE_PATH`: `../gmail-mcp-server/node_modules`
-
-From a case directory:
-
-```bash
-make gmail
-make gmail GMAIL_FLAGS="--dry-run"
-make gmail GMAIL_FLAGS="--force"
-```
-
-You can override the server location if needed:
-
-```bash
-make gmail GMAIL_SERVER_DIR="/custom/path/to/gmail-mcp-server"
-```
 
 The Gmail exporter reads `gmail_addresses:` from the current case's
 `envelopes.yaml` and writes PDFs into `assets/gmail/`.

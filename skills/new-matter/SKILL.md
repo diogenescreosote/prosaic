@@ -7,8 +7,8 @@ description: Scaffold a new matter directory - layout, git repo, commit hooks, a
 
 1. `<prosaic>/cli/sc init <dir> --git` — creates the layout
    (`specs/matter.md`), copies the templates (AGENTS.md contract,
-   KNOWLEDGE/TODO/QUESTIONS, envelopes.yaml, matter.yaml), links the
-   Makefile, initializes git, installs the commit hooks. Rerunnable:
+   KNOWLEDGE/TODO/QUESTIONS, envelopes.yaml, matter.yaml),
+   initializes git, installs the commit hooks. Rerunnable:
    existing files are kept unless `--force`.
 2. **Edit `matter.yaml`**: caption, court, parties, connectors,
    backup. This is configuration the human owns — draft it, then ask.

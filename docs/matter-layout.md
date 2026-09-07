@@ -14,7 +14,6 @@ smith-v-smith/
 ├── TODO.md                # live task list (delete resolved items)
 ├── QUESTIONS.md           # open interview prompts
 ├── README.md              # human orientation
-├── Makefile → prosaic/pleading/Makefile
 │
 ├── inbox/                 # drop zone; unprocessed by definition
 ├── processed_files/       # canonical raw bytes of triaged inbox material
@@ -22,7 +21,7 @@ smith-v-smith/
 ├── assets/                # evidence, organized by topic
 │   ├── INDEX.md           # AUTHORITATIVE description of every asset
 │   ├── gmail/             # connector output: thread PDFs + CATALOG.md
-│   │   ├── mbox/          #   the raw messages — the record (ADR-0038)
+│   │   ├── mbox/          #   the raw messages — the record (ADR-0039)
 │   │   └── attachments/   #   parts extracted from them, per thread
 │   ├── audio/             # recordings + transcript sidecars
 │   └── <topic>/...        # correspondence/, court_filings/, exhibits/, …

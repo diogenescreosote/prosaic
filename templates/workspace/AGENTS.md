@@ -129,7 +129,6 @@ before being cited in any filing.
 
 **Proceed, then report** — configuration and project metadata, where
 there is one obviously correct answer: `matter.yaml`, `envelopes.yaml`,
-`Makefile`, `.gitignore`; key renames tracking current tooling;
 regenerating a derived file from its source; keeping an index in sync
 with disk.
 

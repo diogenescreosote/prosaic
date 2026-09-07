@@ -106,8 +106,8 @@ Scaffold a matter and build a filing packet from Markdown sources:
 ./cli/sc init ~/cases/smith-v-smith        # the directory, its git repo, its hooks
 $EDITOR ~/cases/smith-v-smith/matter.yaml  # case caption, connectors, backup
 ./cli/sc sync ~/cases/smith-v-smith        # pull sources, then triage what arrived
-cd ~/cases/smith-v-smith && make list      # the envelopes this matter defines
-make responsive_declaration VARIANT=public
+cd ~/cases/smith-v-smith && sc list       # the envelopes this matter defines
+sc build responsive_declaration --variant public
 ```
 
 Run the test suite with `uv run pytest`.
@@ -141,7 +141,7 @@ Run the test suite with `uv run pytest`.
   beside it, captioned from the same front matter, never merged into the
   document it accompanies.
 
-693 tests, with `ruff` and `mypy --strict` clean.
+701 tests, with `ruff` and `mypy --strict` clean.
 
 **Status:** 0.1.0. Young code: the engine and the six forms are tested
 against the statutes and the official blanks, but no filing produced by this

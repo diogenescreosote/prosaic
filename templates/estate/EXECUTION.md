@@ -10,8 +10,8 @@ here is legal advice.)*
 - [ ] The Anchored Key in the will and trust is YOUR key (armored
       block and `assets/anchor-key.asc` both replaced), generated
       with an expiry, revocation certificate stored offline.
-- [ ] `notreal:` removed from the source; rebuilt with `--final`
-      (`make <envelope> FINAL=1`); PDF proofread. Only this build
+- [ ] `notreal:` removed from the source; rebuilt with
+      `sc build <envelope> --final`; PDF proofread. Only this build
       lacks the DRAFT banner.
 - [ ] The build's barcode scans back to your key (any PDF417-capable
       scanner app), and the printed fingerprint matches

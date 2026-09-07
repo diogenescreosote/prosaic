@@ -21,11 +21,19 @@ subcommand's real promises live in that component's spec.
   means now (see [sync.md](sync.md)). *(untested)*
 - **`sc build <envelope>` / `sc list`** build and enumerate filing
   envelopes from a matter directory, honoring the generator's
-  staleness, variant, signing, and sent-envelope semantics (see
-  [pleading/generator.md](pleading/generator.md)). Every build is
-  DRAFT-bannered unless `--final` is passed — suppression is a
+  manifest-backed staleness, variant, signing, and sent-envelope
+  semantics (see [pleading/generator.md](pleading/generator.md)). Every
+  build is DRAFT-bannered unless `--final` is passed — suppression is a
   per-invocation act, never a property of the source. *(tested:
   pleading/tests/test_draft_banner.py)*
+- **`sc build-doc <source.md>`** builds exactly one envelope-owned
+  Markdown source: its PDF and, when the envelope entry declares
+  `docx: true`, its DOCX. The output location and available options come
+  from `envelopes.yaml`; a source owned by zero or multiple envelopes is
+  an error. Freshness is mode-aware: a draft output is stale for
+  `--final`, and signer, date, or variant changes also rebuild
+  (ADR-0039). *(tested:
+  tests/scenarios/pleading_exhibits/test_single_document_build.py)*
 - **`sc ocr <pdf> <outdir>`** OCR-supplements one PDF under the
   originals-are-sacred rules (adds text only to pages lacking it,
   never modifies the input, skips already-searchable files).
@@ -46,7 +54,7 @@ subcommand's real promises live in that component's spec.
   HTML (`--html`), the attachments extracted from its MIME parts
   (`--attachments`), or a single message as `.eml` (`--eml n:path`),
   with `--quoted show|hide` deciding whether quoted reply chains
-  appear. Capture and presentation are separate steps (ADR-0038), so
+  appear. Capture and presentation are separate steps (ADR-0039), so
   this reaches no mailbox and needs no token — a thread stored years
   ago re-renders from the bytes alone, and the output is a pure
   function of (mbox, options). *(tested:

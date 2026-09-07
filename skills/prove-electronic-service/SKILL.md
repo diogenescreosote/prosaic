@@ -125,7 +125,7 @@ front matter, and a forms block. What each field wants:
    evidence of.**
 2. Write the source at the canonical path; wire it into the served
    document's envelope.
-3. `make <envelope>` and read stderr per the build-envelope skill.
+3. `sc build <envelope>` and read stderr per the build-envelope skill.
 4. Verify the render (open it): exact title, addresses, date; the
    signature/date lines blank.
 5. The declarant signs **and dates** — the declaration date belongs

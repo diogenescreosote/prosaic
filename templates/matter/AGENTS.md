@@ -28,8 +28,9 @@ If there is no workspace contract above this directory, copy
 
 | Need | Use |
 |---|---|
-| Build a filing envelope | `make <envelope>` (this dir; `Makefile` includes prosaic's) |
-| List envelopes | `make list` |
+| Build a filing envelope | `<prosaic>/cli/sc build <envelope>` |
+| Build one document | `<prosaic>/cli/sc build-doc src/<source>.md` |
+| List envelopes | `<prosaic>/cli/sc list` |
 | Report stale build output | `<prosaic>/cli/sc clean .` |
 | Fill a Judicial Council form | `<prosaic>/cli/sc form fill <id> …` (`sc form info <id>` first) |
 | OCR-supplement a PDF | `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>` |
@@ -47,7 +48,7 @@ Configuration: `matter.yaml` (case, connectors, backup),
 ## STOP. `assets/gmail/mbox/` is the record; the PDF is a rendering
 
 The gmail connector stores each thread twice, and the two are not
-copies of each other (ADR-0038):
+copies of each other (ADR-0039):
 
 - `assets/gmail/mbox/<stem>.mbox` — every captured message as raw
   RFC 822 bytes, exactly as it was transmitted. **This is the
@@ -68,7 +69,7 @@ writes any single message out verbatim.
 
 The PDF shows quoted reply chains by default. If one reads
 `[Quoted text hidden]`, it was rendered under `--quoted hide` (or
-predates ADR-0038) — re-render it rather than reporting the thread as
+predates ADR-0039) — re-render it rather than reporting the thread as
 incomplete.
 
 ---
