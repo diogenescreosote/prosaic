@@ -128,7 +128,7 @@ Order: W0, W1, W2 (watcher and honest sync first), W3, W4, W5-now, then W5-later
 
 **W1, done and pushed.** ADR-0040 records the decision. Four CLI commands: `sc brief` (the one-page session orientation), `sc open` (an envelope's built PDFs), `sc find` (ripgrep over every text file and sidecar, with every PDF lacking a text sidecar listed as unsearched), and `sc harness install` (writes the bundle with the checkout path resolved; `sc init` does the same). The bundle in `templates/matter/.claude` carries a SessionStart hook that runs the brief and seven slash commands: `/build`, `/build-doc`, `/open`, `/clean`, `/status` relay CLI output on Haiku 4.5 at low effort and never edit a source; `/commit` and `/find` run on Sonnet 5 at medium effort. `docs/harness.md` and eleven tests cover it. Full suite: 690 tests, green.
 
-**Not yet done.** No live matter has the bundle; installing it is a deployment step after the merge to `main` and the cherry-pick into the deployment. W2 through W5 are unstarted. The one-line fix to the local descriptor with boolean keys belongs in the deployment's `local/` layer.
+**Deployed September 7.** `dev` is merged to `main` and into the deployment; every git-backed matter has the bundle; the scheduled sync runs text coverage. The largest matter is on every convention: text coverage, derived tree, vault with 191 notes (staging kept for review). Tests of the `/find` procedure with a Sonnet reader on two live matters answered correctly with cites; the first exposed that the missing Bates page lived in the related matter, which `related_matters` now covers, and the second exposed filename-only triage, which the checklist gate now makes explicit. W2, W3, W4b and W5 remain.
 
 | Workstream | State | Commits on `dev` |
 |---|---|---|
@@ -136,5 +136,6 @@ Order: W0, W1, W2 (watcher and honest sync first), W3, W4, W5-now, then W5-later
 | W1 fast path | done | ADR-0040; `sc brief/open/find/harness`; bundle; docs |
 | W2 standby supervisor | next | |
 | W3 pre-signature gate | planned | |
-| W4 / W4a knowledge graph and recall | planned | |
+| W4 knowledge vault | built; the largest matter folded into 191 notes, staging awaits review | ADR-0043; `sc knowledge`; `sc upgrade`; migrate-knowledge skill |
+| W4a recall | first slice built | ADR-0041; `sc text`; `sc find` with summary, `--all`, related matters, checklist gate |
 | W5 backend choice, privilege boundary | planned | |
