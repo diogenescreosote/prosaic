@@ -165,7 +165,10 @@ agent CLI is named (ADR-0020). Its promises:
   audit calls not searchable is listed as UNSEARCHED with its reason,
   the coverage line is printed, a hit under `derived/text/` is shown as
   the original document and page, and the exit status is 2 whenever such a
-  document exists (hits or not); 1 means searched everything and found
+  document exists (hits or not); a term hitting more than 40 files is
+  reported as a summary (files with counts, capped by `--max-files`,
+  `--full` for snippets) so a broad name costs the reading model about
+  2k tokens rather than 60k; 1 means searched everything and found
   nothing; 0 means hits and full coverage. `--ensure` runs
   `sc text ensure` first. A document that was not searched is reported,
   never silently skipped (ADR-0041). *(tested)*

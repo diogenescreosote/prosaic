@@ -161,5 +161,5 @@ def test_find_summarizes_a_broad_term(matter: Path):
     assert len(out) < 6000, f"summary output should stay small, got {len(out)} chars"
     full = sc("find", "Quill", "--full", "--per-file", "1", "--matter-dir", str(matter)).stdout
     assert "Quill wrote" in full
-    narrow = sc("find", "day 07", "--matter-dir", str(matter)).stdout
+    narrow = sc("find", "-F", "day 7.", "--matter-dir", str(matter)).stdout
     assert "note07.txt" in narrow and "Quill wrote on day 7" in narrow
