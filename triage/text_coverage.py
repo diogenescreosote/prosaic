@@ -68,6 +68,18 @@ try:
 except ImportError:  # pragma: no cover
     import fitz  # type: ignore
 
+# A corrupt or encrypted PDF is a classified row (`unreadable`), not a
+# stack trace on stdout: silence MuPDF's error chatter and pymupdf's
+# verbose exception printing, both of which write where the report goes.
+try:
+    fitz.TOOLS.mupdf_display_errors(False)
+    fitz.TOOLS.mupdf_display_warnings(False)
+except Exception:  # pragma: no cover
+    pass
+for _flag in ("g_exceptions_verbose",):
+    if hasattr(fitz, _flag):
+        setattr(fitz, _flag, 0)
+
 HEADER_MARK = "[[[ prosaic text sidecar ]]]"
 BANNER = "MACHINE TEXT --- VERIFY AGAINST THE DOCUMENT BEFORE CITING IN ANY FILING"
 CACHE_NAME = "text_coverage.json"
