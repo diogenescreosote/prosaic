@@ -999,6 +999,44 @@ def _split_fm(text: str):
     return meta, text[end + 4:], None
 
 
+def _second_opinion(matter: Path, target: str, srcs: list[Path], combined: str, per: dict, brief: str) -> int:
+    """Ask a different model (the `second-opinion` role, usually another
+    vendor) for numbered suggestions on a draft, given a one-paragraph
+    brief of what the draft must achieve. Writes the raw suggestions as a
+    report; the /secondopinion skill then has the drafting model weigh
+    each one against the sources and the record."""
+    import yaml
+    cfg = yaml.safe_load((matter / "matter.yaml").read_text()) or {}
+    role = ((cfg.get("agent") or {}).get("roles") or {}).get("second-opinion") or {}
+    if not role.get("cmd") and not os.environ.get("PROSAIC_AGENT_CMD"):
+        print("sc review second-opinion: no command configured. In matter.yaml set\n"
+              "  agent:\n    roles:\n      second-opinion:\n"
+              "        cmd: <prosaic>/sync/second_opinion_openai.sh\n"
+              "        credential: prosaic.openai      # Keychain item holding the API key\n"
+              "        model: gpt-5\n"
+              "(any command that reads a prompt on stdin and prints text works).", file=sys.stderr)
+        return 2
+    template = (ROOT / "triage" / "prompts" / "second_opinion.md").read_text(encoding="utf-8")
+    body = []
+    for p in srcs:
+        if p.exists():
+            body.append(f"\n===== {p.relative_to(matter)} =====\n" + p.read_text(encoding="utf-8", errors="replace"))
+    prompt = template.replace("{brief}", brief or "(no brief given)").replace("{draft}", "\n".join(body))
+    agent_run = ROOT / "cli" / "agent-run"
+    proc = subprocess.run([str(agent_run), "--role", "second-opinion"], input=prompt, text=True,
+                          cwd=matter, capture_output=True)
+    if proc.returncode != 0:
+        print(f"second-opinion command failed ({proc.returncode}): {proc.stderr[-800:]}", file=sys.stderr)
+        return 1
+    rp = report_path(matter, target, "secondopinion", combined[:7])
+    header = report_header(target, "secondopinion", combined, per, matter)
+    model = role.get("model") or "(configured command)"
+    rp.write_text(header + f"\n# Second opinion on {target}\n\nmodel: {model}\nbrief: {brief}\n\n"
+                  + proc.stdout.strip() + "\n", encoding="utf-8")
+    print(rp)
+    return 0
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     matter = _matter_root(Path(args.matter_dir))
     if args.action == "status":
@@ -1057,6 +1095,8 @@ def cmd_review(args: argparse.Namespace) -> int:
         if not rows:
             print("(no citations recognized; if the draft has cites, the extractor needs a pattern for them)")
         return 0
+    if args.action == "second-opinion":
+        return _second_opinion(matter, args.target, srcs, combined, per, args.brief or "")
     if args.action == "report":
         check = args.check or "review"
         rp = report_path(matter, args.target, check, combined[:7])
@@ -1487,7 +1527,8 @@ FIND_EXCLUDE_DIRS = ("out", ".state", ".git", ".flow", "node_modules", ".claude"
 
 
 def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
-                   fixed: bool = False, docs=None, require_all: bool = False) -> dict:
+                   fixed: bool = False, docs=None, require_all: bool = False,
+                   scope: list[str] | None = None) -> dict:
     """ripgrep every term over the matter's text; every document the
     coverage audit says is not searchable is listed as UNSEARCHED with
     its reason. Returns a structured report."""
@@ -1508,12 +1549,17 @@ def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
                 cmd += ["--glob", g]
             cmd += excludes
             cmd += ["-F"] if fixed else []
-            cmd += ["-e", term, "."]
+            # --scope: search only these directories (and their derived text),
+            # for a reader who must see the filed record and nothing else.
+            roots = ["."] if not scope else [d for d in scope if (matter / d).exists()] + \
+                [f"derived/text/{d}" for d in scope if (matter / "derived" / "text" / d).exists()]
+            cmd += ["-e", term, *roots]
             proc = subprocess.run(cmd, cwd=matter, capture_output=True, text=True, errors="replace")
             out = proc.stdout
         else:
+            roots = ["."] if not scope else [d for d in scope if (matter / d).exists()]
             cmd = ["grep", "-r", "-n", "-i", "-I", *(["-F"] if fixed else []),
-                   *[f"--exclude-dir={d}" for d in FIND_EXCLUDE_DIRS], "-e", term, "."]
+                   *[f"--exclude-dir={d}" for d in FIND_EXCLUDE_DIRS], "-e", term, *roots]
             proc = subprocess.run(cmd, cwd=matter, capture_output=True, text=True, errors="replace")
             out = proc.stdout
         for ln in out.splitlines():
@@ -1781,11 +1827,11 @@ def cmd_find(args: argparse.Namespace) -> int:
         docs = tc.ensure(m, jobs=2) if args.ensure else tc.audit(m)
         if len(targets) > 1:
             sys.stdout.write(("\n" if i else "") + f"# Matter: {m.name}" + ("" if i == 0 else " (related)") + "\n\n")
-        ents = _entity_hits(m, args.terms)
+        ents = [] if args.scope else _entity_hits(m, args.terms)
         if ents:
             sys.stdout.write("## Knowledge notes (alias index)\n" + "\n".join(ents) + "\n\n")
         report = find_in_matter(m, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs,
-                                require_all=args.all)
+                                require_all=args.all, scope=args.scope)
         sys.stdout.write(format_find(report, matter=m, summary=summary, max_files=args.max_files))
         reports.append((m, report))
         if summary is True or (summary is None and any(len(h) > SUMMARY_ABOVE_FILES for h in report["terms"].values())):
@@ -2130,6 +2176,8 @@ def main() -> int:
                     help="run `sc text ensure` first so sidecars exist before searching")
     sp.add_argument("--all", action="store_true",
                     help="with several terms, keep only files that contain every term")
+    sp.add_argument("--scope", action="append", metavar="DIR",
+                    help="search only this directory (repeatable), e.g. --scope pleadings --scope src")
     sp.add_argument("--this-matter-only", action="store_true",
                     help="do not search the matters listed under related_matters in matter.yaml")
     sp.add_argument("--summary", action="store_true",
@@ -2169,8 +2217,9 @@ def main() -> int:
     sp.set_defaults(func=cmd_upgrade)
 
     sp = sub.add_parser("review", help="preflight review plumbing: paths, cites, report, status (ADR-0045; optional, never a gate)")
-    sp.add_argument("action", choices=("paths", "cites", "report", "status"))
+    sp.add_argument("action", choices=("paths", "cites", "report", "status", "second-opinion"))
     sp.add_argument("target", nargs="?", help="envelope name or src/ path")
+    sp.add_argument("--brief", help="second-opinion: one paragraph on what the draft must achieve")
     sp.add_argument("--matter-dir", default=".", dest="matter_dir")
     sp.add_argument("--check", help="report: the check name (citecheck, clerkreview, judgereview, oppo, preflight)")
     sp.add_argument("--tidy", action="store_true", help="status: move stale reports into superseded/")

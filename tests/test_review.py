@@ -88,3 +88,33 @@ def test_status_marks_a_report_stale_when_the_source_changes(matter: Path):
 def test_source_path_target_works_without_an_envelope(matter: Path):
     out = sc("review", "cites", "src/mpa.md", "--matter-dir", str(matter), cwd=matter).stdout
     assert "citations in src/mpa.md" in out and "Zeng v. Wang" in out
+
+
+def test_find_scope_restricts_to_named_directories(matter: Path):
+    (matter / "pleadings").mkdir(exist_ok=True)
+    (matter / "pleadings" / "order.txt").write_text("The court ordered mediation.\n")
+    (matter / "knowledge" / "topics").mkdir(parents=True, exist_ok=True)
+    (matter / "knowledge" / "topics" / "note.md").write_text("---\ntitle: n\ntype: topic\nupdated: 2026-09-07\n---\nmediation strategy\n")
+    out = sc("find", "mediation", "--scope", "pleadings", "--matter-dir", str(matter), cwd=matter).stdout
+    assert "pleadings/order.txt" in out and "knowledge/topics/note.md" not in out
+
+
+def test_second_opinion_uses_the_role_command_and_writes_a_report(matter: Path, tmp_path: Path):
+    fake = tmp_path / "other_model.sh"
+    fake.write_text("#!/bin/bash\nprompt=$(cat)\necho \"model=${AGENT_RUN_MODEL:-none}\"\n"
+                    "echo \"1. **[Relief]** --- narrow it --- **why**: overbroad. STRUCTURAL\"\n"
+                    "grep -q 'shorten time' <<<\"$prompt\" && echo 'saw the brief'\n")
+    fake.chmod(0o755)
+    (matter / "matter.yaml").write_text(
+        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: test-gpt\n")
+    proc = sc("review", "second-opinion", "motion", "--brief", "we must shorten time before the 28th",
+              "--matter-dir", str(matter), cwd=matter)
+    assert proc.returncode == 0, proc.stderr
+    rp = Path(proc.stdout.strip())
+    text = rp.read_text()
+    assert "check: secondopinion" in text and "model=test-gpt" in text and "saw the brief" in text
+    assert "narrow it" in text
+    # unconfigured role is a clear message, not a crash
+    (matter / "matter.yaml").write_text("case:\n  name: Smith v. Roe\n")
+    proc = sc("review", "second-opinion", "motion", "--brief", "x", "--matter-dir", str(matter), cwd=matter)
+    assert proc.returncode == 2 and "no command configured" in proc.stderr

@@ -80,11 +80,30 @@ cfg = yaml.safe_load(open("matter.yaml")) or {}
 r = ((cfg.get("agent") or {}).get("roles") or {}).get(role) or {}
 print(r.get("model") or "")
 print(r.get("max_turns") or "")
+print(r.get("cmd") or "")
+print(r.get("credential") or "")
+print(r.get("credential_env") or "OPENAI_API_KEY")
 PY
 )" || return 0
     m="$(printf '%s\n' "$out" | sed -n 1p)"; t="$(printf '%s\n' "$out" | sed -n 2p)"
+    local c cred cenv
+    c="$(printf '%s\n' "$out" | sed -n 3p)"; cred="$(printf '%s\n' "$out" | sed -n 4p)"; cenv="$(printf '%s\n' "$out" | sed -n 5p)"
     [ -z "$MODEL" ] && [ -n "$m" ] && MODEL="$m"
     [ -z "$MAX_TURNS" ] && [ -n "$t" ] && MAX_TURNS="$t"
+    # A role may name its own command (another vendor's CLI or a script);
+    # it becomes the custom provider for this run. The model name is
+    # exported for it, and a Keychain item named by `credential:` is
+    # resolved into the environment variable the command expects (ADR-0031:
+    # credentials by reference; the key never sits in the matter).
+    if [ -n "$c" ] && [ -z "${PROSAIC_AGENT_CMD:-}" ]; then
+      export PROSAIC_AGENT_CMD="$c"
+      [ -n "$MODEL" ] && export AGENT_RUN_MODEL="$MODEL"
+      if [ -n "$cred" ] && [ -z "${!cenv:-}" ] && command -v security >/dev/null 2>&1; then
+        local secret
+        secret="$(security find-generic-password -s "$cred" -w 2>/dev/null || true)"
+        [ -n "$secret" ] && export "$cenv=$secret"
+      fi
+    fi
     return 0
   done
 }
@@ -151,6 +170,9 @@ run_custom() {
     sh -c "$PROSAIC_AGENT_CMD" <<< "$prompt"
 }
 
+# The role may name its own command, which must be known before the
+# provider is chosen.
+resolve_role
 PROVIDER="$(provider)" || {
   [ "$MODE" = check ] && exit 1
   echo "agent-run: no agent CLI found (claude, codex, or gemini on PATH," \
@@ -163,7 +185,6 @@ if [ "$MODE" = check ]; then
   exit 0
 fi
 
-resolve_role
 PROMPT="$(cat)"
 if [ -z "$PROMPT" ]; then
   echo "agent-run: empty prompt on stdin" >&2
