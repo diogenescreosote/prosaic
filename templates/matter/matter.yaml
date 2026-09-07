@@ -33,12 +33,15 @@ connectors: {}
 #  docuseal: {}                        # poll DocuSeal receipts each sync;
 #                                   # completed signatures land in inbox/docuseal/
 #  gmail:
+#    accounts:                      # optional; one OAuth token per mailbox
+#      - jane.roe@example.com       #   the first inherits the existing token
+#      - service@example.com        #   `node auth.js --account <email>`
 #    addresses:                     # plain address, bare domain, or bounded entry
 #      - opposing.party@example.com
 #      - opposingfirm.com           # bare domain matches the whole firm
-#      - address: expartner@example.com
+#      - address: someone@example.com
 #        after: 2024/04/01          # Gmail search bounds (optional)
-#    initial_from: 2026-01-01       # first pull window start
+#    quoted: show                   # show (default) | hide, in the rendered PDF
 #  mycase:
 #    portal_url: https://your-firm.mycase.com
 #    credential: prosaic.mycase

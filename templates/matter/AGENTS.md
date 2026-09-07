@@ -33,6 +33,7 @@ If there is no workspace contract above this directory, copy
 | Where things stand | `/status`; every session starts with `<prosaic>/cli/sc brief .` |
 | Is X in the record? | `/find <term>` (`<prosaic>/cli/sc find <term>`: grep every text file and sidecar, list unsearched PDFs) first, then read the hits |
 | Commit typed work | `/commit <type(scope): subject>` (stages by explicit path) |
+| Re-render a stored email thread | `<prosaic>/cli/sc mail-render assets/gmail/mbox/<stem>.mbox --pdf <out>` |
 | Build one document | `/build-doc src/<source>.md` (`<prosaic>/cli/sc build-doc …`) |
 | List envelopes | `<prosaic>/cli/sc list` |
 | Report stale build output | `/clean` (`<prosaic>/cli/sc clean .`; deleting is your own `--apply`) |
@@ -46,6 +47,34 @@ Configuration: `matter.yaml` (case, connectors, backup),
 `envelopes.yaml` (filing envelopes). Connector/sync state lives in
 `.state/` (gitignored, regenerable).
 
+## STOP. `assets/gmail/mbox/` is the record; the PDF is a rendering
+
+The gmail connector stores each thread twice, and the two are not
+copies of each other (ADR-0038):
+
+- `assets/gmail/mbox/<stem>.mbox` --- every captured message as raw
+  RFC 822 bytes, exactly as it was transmitted. **This is the
+  evidence.** It is append-only: never edit it, never reformat it,
+  never delete a message out of it. Commit it.
+- `assets/gmail/<stem>.pdf` --- Gmail's print view, *rendered from that
+  mbox*, and regenerable from it at any time with
+  `sc mail-render <mbox> --pdf <path>`. Bulky and derived; a matter
+  may gitignore it.
+- `assets/gmail/attachments/<stem>/` --- the thread's attachment parts,
+  extracted from the same bytes.
+
+So: read the PDF, cite the PDF, catalog the PDF. But when a question
+is about what a message actually *said* --- full headers, the quoted
+chain, an attachment the print view only names --- go to the mbox.
+`sc mail-render <mbox> --list` enumerates it and `--eml n:<path>`
+writes any single message out verbatim.
+
+The PDF shows quoted reply chains by default. If one reads
+`[Quoted text hidden]`, it was rendered under `--quoted hide` (or
+predates ADR-0038) --- re-render it rather than reporting the thread as
+incomplete.
+
+---
 ---
 
 ## Who is who

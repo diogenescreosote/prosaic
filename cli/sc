@@ -371,6 +371,24 @@ def cmd_connectors(_args: argparse.Namespace) -> int:
     return 0
 
 
+#: The gmail connector's presentation layer, reachable on its own.
+#: Capture (pull.js) and rendering (render.js) are separate steps, so a
+#: thread stored months ago can be re-rendered with different options
+#: from the mbox alone --- no mailbox, no token, no network (ADR-0038).
+MAIL_RENDERER = ROOT / "connectors" / "gmail" / "render.js"
+
+
+def cmd_mail_render(args: argparse.Namespace) -> int:
+    node = shutil.which("node")
+    if node is None:
+        print("sc mail-render needs node on PATH", file=sys.stderr)
+        return 1
+    env = {**os.environ, "NODE_PATH": str(ROOT / "connectors" / "node_modules")}
+    return subprocess.run(
+        [node, str(MAIL_RENDERER), *args.rest], env=env
+    ).returncode
+
+
 #: The system binaries the pipeline shells out to, declared in one
 #: place so they stop being prose in docs/ that you discover by way of
 #: a failed build. The Dockerfile installs from this list and the
@@ -1248,6 +1266,12 @@ def main() -> int:
     sp = sub.add_parser("paths", help="print an application directory")
     sp.add_argument("kind", choices=PATH_KINDS)
     sp.set_defaults(func=cmd_paths)
+
+    sp = sub.add_parser("mail-render",
+                        help="re-render a stored gmail thread mbox: PDF, .eml, attachments")
+    sp.add_argument("rest", nargs=argparse.REMAINDER,
+                    help="passed through to connectors/gmail/render.js")
+    sp.set_defaults(func=cmd_mail_render)
 
     sp = sub.add_parser("harness", help="install the coding-agent harness bundle (.claude/) in a matter")
     sp.add_argument("action", choices=("install",))

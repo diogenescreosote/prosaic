@@ -80,3 +80,9 @@ checkable state).
 Matters work well as git repositories (history = provenance), with
 `.state/`, `out/`, and bulky regenerable connector output (e.g.
 `assets/gmail/*.pdf`) in `.gitignore`. `sc init --git` sets this up.
+
+Note which side of that line the mail sits on. `assets/gmail/*.pdf` is
+a *rendering* and can be regenerated from `assets/gmail/mbox/` at any
+time (`sc mail-render`), so ignoring it costs nothing.
+`assets/gmail/mbox/` is the record and cannot be regenerated from
+anything the matter holds --- commit it (ADR-0038).

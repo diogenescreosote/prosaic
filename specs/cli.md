@@ -186,6 +186,16 @@ agent CLI is named (ADR-0020). Its promises:
   resolving the checkout placeholder to a real path; `sc init` does the
   same at scaffold time. A matter's own settings.local.json is never
   touched. *(tested)*
+- **`sc mail-render <mbox> [...]`** re-renders one stored gmail
+  thread from its mbox: the print-view PDF (`--pdf`), the intermediate
+  HTML (`--html`), the attachments extracted from its MIME parts
+  (`--attachments`), or a single message as `.eml` (`--eml n:path`),
+  with `--quoted show|hide` deciding whether quoted reply chains
+  appear. Capture and presentation are separate steps (ADR-0038), so
+  this reaches no mailbox and needs no token --- a thread stored years
+  ago re-renders from the bytes alone, and the output is a pure
+  function of (mbox, options). *(tested:
+  tests/test_connectors_gmail.py)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without

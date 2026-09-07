@@ -29,6 +29,12 @@ A connector is a directory `connectors/<name>/` containing:
    creates or updates. *Nothing else goes to stdout*; all progress and
    diagnostics go to stderr. The sync orchestrator consumes these
    lines to build the AI triage worklist.
+
+   One documented exception exists, and a new one needs the same
+   argument: the gmail connector does not announce the mbox it stores
+   a thread in, because that file is the *source* of the PDF it does
+   announce (ADR-0038), and two `NEW` lines for one piece of evidence
+   put two rows in the matter's catalog.
 4. **Keep state in `.state/<name>.json`** via
    `loadState`/`saveState` from `../core/config`. Pulls must be
    idempotent: re-running after a crash re-downloads at most what
@@ -61,7 +67,7 @@ A connector is a directory `connectors/<name>/` containing:
 
 | name | what it does | auth |
 |---|---|---|
-| `gmail` | Exports every Gmail thread involving configured addresses/domains as a print-view PDF (court-usable). Supports per-address `after:`/`before:` bounds. Incremental via a `.state/gmail.json` thread ledger (per-thread `historyId` + message count): unchanged threads are skipped without a fetch, grown threads re-export and re-triage, and a thread once exported is never re-pulled even if triage later moves the PDF. **Attachments are downloaded too**, into `assets/gmail/attachments/<thread pdf stem>/`, each with its own `NEW` line — the print view can only list an attachment's *name*, and a document whose value is its contents is invisible to triage until the file itself lands. Inline images are excluded (already embedded in the PDF); files over 25MB are skipped with a `SKIPPED` line; a file already present at its target path with the expected size is not re-downloaded. Threads exported before attachment support get their attachments on their next re-export, or under `--force`. | OAuth; `node connectors/gmail/auth.js` once |
+| `gmail` | Captures every Gmail thread involving configured addresses/domains **as raw mail** — one mbox per thread at `assets/gmail/mbox/<stem>.mbox`, RFC 822 bytes exactly as the API returns them for `format=raw` — and renders that mbox to the court-usable print-view PDF at `assets/gmail/<stem>.pdf` (ADR-0038). Capture and rendering are separate steps: the PDF is a pure function of the mbox plus options, so `sc mail-render` regenerates it at any time, with different options, offline. Quoted reply chains are **shown by default** (`quoted: hide` in config, or `--quoted hide`, reproduces Gmail's `[Quoted text hidden]` print behavior). Supports per-address `after:`/`before:` bounds, and `accounts:` for a matter that watches more than one mailbox — one OAuth token each, ledger keyed by account then thread id. Incremental via a `.state/gmail.json` thread ledger (per-thread `historyId`, message count and message ids, plus per-account run stamps): a routine run lists only threads with a message in a `newer_than:` window since the last run (full listing on the first run, on `--full`, or weekly), a changed thread fetches only the messages its mbox lacks, unchanged threads are skipped without a fetch, threads whose message set changed (grown, or a message replaced at the same count) re-export and re-triage, and a thread once exported is never re-pulled even if triage later moves the PDF. **Attachments are extracted from the stored MIME parts**, into `assets/gmail/attachments/<pdf stem>/`, each with its own `NEW` line — the print view can only list an attachment's *name*, and a document whose value is its contents is invisible to triage until the file itself lands. Images actually embedded in the rendering are excluded; files over 25MB are skipped with a `SKIPPED` line; a file already present at its target path with the expected size is not rewritten. The mbox gets no `NEW` line — it is the source the announced PDF was rendered from, not a second document. Threads exported before the mbox existed get one from `pull.js --backfill-mbox` (opt-in, `--limit N`, `--concurrency N`, resumable, renders nothing and announces nothing). Fetching is concurrent and bounded (6 messages per thread, 4 threads at a time in a backfill, 8 metadata lookups) with a 60-second per-request timeout and retry on transient failures. | OAuth; `node connectors/gmail/auth.js [--account <email>]` once per mailbox |
 | `mycase` | Walks a MyCase client portal's document folder tree, diffs against a manifest (doc id + content hash), downloads new/updated documents into staging renamed to dated snake_case, keeping the portal folder as a routing hint. With `billing: <dir>` configured, also pulls the Billing tab: every bill whose detail page offers the portal's first-class PDF export (`/bills/<id>.pdf`) lands directly in `<dir>` (no triage — billing PDFs are born-digital and authoritatively named) as `<date>_invoice_<n>.pdf`, re-exported when a bill's listed status changes (a payment posts, a balance forwards) and never overwriting a previously fetched file; a bill with no export (funds requests) is noted, not fetched. | Keychain |
 
 ## Writing a new connector
@@ -91,6 +97,22 @@ advice for portal (browser-automation) connectors:
 Then add a `manifest.json`, document the config keys in it and here,
 and it's live: `sc sync` discovers connectors purely from
 `matter.yaml` config keys + the connectors directory.
+
+## Re-rendering stored mail
+
+The gmail connector's presentation layer stands on its own:
+
+```
+sc mail-render assets/gmail/mbox/20260105_scheduling.mbox \
+    --pdf /tmp/complete.pdf --quoted show
+sc mail-render <mbox> --list                  # messages + attachments
+sc mail-render <mbox> --eml 2:/tmp/second.eml # one message, verbatim
+sc mail-render <mbox> --attachments           # extract the parts
+```
+
+No token, no mailbox, no network (beyond the gstatic icons Gmail's own
+print view uses). This is what a stored raw record buys: a rendering
+defect is a bug to fix and re-run, not damage to the archive.
 
 Local deployments can carry additional connectors under
 `local/connectors/` (see ADR-0032); they dispatch identically and are

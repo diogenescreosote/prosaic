@@ -20,8 +20,10 @@ and the ones only you can make.
   protected, or both.
 - **Credentials live in the OS keychain** (`security` generic
   passwords), read at runtime, never written to config files or logs.
-  Gmail uses OAuth with a locally stored token
-  (`~/.config/prosaic/gmail/`), scoped read-only.
+  Gmail uses OAuth with locally stored tokens
+  (`~/.config/prosaic/gmail/`), scoped read-only — one file per
+  configured mailbox, so revoking one account does not disturb the
+  others.
 - **Browser sessions** (portal cookies) persist in
   `~/.local/share/prosaic/portal-profiles/` — local disk,
   deliberately outside any cloud-synced folder.
