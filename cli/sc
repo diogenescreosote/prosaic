@@ -630,6 +630,136 @@ def cmd_hooks(args: argparse.Namespace) -> int:
 
 
 # ---------------------------------------------------------------------------
+# knowledge: the vault of notes (ADR-0043)
+# ---------------------------------------------------------------------------
+
+def _knowledge():
+    sys.path.insert(0, str(ROOT / "triage"))
+    import knowledge_vault  # noqa: E402
+    return knowledge_vault
+
+
+def cmd_knowledge(args: argparse.Namespace) -> int:
+    kv = _knowledge()
+    matter = _matter_root(Path(args.matter_dir))
+    if args.action == "init":
+        print("\n".join(kv.init(matter, migrate=args.migrate)))
+        return 0
+    if args.action == "new":
+        if not args.type or not args.title:
+            print("sc knowledge new <matter> --type T --title 'X' [--alias A]...", file=sys.stderr)
+            return 2
+        p = kv.new_note(matter, args.type, args.title, args.alias)
+        kv.write_index(matter, kv.load_notes(matter))
+        print(p)
+        return 0
+    if args.action == "index":
+        print(kv.write_index(matter, kv.load_notes(matter)))
+        return 0
+    if args.action == "migrate":
+        out = kv.migrate_legacy(matter)
+        kv.write_index(matter, kv.load_notes(matter))
+        print("\n".join(out))
+        return 0
+    if args.action == "check":
+        if args.fix:
+            kv.write_index(matter, kv.load_notes(matter))
+        notes = kv.check(matter)
+        sys.stdout.write(kv.format_check(notes))
+        return 1 if any(n.problems for n in notes) else 0
+    return 2
+
+
+# ---------------------------------------------------------------------------
+# upgrade: bring an existing matter onto the current conventions
+# ---------------------------------------------------------------------------
+
+def cmd_upgrade(args: argparse.Namespace) -> int:
+    """Every deterministic migration prosaic knows, in order, idempotent,
+    followed by the list of what still needs a human or an agent. The
+    canonical target is a live matter that predates all of it: the
+    harness bundle (ADR-0040), the derived text tree (ADR-0041/0042) and
+    the knowledge vault (ADR-0043) each install here.
+    """
+    matter = _matter_root(Path(args.matter_dir))
+    dry = args.dry_run
+    todo: list[str] = []
+    print(f"== upgrade {matter}{' (dry run)' if dry else ''}")
+
+    print("-- harness bundle (ADR-0040)")
+    if dry:
+        print("   would install/refresh .claude/settings.json and the seven routine commands")
+    else:
+        cmd_harness(argparse.Namespace(matter_dir=str(matter)))
+
+    print("-- derived text tree (ADR-0041, ADR-0042)")
+    tc = _text_coverage()
+    moves = tc.migrate(matter, dry_run=dry)
+    print(f"   migrate: {len(moves)} action(s)" + ("" if moves else " (nothing beside originals)"))
+    docs = tc.ensure(matter, dry_run=dry, jobs=args.jobs) if not dry else tc.audit(matter)
+    print("   " + tc.coverage_line(docs))
+    gaps = [d for d in docs if not d.searched and d.state != "untriaged"]
+    if gaps:
+        todo.append(f"{len(gaps)} document(s) still not searchable: `sc text audit .` names them "
+                    "(photo pages need a human description; audio needs the local STT pipeline)")
+
+    print("-- knowledge vault (ADR-0043)")
+    kv = _knowledge()
+    legacy = matter / "KNOWLEDGE.md"
+    if (matter / kv.VAULT).is_dir() and legacy.exists() and kv.INDEX_START in legacy.read_text(errors="replace"):
+        notes = kv.check(matter)
+        staging = [n for n in notes if n.staging]
+        errs = sum(len(n.problems) for n in notes)
+        print(f"   vault present: {len(notes)} note(s), {errs} lint error(s), {len(staging)} in staging")
+        if staging:
+            todo.append(f"{len(staging)} staging note(s) under knowledge/_migration: run the "
+                        "migrate-knowledge skill, then `sc knowledge check`")
+        if errs:
+            todo.append("`sc knowledge check` reports errors; fix the notes")
+    elif legacy.exists():
+        n_lines = sum(1 for _ in legacy.open(errors="replace"))
+        if dry:
+            print(f"   would split the {n_lines}-line KNOWLEDGE.md into staging notes and make it the index")
+        else:
+            for line in kv.init(matter, migrate=True):
+                print("   " + line)
+        todo.append("run the migrate-knowledge skill over knowledge/_migration (agent, Fable, gated by you)")
+    else:
+        if dry:
+            print("   would scaffold knowledge/")
+        else:
+            for line in kv.init(matter):
+                print("   " + line)
+
+    print("-- .gitignore")
+    gi = matter / ".gitignore"
+    have = gi.read_text().splitlines() if gi.exists() else []
+    want = ["derived/ocr/", ".obsidian/", ".state/"]
+    missing = [w for w in want if w not in have]
+    if missing and not dry:
+        gi.write_text((gi.read_text().rstrip("\n") + "\n" if gi.exists() else "") + "\n".join(missing) + "\n")
+    print(f"   {'would add' if dry else 'added'} {missing}" if missing else "   complete")
+
+    print("-- scheduled sync")
+    label_old = Path.home() / "Library/LaunchAgents" / f"com.slopcannon.sync.{matter.name}.plist"
+    label_new = Path.home() / "Library/LaunchAgents" / f"com.prosaic.sync.{matter.name}.plist"
+    if label_old.exists() or label_new.exists():
+        print(f"   installed ({'legacy label' if label_old.exists() else 'current label'}); "
+              "matter_sync.sh is read from the checkout at run time, so no reinstall is needed")
+    else:
+        todo.append("no scheduled sync for this matter: `sc schedule .` installs one")
+
+    print()
+    if todo:
+        print("Needs a human or an agent:")
+        for t in todo:
+            print(f"  - {t}")
+    else:
+        print("Nothing left that a tool can do; the matter is on current conventions.")
+    return 0
+
+
+# ---------------------------------------------------------------------------
 # Session brief and open: the deterministic paths behind the routine
 # harness commands (ADR-0040). Neither asks a model anything.
 # ---------------------------------------------------------------------------
@@ -735,11 +865,28 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
             lines.append(f"## Envelopes ({len(envs)})")
             lines.append(", ".join(f"`{e}`" for e in envs))
 
-    dates = _knowledge_dates(matter / "KNOWLEDGE.md", dates_limit)
-    if dates:
-        lines.append("")
-        lines.append("## Dates and hearings (from KNOWLEDGE.md)")
-        lines.extend(dates)
+    dates: list[str] = []
+    if (matter / "knowledge").is_dir():
+        try:
+            kv = _knowledge()
+            dates = kv.upcoming_events(matter, dates_limit)
+            issues = kv.open_issues(matter)
+        except Exception:  # the brief must never fail on a vault error
+            issues = []
+        if dates:
+            lines.append("")
+            lines.append("## Upcoming events (knowledge vault)")
+            lines.extend(f"- {d}" for d in dates)
+        if issues:
+            lines.append("")
+            lines.append(f"## Open issues ({len(issues)})")
+            lines.extend(f"- {i}" for i in issues)
+    if not dates:
+        dates = _knowledge_dates(matter / "KNOWLEDGE.md", dates_limit)
+        if dates:
+            lines.append("")
+            lines.append("## Dates and hearings (from KNOWLEDGE.md)")
+            lines.extend(dates)
 
     todo = _list_items(matter / "TODO.md", todo_limit)
     if todo:
@@ -951,6 +1098,25 @@ def format_find(report: dict, show_unsearched: int = 40, matter: Path | None = N
     return "\n".join(lines) + "\n"
 
 
+def _entity_hits(matter: Path, terms: list[str]) -> list[str]:
+    """Tier one of search: the knowledge vault's alias index."""
+    ent = matter / "derived" / "knowledge" / "entities.json"
+    if not ent.is_file():
+        return []
+    try:
+        data = json.loads(ent.read_text())
+    except json.JSONDecodeError:
+        return []
+    out: list[str] = []
+    for term in terms:
+        t = term.lower()
+        stems = sorted({s for alias, ss in data.get("aliases", {}).items() if t in alias for s in ss})
+        for st in stems:
+            info = data["notes"].get(st, {})
+            out.append(f"- [[{st}]] ({info.get('type', '?')}: {info.get('title', st)}) --- {info.get('path', '')}")
+    return out
+
+
 def cmd_find(args: argparse.Namespace) -> int:
     """Exit 0: hits and everything searchable. 1: no hits. 2: something
     was not searchable (whatever the hits) --- the caller must not read
@@ -958,6 +1124,9 @@ def cmd_find(args: argparse.Namespace) -> int:
     matter = _matter_root(Path(args.matter_dir))
     tc = _text_coverage()
     docs = tc.ensure(matter, jobs=2) if args.ensure else tc.audit(matter)
+    ents = _entity_hits(matter, args.terms)
+    if ents:
+        sys.stdout.write("## Knowledge notes (alias index)\n" + "\n".join(ents) + "\n\n")
     report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs)
     sys.stdout.write(format_find(report, matter=matter))
     if report["unsearched"]:
@@ -1300,6 +1469,22 @@ def main() -> int:
                     help="ensure: regenerate an _ocr sibling that still has uncovered pages")
     sp.add_argument("--jobs", type=int, default=2)
     sp.set_defaults(func=cmd_text)
+
+    sp = sub.add_parser("knowledge", help="the knowledge vault: init, new, check, index, migrate (ADR-0043)")
+    sp.add_argument("action", choices=("init", "new", "check", "index", "migrate"))
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--migrate", action="store_true", help="init: split a legacy KNOWLEDGE.md into staging")
+    sp.add_argument("--fix", action="store_true", help="check: regenerate the index first")
+    sp.add_argument("--type", choices=("person", "organization", "event", "topic", "issue", "filing"))
+    sp.add_argument("--title")
+    sp.add_argument("--alias", action="append", default=[])
+    sp.set_defaults(func=cmd_knowledge)
+
+    sp = sub.add_parser("upgrade", help="bring an existing matter onto current conventions (idempotent)")
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--dry-run", action="store_true")
+    sp.add_argument("--jobs", type=int, default=2)
+    sp.set_defaults(func=cmd_upgrade)
 
     sp = sub.add_parser("brief", help="print a short matter brief for a session start")
     sp.add_argument("matter_dir", nargs="?", default=".")
