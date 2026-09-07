@@ -318,6 +318,57 @@ function claimedFilenames(state, outDir) {
   return claimed;
 }
 
+// --- one thread, one filename ---------------------------------------------
+
+/** Is this PDF filename already the record of a DIFFERENT thread? */
+function filenameClaimedByAnother(state, filename, threadId) {
+  for (const account of Object.values(state.accounts || {})) {
+    for (const [id, entry] of Object.entries(account.threads || {})) {
+      if (id !== threadId && entry && entry.filename === filename) return true;
+    }
+  }
+  return false;
+}
+
+/**
+ * Two threads must never share a filename: the mbox path follows the
+ * filename, so a shared name mixed two threads' messages into one
+ * record and let one thread's PDF stand for another. Pre-ledger PDFs
+ * absorbed by subject-and-date collided this way. For each group of
+ * entries on one filename, the first keeps it; the rest get a unique
+ * name and no PDF (the backfill renders theirs afresh); every member
+ * loses its mbox record and the mixed file is deleted so the backfill
+ * recaptures each thread into its own file. Returns the renames.
+ */
+function repairSharedFilenames(ledger, outDir, uniqueName, { dryRun = false } = {}) {
+  const byName = new Map();
+  for (const [id, entry] of Object.entries(ledger.threads)) {
+    if (!entry || !entry.filename) continue;
+    if (!byName.has(entry.filename)) byName.set(entry.filename, []);
+    byName.get(entry.filename).push(id);
+  }
+  const renames = [];
+  for (const [filename, ids] of byName) {
+    if (ids.length < 2) continue;
+    const mixed = mboxlib.mboxPathFor(outDir, filename);
+    for (const [i, id] of ids.entries()) {
+      const entry = ledger.threads[id];
+      const to = i === 0 ? filename : uniqueName(filename);
+      renames.push({ threadId: id, from: filename, to });
+      if (dryRun) continue;
+      ledger.threads[id] = {
+        ...entry,
+        filename: to,
+        ...(i === 0 ? {} : { exportedAt: null, renamedFrom: filename }),
+      };
+      delete ledger.threads[id].mbox;
+      delete ledger.threads[id].messageIds;
+    }
+    if (!dryRun && fs.existsSync(mixed)) fs.unlinkSync(mixed);
+  }
+  return renames;
+}
+
 // --- drafts --------------------------------------------------------------
 
 //: A draft is not mail. Gmail keeps unsent drafts (including scheduled
@@ -577,7 +628,11 @@ async function pullAccountListed(ctx, account) {
     // New to the ledger. If a matching export already sits on disk from
     // a pre-ledger pull, absorb it without re-triaging. It has no mbox;
     // --backfill-mbox is how it gets one.
-    if (!force && existingFiles.has(meta.defaultFilename)) {
+    if (
+      !force &&
+      existingFiles.has(meta.defaultFilename) &&
+      !filenameClaimedByAnother(state, meta.defaultFilename, t.id)
+    ) {
       ledger.threads[t.id] = {
         historyId: meta.historyId,
         messageCount: meta.messageCount,
@@ -686,6 +741,11 @@ async function backfillAccount(ctx, account) {
   const { gmail, outDir, state, dryRun } = ctx;
   const key = creds.accountKey(account);
   const ledger = ledgerFor(state, key);
+  const renames = repairSharedFilenames(ledger, outDir, ctx.uniqueName, { dryRun });
+  for (const r of renames) {
+    if (r.from !== r.to) console.error(`  [${key}] ${r.from} was also thread ${r.threadId}: now ${r.to}`);
+  }
+  if (renames.length && !dryRun) saveState(ctx.matterDir, 'gmail', state);
   const pending = Object.entries(ledger.threads).filter(
     ([, entry]) => entry && entry.filename && !entry.mbox
   );
@@ -714,6 +774,25 @@ async function backfillAccount(ctx, account) {
       saveState(ctx.matterDir, 'gmail', state);
       done++;
       console.error(`  ${entry.filename} ok (${result.total} msg)`);
+      // A thread whose PDF is not on disk (a repaired collision) gets its
+      // own rendering now, from the mbox just captured; that PDF is new
+      // to the matter, so it is announced.
+      const pdfPath = path.join(outDir, entry.filename);
+      if (!fs.existsSync(pdfPath)) {
+        const messages = render.loadThread(mboxPath);
+        await render.renderMboxToPdf(mboxPath, pdfPath, {
+          messages,
+          subject: render.threadSubject(messages),
+          account: ledger.identity || key,
+          quoted: ctx.quoted,
+          tmpDir: ctx.tmpDir,
+        });
+        console.log(`NEW ${pdfPath}`);
+        const written = render.extractAttachments(messages, render.attachmentsDirFor(mboxPath), {});
+        for (const file of written) if (file.created) console.log(`NEW ${file.path}`);
+        ledger.threads[threadId].exportedAt = new Date().toISOString();
+        saveState(ctx.matterDir, 'gmail', state);
+      }
     } catch (err) {
       console.error(`  ${entry.filename} FAIL (${err.message})`);
     }
@@ -820,6 +899,8 @@ module.exports = {
   threadChanged,
   isNotDraft,
   mapLimit,
+  filenameClaimedByAnother,
+  repairSharedFilenames,
   listingQuery,
   listingPlan,
   searchThreads,

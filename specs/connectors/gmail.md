@@ -97,7 +97,13 @@ what is stored, and can be produced again.
    skipped. *(tested)* Because identity is the thread id rather than the filename,
    triage may move or rename an exported PDF and it will not be
    re-pulled. A matter whose `assets/gmail/` predates the ledger
-   absorbs those files on first run instead of re-exporting them. The
+   absorbs those files on first run instead of re-exporting them. A
+   pre-ledger file is absorbed only if no other thread already claims
+   its name: two threads never share a filename, because the mbox path
+   follows the filename and a shared name would mix two threads into
+   one record. The backfill repairs any such sharing it finds (first
+   claimant keeps the name, the rest are renamed and rendered afresh,
+   the mixed mbox is deleted and each thread recaptured). *(tested)* The
    ledger is written after each successful export, so a crash
    mid-batch never repeats work already done. *(untested)*
 9. **Chronological, literate names.** Output is

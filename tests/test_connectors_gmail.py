@@ -1102,3 +1102,60 @@ def test_capture_fetches_only_messages_the_mbox_lacks() -> None:
     assert out["secondIds"] == ["m1", "m2", "m3"] and out["secondTotal"] == 3
     assert out["secondFetched"] == 1
     assert out["rebuiltFetched"] == 3 and out["stored"] == 3
+
+
+# --- one thread, one filename --------------------------------------------
+
+
+def test_two_threads_never_share_a_filename_or_an_mbox() -> None:
+    """A pre-ledger PDF absorbed by subject-and-date could be claimed by two
+    threads; the repair keeps the name for the first, renames the rest,
+    clears every member's mbox record, and deletes the mixed file."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js'); const mbox = require('./mbox.js');
+        const outDir = fs.mkdtempSync(path.join(os.tmpdir(), 'rep-'));
+        const mixed = mbox.mboxPathFor(outDir, '20240101_no_subject.pdf');
+        fs.mkdirSync(path.dirname(mixed), { recursive: true }); fs.writeFileSync(mixed, 'x');
+        const ledger = { threads: {
+          a: { filename: '20240101_no_subject.pdf', mbox: 'mbox/20240101_no_subject.mbox',
+               messageIds: ['1'], exportedAt: '2024-01-02T00:00:00Z' },
+          b: { filename: '20240101_no_subject.pdf', mbox: 'mbox/20240101_no_subject.mbox',
+               messageIds: ['2'], exportedAt: null, migrated: true },
+          c: { filename: '20240102_other.pdf', mbox: 'mbox/20240102_other.mbox',
+               messageIds: ['3'] },
+        } };
+        const claimed = new Set(['20240101_no_subject.pdf', '20240102_other.pdf']);
+        const uniqueName = (base) => { let n = base, i = 2;
+          while (claimed.has(n)) n = base.replace(/\.pdf$/, '') + '_' + (i++) + '.pdf';
+          claimed.add(n); return n; };
+        const dry = pull.repairSharedFilenames(JSON.parse(JSON.stringify(ledger)), outDir,
+          (b) => b + '?', { dryRun: true });
+        const dryLeftFile = fs.existsSync(mixed) && dry.length === 2;
+        const renames = pull.repairSharedFilenames(ledger, outDir, uniqueName);
+        const state = { accounts: { k: ledger } };
+        console.log(JSON.stringify({
+          dryLeftFile,
+          renames, a: ledger.threads.a, b: ledger.threads.b, c: ledger.threads.c,
+          mixedGone: !fs.existsSync(mixed),
+          claimedByOther: pull.filenameClaimedByAnother(state, '20240102_other.pdf', 'zzz'),
+          ownName: pull.filenameClaimedByAnother(state, '20240102_other.pdf', 'c'),
+        }));
+        """
+    )
+    assert out["dryLeftFile"], "a dry run reports and touches nothing"
+    assert out["renames"] == [
+        {"threadId": "a", "from": "20240101_no_subject.pdf", "to": "20240101_no_subject.pdf"},
+        {"threadId": "b", "from": "20240101_no_subject.pdf", "to": "20240101_no_subject_2.pdf"},
+    ]
+    assert out["a"] == {"filename": "20240101_no_subject.pdf", "exportedAt": "2024-01-02T00:00:00Z"}
+    assert out["b"] == {
+        "filename": "20240101_no_subject_2.pdf",
+        "exportedAt": None,
+        "migrated": True,
+        "renamedFrom": "20240101_no_subject.pdf",
+    }
+    assert out["c"]["mbox"] == "mbox/20240102_other.mbox", "an unshared thread is untouched"
+    assert out["mixedGone"]
+    assert out["claimedByOther"] is True and out["ownName"] is False
