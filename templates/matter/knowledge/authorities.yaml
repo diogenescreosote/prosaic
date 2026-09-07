@@ -1,0 +1,9 @@
+# Authorities a human has verified for this matter (ADR-0045). Keyed by
+# the normalized cite `sc review cites` prints. /citecheck treats an entry
+# as existing and still checks the proposition against the draft's use.
+authorities: {}
+#  "code civ. proc., § 1987.1":
+#    status: verified          # verified | bad | superseded
+#    proposition: the court may direct compliance with a subpoena on terms it declares
+#    checked: 2026-09-07
+#    source: official code, accessed 2026-09-07

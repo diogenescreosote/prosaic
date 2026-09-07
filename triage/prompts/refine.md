@@ -22,7 +22,13 @@ accept or reject with one word:
 4. **Questions for the human.** What only they can answer: a date the
    record does not fix, a decision, an identity. One line each, most
    time-sensitive first.
-5. **Housekeeping.** Lint errors, notes without sources, unsearched
+5. **Opposing-counsel profile.** From any new filing or letter by
+   opposing counsel, propose additions to
+   `knowledge/topics/opposing-counsel-profile.md`: the arguments they
+   made, what they moved to strike or called misleading, the authorities
+   they lean on, with cites to their documents. Create the note if it
+   does not exist.
+6. **Housekeeping.** Lint errors, notes without sources, unsearched
    documents, failed connectors, staging still present.
 
 Rules: absolute dates only; no fact without a source or an explicit

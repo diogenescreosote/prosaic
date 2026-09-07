@@ -17,7 +17,8 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 SC = REPO_ROOT / "cli" / "sc"
 BUNDLE = REPO_ROOT / "templates" / "matter" / ".claude"
-EXPECTED_COMMANDS = {"build", "build-doc", "open", "clean", "status", "commit", "find", "standup"}
+EXPECTED_COMMANDS = {"build", "build-doc", "open", "clean", "status", "commit", "find", "standup",
+                     "citecheck", "clerkreview", "judgereview", "oppo", "preflight"}
 
 
 def frontmatter(text: str) -> dict[str, str]:
@@ -58,7 +59,7 @@ def test_each_command_runs_the_cli_and_relays(name: str):
     assert fm["name"] == name
     assert fm.get("description")
     assert fm.get("model", "").startswith("claude-"), "a relay command names its (small) model"
-    assert fm.get("effort") in {"low", "medium"}
+    assert fm.get("effort") in {"low", "medium", "high"}
     assert "!`" in text, "the CLI runs before the model sees the prompt"
     if name != "commit":  # commit is pure git; the others run sc
         assert "@@PROSAIC@@" in text, "the checkout path is a placeholder until install"
