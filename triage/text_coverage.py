@@ -161,7 +161,13 @@ def iter_documents(matter: Path) -> list[Path]:
 
 
 def _rel(matter: Path, doc: Path) -> Path:
-    return doc.resolve().relative_to(matter.resolve())
+    """Lexical path of `doc` under `matter`. Never resolves symlinks: an
+    `assets/x.pdf` that links to `processed_files/x.pdf` is its own
+    document with its own derived files, and the matter itself may sit
+    behind a symlinked mount."""
+    m = Path(os.path.abspath(matter))
+    d = Path(os.path.abspath(doc))
+    return d.relative_to(m)
 
 
 def derived_text_path(matter: Path, doc: Path) -> Path:
@@ -327,7 +333,7 @@ def _cache_path(matter: Path) -> Path:
 
 #: Bump when classification or note text changes, so cached rows written
 #: by an older version are re-surveyed instead of carrying stale wording.
-CACHE_VERSION = "3"
+CACHE_VERSION = "4"
 
 
 def _stamp(matter: Path, doc: Path) -> str:
@@ -341,7 +347,7 @@ def _stamp(matter: Path, doc: Path) -> str:
 
 
 def audit(matter: Path, include_inbox: bool = False, use_cache: bool = True) -> list[Doc]:
-    matter = matter.resolve()
+    matter = Path(os.path.abspath(matter))
     cache_file = _cache_path(matter)
     cache: dict = {}
     if use_cache and cache_file.is_file():
@@ -453,7 +459,7 @@ def ocr_pdf(original: Path, pages_to_force: list[int], redo: bool = False,
 
 def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) -> Doc:
     """Bring one document to `searchable` if a tool can; return its new state."""
-    matter = matter.resolve()
+    matter = Path(os.path.abspath(matter))
     p = matter / d.path
     if d.state in ("searchable", "unverified-sidecar", "untriaged", "unreadable",
                    "transcript-needed", "unsupported"):
@@ -526,7 +532,7 @@ def ensure(matter: Path, include_inbox: bool = False, dry_run: bool = False,
     # re-audited; keep it beside the cache and surface it on the row.
     failures = {r.path: r.note for r in results if r.note.startswith("repair failed")
                 or "not installed" in r.note or "leaving it" in r.note}
-    fpath = matter.resolve() / ".state" / FAILURES_NAME
+    fpath = Path(os.path.abspath(matter)) / ".state" / FAILURES_NAME
     fpath.parent.mkdir(parents=True, exist_ok=True)
     fpath.write_text(json.dumps(failures, indent=1, sort_keys=True))
     final = audit(matter, include_inbox=include_inbox)
@@ -566,7 +572,7 @@ def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = Fals
     """Move tool-written text files (header present) and the OCR copies the
     tool made into derived/. Human text files stay where they are. Legacy
     `_ocr.pdf` siblings the tool did not make move only on request."""
-    matter = matter.resolve()
+    matter = Path(os.path.abspath(matter))
     moves: list[str] = []
     for doc in iter_documents(matter):
         legacy_txt = legacy_text_sibling(doc)

@@ -208,3 +208,15 @@ def test_sc_text_audit_and_brief_report_coverage(matter: Path):
     assert proc.stdout.startswith("text coverage: 0/3 document(s) searchable")
     brief = sc("brief", str(matter), cwd=matter)
     assert "text coverage: 0/3" in brief.stdout
+
+
+def test_symlinked_document_gets_its_own_derived_files(matter: Path, monkeypatch):
+    monkeypatch.setattr(tc, "_tool", lambda name: None)
+    (matter / "processed_files").mkdir()
+    make_text_pdf(matter / "processed_files" / "orig.pdf")
+    os.symlink(matter / "processed_files" / "orig.pdf", matter / "assets" / "orig.pdf")
+    docs = tc.ensure(matter, jobs=1)
+    st = states(docs)
+    assert st["assets/orig.pdf"] == "searchable" and st["processed_files/orig.pdf"] == "searchable"
+    assert (matter / "derived" / "text" / "assets" / "orig.pdf.txt").exists()
+    assert (matter / "derived" / "text" / "processed_files" / "orig.pdf.txt").exists()
