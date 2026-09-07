@@ -63,6 +63,7 @@ project accretes decisions instead of middleware.
 - [0040](adr/0040-routine-operations-are-harness-commands.md) Routine operations are harness commands run on small models; sessions start from `sc brief`
 - [0041](adr/0041-searchability-is-audited-not-assumed.md) Searchability is audited and repaired (`sc text audit|ensure`), never assumed; `sc find` exits 2 on any gap
 - [0042](adr/0042-derived-artifacts-in-parallel-directories.md) Derived artifacts live under `derived/<kind>/` mirroring the matter, never beside originals
+- [0043](adr/0043-knowledge-is-a-vault-of-notes.md) Knowledge is a vault of typed notes with front matter; Obsidian-compatible, Obsidian-optional; `sc knowledge`
 
 Also:
 
