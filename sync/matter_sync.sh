@@ -39,9 +39,15 @@ sc_python() {
   return 1
 }
 
-MATTER_DIR="${1:?usage: matter_sync.sh <matter_dir> [--scheduled]}"
+MATTER_DIR="${1:?usage: matter_sync.sh <matter_dir> [--scheduled|--watch]}"
 SCHEDULED=0
-[ "${2:-}" = "--scheduled" ] && SCHEDULED=1
+WATCH=0
+case "${2:-}" in
+  --scheduled) SCHEDULED=1 ;;
+  --watch)     WATCH=1 ;;   # inbox watcher: no connectors, triage what landed (ADR-0044)
+esac
+RUN_STARTED="$(date +%s)"
+RUN_MODE="manual"; [ "$SCHEDULED" = 1 ] && RUN_MODE="scheduled"; [ "$WATCH" = 1 ] && RUN_MODE="watch"
 
 # Repo root: resolve through symlinks so an installed copy still finds home.
 SOURCE="${BASH_SOURCE[0]}"
@@ -86,6 +92,27 @@ MIN_INTERVAL_HOURS="${PROSAIC_MIN_INTERVAL_HOURS:-11}"
 
 mkdir -p "$LOG_ROOT"
 log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
+# One JSON document per run in .state/sync_last_run.json: what the brief
+# and the standup agenda read, so a failed connector is seen the next
+# morning rather than found in a log weeks later.
+CONNECTOR_STATUS=""
+write_summary() {   # $1 = outcome word, $2 = new-file count, $3 = triage status
+  mkdir -p "$STATE_DIR"
+  local py; py="$(sc_python 2>/dev/null || echo python3)"
+  "$py" - "$STATE_DIR/sync_last_run.json" "$RUN_MODE" "$RUN_STARTED" "$1" "$2" "$3" "$CONNECTOR_STATUS" <<'PY' 2>/dev/null || true
+import json, sys, time
+path, mode, started, outcome, new, triage, conns = sys.argv[1:8]
+status = {}
+for item in conns.split():
+    name, _, st = item.partition("=")
+    status[name] = st
+json.dump({"mode": mode, "started": int(started), "finished": int(time.time()),
+           "outcome": outcome, "new_files": int(new or 0), "triage": triage,
+           "connectors": status,
+           "failed_connectors": sorted(n for n, st in status.items() if st != "ok")},
+          open(path, "w"), indent=1)
+PY
+}
 
 # --- sanity: matter reachable (cloud-synced volume may be unmounted) ---------
 if [ ! -f "$MATTER_DIR/matter.yaml" ] && [ ! -f "$MATTER_DIR/envelopes.yaml" ]; then
@@ -93,6 +120,28 @@ if [ ! -f "$MATTER_DIR/matter.yaml" ] && [ ! -f "$MATTER_DIR/envelopes.yaml" ]; 
   exit 0
 fi
 mkdir -p "$STATE_DIR"
+
+# --- inbox watcher (--watch): triage what landed, no connectors ---------------
+# launchd fires this on any change under inbox/ (WatchPaths). A file still
+# being written is skipped until a later firing sees it settled; a file the
+# watcher already listed is not re-triaged unless its size or mtime changed.
+if [ "$WATCH" = 1 ]; then
+  WATCH_SEEN="$STATE_DIR/watch_seen.txt"; touch "$WATCH_SEEN"
+  NEW_LIST="$(mktemp)"
+  while IFS= read -r f; do
+    [ -f "$f" ] || continue
+    case "$(basename "$f")" in .*) continue ;; esac
+    if [ -n "$(find "$f" -newermt '-20 seconds' 2>/dev/null)" ]; then continue; fi   # still being written
+    sig="$(stat -f '%z:%m' "$f" 2>/dev/null || stat -c '%s:%Y' "$f")"
+    if grep -qxF "$f|$sig" "$WATCH_SEEN"; then continue; fi
+    echo "$f|$sig" >> "$WATCH_SEEN"
+    echo "inbox $f" >> "$NEW_LIST"
+  done < <(find "$MATTER_DIR/inbox" -type f 2>/dev/null | sort)
+  if [ ! -s "$NEW_LIST" ]; then
+    log "WATCH: nothing new and settled under inbox/"
+    rm -f "$NEW_LIST"; exit 0
+  fi
+fi
 
 # --- min-interval guard (scheduled runs only) ---------------------------------
 if [ "$SCHEDULED" = 1 ] && [ -f "$GUARD_FILE" ]; then
@@ -137,7 +186,7 @@ print('\n'.join(names))
 PY
 }
 
-NEW_LIST=$(mktemp)
+[ "$WATCH" = 1 ] || NEW_LIST=$(mktemp)
 FAILURES=0
 
 SC_PY="$(sc_python)" || {
@@ -157,6 +206,7 @@ if [ -z "$CONNECTORS" ] && grep -qE "^(connectors|gmail_addresses${LEGACY_KEYS:+
   exit 1
 fi
 
+[ "$WATCH" = 1 ] && CONNECTORS=""
 for name in $CONNECTORS; do
   entry="$(connector_entry "$name")"
   if [ -z "$entry" ]; then
@@ -170,8 +220,10 @@ for name in $CONNECTORS; do
       | sed -n "s/^NEW /$name /p" >> "$NEW_LIST"
   if [ "${PIPESTATUS[0]}" = 0 ]; then
     log "CONNECTOR $name ok"
+    CONNECTOR_STATUS="$CONNECTOR_STATUS $name=ok"
   else
     log "ERROR: connector $name failed (exit ${PIPESTATUS[0]})"
+    CONNECTOR_STATUS="$CONNECTOR_STATUS $name=failed"
     FAILURES=$((FAILURES+1))
   fi
 done
@@ -187,10 +239,11 @@ else
   log "TEXT ensure: gaps remain: $(head -1 "$STATE_DIR/text_ensure_last.txt")"
 fi
 
-[ "$FAILURES" = 0 ] && date +%s > "$GUARD_FILE"
+[ "$FAILURES" = 0 ] && [ "$WATCH" = 0 ] && date +%s > "$GUARD_FILE"
 
 if [ ! -s "$NEW_LIST" ]; then
   log "SYNC done: nothing new (failures=$FAILURES)"
+  write_summary "$([ "$FAILURES" = 0 ] && echo ok || echo connector-failures)" 0 skipped
   rm -f "$NEW_LIST"; exit 0
 fi
 count=$(wc -l < "$NEW_LIST" | tr -d ' ')
@@ -203,6 +256,7 @@ sed 's/^/    /' "$NEW_LIST" >> "$LOG_FILE"
 AGENT_RUN="$PROSAIC_ROOT/cli/agent-run"
 if ! "$AGENT_RUN" --check >/dev/null 2>&1; then
   log "WARN: no agent CLI found (claude/codex/gemini, or PROSAIC_AGENT_CMD); skipping knowledge triage"
+  write_summary "no-agent" "$count" skipped
   rm -f "$NEW_LIST"; exit 0
 fi
 PROMPT_TEMPLATE="$PROSAIC_ROOT/triage/prompts/sync_triage.md"
@@ -216,10 +270,12 @@ NEW FILES (one per line: <connector> <absolute path>):
 
 $(cat "$NEW_LIST")"
 
-log "TRIAGE start ($count files)"
-if ( cd "$MATTER_DIR" && printf '%s' "$PROMPT" | "$AGENT_RUN" --yolo ) >> "$LOG_FILE" 2>&1; then
+log "TRIAGE start ($count files, role triage)"
+if ( cd "$MATTER_DIR" && printf '%s' "$PROMPT" | "$AGENT_RUN" --yolo --role triage ) >> "$LOG_FILE" 2>&1; then
   log "TRIAGE done"
+  write_summary "$([ "$FAILURES" = 0 ] && echo ok || echo connector-failures)" "$count" ok
 else
   log "ERROR: triage failed (new files remain in place)"
+  write_summary "triage-failed" "$count" failed
 fi
 rm -f "$NEW_LIST"

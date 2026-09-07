@@ -12,7 +12,13 @@
 #
 # Usage:
 #   agent-run --check                      # print provider name; exit 0 if usable
-#   agent-run [--dir DIR]... [--yolo] < prompt.txt
+#   agent-run [--dir DIR]... [--yolo] [--role NAME] [--model M] [--max-turns N] < prompt.txt
+#
+# --role NAME reads `agent.roles.NAME` from ./matter.yaml (the matter is
+# the working directory) for a model and a turn cap, so a deployment
+# routes triage, refine and judge work to the models it chooses without
+# editing prosaic (ADR-0044). Explicit --model/--max-turns win over the
+# role. With neither, the harness's own default model runs uncapped.
 #
 # The prompt arrives on stdin (prompts are long; argv mangles them).
 # The agent's output goes to stdout. --dir grants read access to a
@@ -36,12 +42,18 @@ set -u
 
 MODE=run
 YOLO=0
+ROLE=""
+MODEL="${AGENT_RUN_MODEL:-}"
+MAX_TURNS="${AGENT_RUN_MAX_TURNS:-}"
 DIRS=()
 
 while [ $# -gt 0 ]; do
   case "$1" in
     --check) MODE=check ;;
     --yolo)  YOLO=1 ;;
+    --role)  shift; ROLE="${1:?--role needs an argument}" ;;
+    --model) shift; MODEL="${1:?--model needs an argument}" ;;
+    --max-turns) shift; MAX_TURNS="${1:?--max-turns needs an argument}" ;;
     --dir)   shift; DIRS+=("${1:?--dir needs an argument}") ;;
     -h|--help)
       sed -n '2,35p' "$0" | sed 's/^# \{0,1\}//'
@@ -50,6 +62,32 @@ while [ $# -gt 0 ]; do
   esac
   shift
 done
+
+# Role -> model / turn cap, from ./matter.yaml `agent.roles.<role>`.
+# Python with PyYAML is what the sync already requires; without it the
+# role silently resolves to nothing, which is the pre-ADR-0044 behavior.
+resolve_role() {
+  [ -n "$ROLE" ] || return 0
+  [ -f matter.yaml ] || return 0
+  local py out m t
+  for py in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+    command -v "$py" >/dev/null 2>&1 || continue
+    "$py" -c "import yaml" >/dev/null 2>&1 || continue
+    out="$("$py" - "$ROLE" <<'PY'
+import sys, yaml
+role = sys.argv[1]
+cfg = yaml.safe_load(open("matter.yaml")) or {}
+r = ((cfg.get("agent") or {}).get("roles") or {}).get(role) or {}
+print(r.get("model") or "")
+print(r.get("max_turns") or "")
+PY
+)" || return 0
+    m="$(printf '%s\n' "$out" | sed -n 1p)"; t="$(printf '%s\n' "$out" | sed -n 2p)"
+    [ -z "$MODEL" ] && [ -n "$m" ] && MODEL="$m"
+    [ -z "$MAX_TURNS" ] && [ -n "$t" ] && MAX_TURNS="$t"
+    return 0
+  done
+}
 
 provider() {
   if [ -n "${PROSAIC_AGENT_CMD:-}" ]; then
@@ -80,6 +118,8 @@ run_claude() {
   local d
   for d in "${DIRS[@]+"${DIRS[@]}"}"; do args+=(--add-dir "$d"); done
   [ "$YOLO" = 1 ] && args+=(--dangerously-skip-permissions)
+  [ -n "$MODEL" ] && args+=(--model "$MODEL")
+  [ -n "$MAX_TURNS" ] && args+=(--max-turns "$MAX_TURNS")
   claude -p "$prompt" "${args[@]+"${args[@]}"}"
 }
 
@@ -123,6 +163,7 @@ if [ "$MODE" = check ]; then
   exit 0
 fi
 
+resolve_role
 PROMPT="$(cat)"
 if [ -z "$PROMPT" ]; then
   echo "agent-run: empty prompt on stdin" >&2
