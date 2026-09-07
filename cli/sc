@@ -32,6 +32,8 @@ from pathlib import Path
 ROOT = Path(__file__).resolve().parent.parent
 
 MATTER_DIRS = [
+    "derived/text",
+    "derived/ocr",
     "inbox",
     "processed_files",
     "assets",
@@ -789,6 +791,10 @@ def _text_coverage():
 def cmd_text(args: argparse.Namespace) -> int:
     tc = _text_coverage()
     matter = _matter_root(Path(args.matter_dir))
+    if args.action == "migrate":
+        for m in tc.migrate(matter, dry_run=args.dry_run, include_legacy_ocr=args.include_legacy_ocr):
+            print(m)
+        return 0
     if args.action == "audit":
         docs = tc.audit(matter, include_inbox=args.include_inbox, use_cache=not args.no_cache)
     else:
@@ -869,14 +875,48 @@ def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
     return report
 
 
-def format_find(report: dict, show_unsearched: int = 40) -> str:
+def _page_index(text_file: Path) -> list[int]:
+    """Line number (1-based index) -> page, from `[[[ page k of N ]]]` markers."""
+    pages: list[int] = [0]
+    cur = 0
+    try:
+        for ln in text_file.open(encoding="utf-8", errors="replace"):
+            if ln.startswith("[[[ page "):
+                try:
+                    cur = int(ln.split()[2])
+                except (IndexError, ValueError):
+                    pass
+            pages.append(cur)
+    except OSError:
+        pass
+    return pages
+
+
+def format_find(report: dict, show_unsearched: int = 40, matter: Path | None = None) -> str:
+    """Hits under derived/text/ are shown as the original document with a
+    page number, so a hit is a cite, not a path into a cache."""
     lines: list[str] = []
     for term, hits in report["terms"].items():
         total = sum(len(v) for v in hits.values())
         lines.append(f"## {term!r}: {total} hit line(s) in {len(hits)} file(s)")
         for path in sorted(hits):
-            lines.append(f"- {path}")
+            derived = path.startswith("derived/text/") and path.endswith(".txt")
+            if derived:
+                original = path[len("derived/text/"):-len(".txt")]
+                lines.append(f"- {original}  (text at {path})")
+                index = _page_index(matter / path) if matter else []
+            else:
+                lines.append(f"- {path}")
+                index = []
             for h in hits[path]:
+                if index:
+                    lno, _, rest = h.partition(":")
+                    try:
+                        pg = index[int(lno)]
+                        lines.append(f"    p.{pg} L{lno}: {rest}")
+                        continue
+                    except (ValueError, IndexError):
+                        pass
                 lines.append(f"    {h}")
         lines.append("")
     un = report["unsearched"]
@@ -901,7 +941,7 @@ def cmd_find(args: argparse.Namespace) -> int:
     tc = _text_coverage()
     docs = tc.ensure(matter, jobs=2) if args.ensure else tc.audit(matter)
     report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs)
-    sys.stdout.write(format_find(report))
+    sys.stdout.write(format_find(report, matter=matter))
     if report["unsearched"]:
         return 2
     return 0 if any(report["terms"].values()) else 1
@@ -1224,9 +1264,11 @@ def main() -> int:
     sp.set_defaults(func=cmd_find)
 
     sp = sub.add_parser("text", help="text coverage: audit or ensure that every document is searchable")
-    sp.add_argument("action", choices=("audit", "ensure"))
+    sp.add_argument("action", choices=("audit", "ensure", "migrate"))
     sp.add_argument("matter_dir", nargs="?", default=".")
     sp.add_argument("--json", action="store_true")
+    sp.add_argument("--include-legacy-ocr", action="store_true",
+                    help="migrate: also move _ocr.pdf siblings the tool did not make")
     sp.add_argument("--include-inbox", action="store_true", help="also cover inbox/ (normally triage first)")
     sp.add_argument("--no-cache", action="store_true", help="re-survey every document")
     sp.add_argument("--dry-run", action="store_true", help="ensure: report what would be repaired")

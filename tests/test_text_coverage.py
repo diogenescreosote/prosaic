@@ -85,12 +85,29 @@ def test_audit_classifies_every_document(matter: Path):
 
 
 def test_ocr_sibling_alone_does_not_make_a_pdf_searchable(matter: Path):
-    """The hole this module closes: rg cannot read a PDF, so an _ocr
-    sibling without a .txt is still unsearched."""
-    make_text_pdf(matter / "assets" / "scan_ocr.pdf")   # pretend OCR ran
+    """The hole this module closes: rg cannot read a PDF, so an OCR'd copy
+    without a text file is still unsearched. Legacy siblings are read."""
+    make_text_pdf(matter / "assets" / "scan_ocr.pdf")   # a legacy sibling
     st = states(tc.audit(matter, use_cache=False))
     assert st["assets/scan.pdf"] == "needs-sidecar"
     assert "assets/scan_ocr.pdf" not in st, "siblings are audited through their original"
+
+
+def test_legacy_tool_sidecar_is_recognized_and_migrated(matter: Path, monkeypatch):
+    monkeypatch.setattr(tc, "_tool", lambda name: None)
+    legacy = matter / "assets" / "letter.txt"
+    tc.write_pdf_sidecar(matter, matter / "assets" / "letter.pdf", matter / "assets" / "letter.pdf", legacy)
+    d = {x.path: x for x in tc.audit(matter, use_cache=False)}["assets/letter.pdf"]
+    assert d.state == "searchable" and "legacy location" in d.note
+    (matter / "assets" / "photo.txt").write_text("a human wrote this")   # stays put
+    moves = tc.migrate(matter)
+    assert any("assets/letter.txt -> derived/text/assets/letter.pdf.txt" in m for m in moves)
+    assert (matter / "derived" / "text" / "assets" / "letter.pdf.txt").exists()
+    assert not legacy.exists()
+    assert (matter / "assets" / "photo.txt").exists(), "human text files are never moved"
+    assert "derived/ocr/" in (matter / ".gitignore").read_text()
+    d = {x.path: x for x in tc.audit(matter, use_cache=False)}["assets/letter.pdf"]
+    assert d.state == "searchable" and d.note == ""
 
 
 def test_ensure_writes_page_marked_sidecars_without_ocr_tools(matter: Path, monkeypatch):
@@ -98,8 +115,9 @@ def test_ensure_writes_page_marked_sidecars_without_ocr_tools(matter: Path, monk
     docs = tc.ensure(matter, jobs=1)
     st = states(docs)
     assert st["assets/letter.pdf"] == "searchable"
-    side = (matter / "assets" / "letter.txt").read_text()
+    side = (matter / "derived" / "text" / "assets" / "letter.pdf.txt").read_text()
     assert side.startswith(tc.HEADER_MARK)
+    assert not (matter / "assets" / "letter.txt").exists(), "nothing is written beside the original"
     assert "pages: 2" in side and "[[[ page 2 of 2 ]]]" in side
     assert "quick brown fox" in side and tc.BANNER in side
     # what no tool could fix stays visible, with the reason
@@ -119,7 +137,7 @@ def test_foreign_sidecar_is_never_overwritten(matter: Path, monkeypatch):
 def test_stale_sidecar_is_detected_and_refreshed(matter: Path, monkeypatch):
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     tc.ensure(matter, jobs=1)
-    side = matter / "assets" / "letter.txt"
+    side = matter / "derived" / "text" / "assets" / "letter.pdf.txt"
     old = side.stat().st_mtime - 100
     os.utime(side, (old, old))
     st = states(tc.audit(matter, use_cache=False))
@@ -148,8 +166,9 @@ def test_ensure_ocrs_an_image_only_pdf(matter: Path):
     docs = tc.ensure(matter, jobs=1)
     st = states(docs)
     assert st["assets/scan.pdf"] == "searchable", [d for d in docs if d.path == "assets/scan.pdf"]
-    assert (matter / "assets" / "scan_ocr.pdf").exists()
-    side = (matter / "assets" / "scan.txt").read_text().lower()
+    assert (matter / "derived" / "ocr" / "assets" / "scan.pdf").exists()
+    assert not (matter / "assets" / "scan_ocr.pdf").exists()
+    side = (matter / "derived" / "text" / "assets" / "scan.pdf.txt").read_text().lower()
     assert "meeting" in side or "may" in side
     # the original is byte-identical
     assert fitz.open(str(matter / "assets" / "scan.pdf"))[0].get_text().strip() == ""
@@ -159,7 +178,7 @@ def test_ensure_ocrs_an_image_only_pdf(matter: Path):
 def test_ensure_ocrs_an_image(matter: Path):
     docs = tc.ensure(matter, jobs=1)
     assert states(docs)["assets/photo.png"] == "searchable"
-    side = (matter / "assets" / "photo.ocr.txt").read_text()
+    side = (matter / "derived" / "text" / "assets" / "photo.png.txt").read_text()
     assert side.startswith(tc.HEADER_MARK)
 
 
@@ -173,6 +192,14 @@ def test_sc_find_exits_2_while_anything_is_unsearchable(matter: Path, monkeypatc
     assert proc.returncode == 2, proc.stdout + proc.stderr
     assert "UNSEARCHED:" in proc.stdout and "[needs-ocr] assets/scan.pdf" in proc.stdout
     assert "UNTRIAGED (inbox/" in proc.stdout
+
+
+def test_find_cites_the_original_and_page_for_derived_text(matter: Path, monkeypatch):
+    monkeypatch.setattr(tc, "_tool", lambda name: None)
+    tc.ensure(matter, jobs=1)
+    proc = sc("find", "page 2 of 2", "--matter-dir", str(matter), cwd=matter)
+    assert "- assets/letter.pdf  (text at derived/text/assets/letter.pdf.txt)" in proc.stdout
+    assert "p.2 L" in proc.stdout
 
 
 def test_sc_text_audit_and_brief_report_coverage(matter: Path):

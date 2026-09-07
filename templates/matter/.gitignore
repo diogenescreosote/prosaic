@@ -1,0 +1,13 @@
+.DS_Store
+__pycache__/
+.venv/
+
+# Connector and coverage state: regenerable
+.state/
+
+# Build dependency manifests: regenerable, churn on every build
+out/*/.build_manifest.json
+
+# OCR'd copies under the derived tree (ADR-0041): regenerable by `sc text ensure`, large.
+# derived/text/ (page-marked text) IS tracked: small, and what the record is searched through.
+derived/ocr/

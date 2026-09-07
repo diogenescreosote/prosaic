@@ -32,14 +32,28 @@ audio) as one of:
 
 `ensure` repairs what it can: OCR-supplements PDFs whose pages lack text
 (`ocrmypdf --skip-text`, or `--force-ocr --pages` for pages that carry
-useless text: image-bodied, garbled), then writes a `.txt` sidecar from
-the best available source with `[[[ page k of N ]]]` markers so a hit
-carries a page cite. Images get `<stem>.ocr.txt` through tesseract;
-DOCX gets `<stem>.txt` through pandoc.
+useless text: image-bodied, garbled), then writes a text file from the
+best available source with `[[[ page k of N ]]]` markers so a hit
+carries a page cite. Images go through tesseract; DOCX through pandoc.
+
+Layout (ADR-0041): derived artifacts live in a parallel tree that
+mirrors the matter, never beside the original:
+
+    derived/text/<relative path>.txt     page-marked text (tracked)
+    derived/ocr/<relative path>          the OCR'd copy (regenerable; ignored)
+
+so `assets/gmail/2026-01-02_letter.pdf` is searched through
+`derived/text/assets/gmail/2026-01-02_letter.pdf.txt`, and its OCR'd copy,
+if one was needed, is `derived/ocr/assets/gmail/2026-01-02_letter.pdf`.
+Legacy siblings (`<stem>_ocr.pdf`, `<stem>.txt`, `<stem>.ocr.txt` beside
+the original) are still recognized and searched; `migrate` moves the
+ones this tool wrote into the tree. A `.txt` beside an original that
+carries no header is a human transcription: read, reported as
+unverified, never moved or overwritten.
 
 Guarantees:
-  * Originals are never modified. Everything written is a sibling.
-  * A sidecar not written by this tool (no header) is never overwritten.
+  * Originals are never modified. Everything written goes under derived/.
+  * A text file not written by this tool (no header) is never overwritten.
   * The tool's own sidecar is rewritten only when the document or its
     `_ocr` sibling is newer than the sidecar.
   * Every classification is cached in .state/text_coverage.json keyed by
@@ -84,7 +98,9 @@ HEADER_MARK = "[[[ prosaic text sidecar ]]]"
 BANNER = "MACHINE TEXT --- VERIFY AGAINST THE DOCUMENT BEFORE CITING IN ANY FILING"
 CACHE_NAME = "text_coverage.json"
 
-EXCLUDE_DIRS = frozenset({"out", ".state", ".git", ".flow", "node_modules", ".claude", ".venv"})
+EXCLUDE_DIRS = frozenset({"out", ".state", ".git", ".flow", "node_modules", ".claude", ".venv",
+                          "derived"})
+DERIVED = "derived"
 PDF_EXT = {".pdf"}
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
 IMAGE_UNSUPPORTED_EXT = {".heic", ".heif"}
@@ -144,14 +160,51 @@ def iter_documents(matter: Path) -> list[Path]:
     return out
 
 
-def ocr_sibling(pdf: Path) -> Path:
+def _rel(matter: Path, doc: Path) -> Path:
+    return doc.resolve().relative_to(matter.resolve())
+
+
+def derived_text_path(matter: Path, doc: Path) -> Path:
+    return matter / DERIVED / "text" / (str(_rel(matter, doc)) + ".txt")
+
+
+def derived_ocr_path(matter: Path, doc: Path) -> Path:
+    return matter / DERIVED / "ocr" / _rel(matter, doc)
+
+
+def legacy_ocr_sibling(pdf: Path) -> Path:
     return pdf.with_name(pdf.stem + "_ocr.pdf")
 
 
-def sidecar_for(doc: Path) -> Path:
+def legacy_text_sibling(doc: Path) -> Path:
     if doc.suffix.lower() in IMAGE_EXT | IMAGE_UNSUPPORTED_EXT:
         return doc.with_name(doc.stem + ".ocr.txt")
     return doc.with_suffix(".txt")
+
+
+def ocr_copy_for(matter: Path, pdf: Path) -> Path | None:
+    """The OCR'd copy to read from, derived/ first, then the legacy sibling."""
+    for cand in (derived_ocr_path(matter, pdf), legacy_ocr_sibling(pdf)):
+        if cand.exists():
+            return cand
+    return None
+
+
+def text_file_for(matter: Path, doc: Path) -> Path | None:
+    """The text file that speaks for `doc`, derived/ first, then legacy
+    siblings (the tool's old location, then a human `.txt`)."""
+    cands = [derived_text_path(matter, doc), legacy_text_sibling(doc)]
+    if doc.suffix.lower() in IMAGE_EXT | IMAGE_UNSUPPORTED_EXT:
+        cands.append(doc.with_suffix(".txt"))
+    for cand in cands:
+        if cand.exists():
+            return cand
+    return None
+
+
+# Back-compat names used by older callers and tests.
+ocr_sibling = legacy_ocr_sibling
+sidecar_for = legacy_text_sibling
 
 
 def _header_pages(sidecar: Path) -> int | None:
@@ -192,14 +245,15 @@ def _survey(path: Path, ocr_output: bool = False) -> tuple[int, list[int], list[
 
 
 def classify_pdf(matter: Path, pdf: Path) -> Doc:
-    rel = str(pdf.relative_to(matter))
-    sib = ocr_sibling(pdf)
-    best = sib if sib.exists() else pdf
-    side = sidecar_for(pdf)
-    d = Doc(path=rel, kind="pdf", state="", sidecar=str(side.relative_to(matter)),
-            source=str(best.relative_to(matter)))
+    rel = str(_rel(matter, pdf))
+    ocr = ocr_copy_for(matter, pdf)
+    best = ocr or pdf
+    side = text_file_for(matter, pdf)
+    target = derived_text_path(matter, pdf)
+    d = Doc(path=rel, kind="pdf", state="",
+            sidecar=str(_rel(matter, side or target)), source=str(_rel(matter, best)))
     try:
-        pages, unc, _ = _survey(best, ocr_output=best is sib)
+        pages, unc, _ = _survey(best, ocr_output=ocr is not None)
     except Exception as exc:  # encrypted, corrupt
         d.state = "unreadable"
         d.note = f"{type(exc).__name__}: {exc}"[:160]
@@ -207,69 +261,63 @@ def classify_pdf(matter: Path, pdf: Path) -> Doc:
     d.pages, d.uncovered = pages, unc
     if unc:
         d.state = "needs-ocr"
-        if best is sib:
+        if ocr is not None:
             d.note = (f"OCR ran and found no text on {len(unc)} of {pages} page(s): "
                       "likely a photo, graphic or blank scan; describe it in a "
-                      "human .txt sidecar if its content matters")
+                      "human text file if its content matters")
         else:
             d.note = f"{len(unc)} of {pages} page(s) lack a usable text layer"
         return d
-    if not side.exists():
+    if side is None:
         d.state = "needs-sidecar"
         return d
     hp = _header_pages(side)
     if hp is None:
         d.state = "unverified-sidecar"
-        d.note = "sidecar not written by this tool; completeness unknown"
+        d.note = "text file not written by this tool; completeness unknown"
         return d
-    newest = max(pdf.stat().st_mtime, sib.stat().st_mtime if sib.exists() else 0)
+    newest = max(pdf.stat().st_mtime, ocr.stat().st_mtime if ocr else 0)
     if side.stat().st_mtime < newest or hp != pages:
         d.state = "stale-sidecar"
-        d.note = ("document newer than sidecar" if hp == pages
-                  else f"sidecar says {hp} pages, document has {pages}")
+        d.note = ("document newer than its text file" if hp == pages
+                  else f"text file says {hp} pages, document has {pages}")
         return d
     d.state = "searchable"
+    if side != target:
+        d.note = "legacy location; `sc text migrate` moves it under derived/"
     return d
 
 
 def classify_other(matter: Path, p: Path) -> Doc:
-    rel = str(p.relative_to(matter))
+    rel = str(_rel(matter, p))
     ext = p.suffix.lower()
-    side = sidecar_for(p)
+    target = derived_text_path(matter, p)
+    side = text_file_for(matter, p)
     if ext in AUDIO_EXT:
-        has = p.with_suffix(".txt").exists()
+        has = side is not None
         return Doc(path=rel, kind="audio", state="searchable" if has else "transcript-needed",
-                   sidecar=str(p.with_suffix(".txt").relative_to(matter)),
+                   sidecar=str(_rel(matter, side or target)),
                    note="" if has else "run the local STT pipeline (docs/stt.md); never a cloud service")
-    if ext in IMAGE_UNSUPPORTED_EXT:
-        has = side.exists() or p.with_suffix(".txt").exists()
-        return Doc(path=rel, kind="image", state="unverified-sidecar" if has else "unsupported",
-                   sidecar=str(side.relative_to(matter)), note="" if has else "convert to PNG/JPEG first")
-    if ext in IMAGE_EXT:
-        human = p.with_suffix(".txt")
-        if human.exists():
-            return Doc(path=rel, kind="image", state="unverified-sidecar",
-                       sidecar=str(human.relative_to(matter)), note="human transcription sidecar")
-        d = Doc(path=rel, kind="image", state="", sidecar=str(side.relative_to(matter)), source=rel, pages=1)
-        if not side.exists():
-            d.state = "needs-ocr"
-        elif _header_pages(side) is None:
-            d.state = "unverified-sidecar"
-        elif side.stat().st_mtime < p.stat().st_mtime:
-            d.state = "stale-sidecar"
+    kind = "image" if ext in IMAGE_EXT | IMAGE_UNSUPPORTED_EXT else "docx"
+    d = Doc(path=rel, kind=kind, state="", sidecar=str(_rel(matter, side or target)),
+            source=rel, pages=1)
+    if side is None:
+        if ext in IMAGE_UNSUPPORTED_EXT:
+            d.state, d.note = "unsupported", "convert to PNG/JPEG first"
         else:
-            d.state = "searchable"
+            d.state = "needs-ocr" if kind == "image" else "needs-sidecar"
         return d
-    # docx
-    d = Doc(path=rel, kind="docx", state="", sidecar=str(side.relative_to(matter)), source=rel, pages=1)
-    if not side.exists():
-        d.state = "needs-sidecar"
-    elif _header_pages(side) is None:
+    hp = _header_pages(side)
+    if hp is None:
         d.state = "unverified-sidecar"
-    elif side.stat().st_mtime < p.stat().st_mtime:
+        d.note = "human transcription" if kind == "image" else "text file not written by this tool"
+        return d
+    if side.stat().st_mtime < p.stat().st_mtime:
         d.state = "stale-sidecar"
-    else:
-        d.state = "searchable"
+        return d
+    d.state = "searchable"
+    if side != target:
+        d.note = "legacy location; `sc text migrate` moves it under derived/"
     return d
 
 
@@ -279,12 +327,13 @@ def _cache_path(matter: Path) -> Path:
 
 #: Bump when classification or note text changes, so cached rows written
 #: by an older version are re-surveyed instead of carrying stale wording.
-CACHE_VERSION = "2"
+CACHE_VERSION = "3"
 
 
 def _stamp(matter: Path, doc: Path) -> str:
     bits = [f"v{CACHE_VERSION}", f"{doc.stat().st_size}:{doc.stat().st_mtime_ns}"]
-    for extra in (ocr_sibling(doc), sidecar_for(doc), doc.with_suffix(".txt")):
+    for extra in (derived_ocr_path(matter, doc), derived_text_path(matter, doc),
+                  legacy_ocr_sibling(doc), legacy_text_sibling(doc), doc.with_suffix(".txt")):
         if extra.exists() and extra != doc:
             st = extra.stat()
             bits.append(f"{extra.name}:{st.st_size}:{st.st_mtime_ns}")
@@ -369,20 +418,23 @@ def write_pdf_sidecar(matter: Path, original: Path, source: Path, sidecar: Path,
             lines.append(f"[[[ pages NOT covered by this text: {', '.join(map(str, unc))} ]]]")
     finally:
         doc.close()
+    sidecar.parent.mkdir(parents=True, exist_ok=True)
     tmp = sidecar.with_suffix(sidecar.suffix + ".tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
     os.replace(tmp, sidecar)
     return classify_pdf(matter, original)
 
 
-def ocr_pdf(original: Path, pages_to_force: list[int], redo: bool = False) -> tuple[Path, str]:
-    """Produce/refresh the `_ocr.pdf` sibling. Returns (sibling, note)."""
+def ocr_pdf(original: Path, pages_to_force: list[int], redo: bool = False,
+            target: Path | None = None) -> tuple[Path, str]:
+    """Produce/refresh the OCR'd copy under derived/ocr/. Returns (copy, note)."""
     exe = _tool("ocrmypdf")
     if not exe:
         raise RuntimeError("ocrmypdf is not installed")
-    sib = ocr_sibling(original)
+    sib = target or legacy_ocr_sibling(original)
     if sib.exists() and not redo:
         raise FileExistsError(f"{sib.name} exists; pass --redo-ocr to regenerate it")
+    sib.parent.mkdir(parents=True, exist_ok=True)
     # The sibling is derived output; the signed original is untouched, so
     # invalidating the signature on the copy is correct, not destructive.
     cmd = [exe, "-l", "eng", "-q", "--invalidate-digital-signatures"]
@@ -411,19 +463,22 @@ def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) 
     try:
         if d.kind == "pdf":
             ocr_note = "none"
-            sib = ocr_sibling(p)
+            existing = ocr_copy_for(matter, p)
+            target_ocr = derived_ocr_path(matter, p)
             if d.state == "needs-ocr":
-                pages, unc, kinds = _survey(sib if sib.exists() else p, ocr_output=sib.exists())
+                pages, unc, kinds = _survey(existing or p, ocr_output=existing is not None)
                 force = [i for i in unc if kinds[i - 1] in FORCE_KINDS]
-                sib, ocr_note = ocr_pdf(p, force if (force or sib.exists()) else [],
-                                        redo=redo_ocr or not sib.exists())
-            source = sib if sib.exists() else p
-            return write_pdf_sidecar(matter, p, source, sidecar_for(p), ocr_note)
+                copy, ocr_note = ocr_pdf(p, force if (force or existing) else [],
+                                         redo=redo_ocr or existing is None, target=target_ocr)
+                existing = copy
+            source = existing or p
+            return write_pdf_sidecar(matter, p, source, derived_text_path(matter, p), ocr_note)
         if d.kind == "image":
             exe = _tool("tesseract")
             if not exe:
                 return Doc(**{**asdict(d), "note": "tesseract is not installed"})
-            side = sidecar_for(p)
+            side = derived_text_path(matter, p)
+            side.parent.mkdir(parents=True, exist_ok=True)
             out_base = side.with_suffix("")  # tesseract appends .txt
             subprocess.run([exe, str(p), str(out_base), "-l", "eng"], check=True,
                            stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
@@ -437,9 +492,8 @@ def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) 
             exe = _tool("pandoc")
             if not exe:
                 return Doc(**{**asdict(d), "note": "pandoc is not installed"})
-            side = sidecar_for(p)
-            if side.exists() and _header_pages(side) is None:
-                return Doc(**{**asdict(d), "state": "unverified-sidecar"})
+            side = derived_text_path(matter, p)
+            side.parent.mkdir(parents=True, exist_ok=True)
             proc = subprocess.run([exe, str(p), "-t", "plain", "--wrap=none"],
                                   check=True, capture_output=True, text=True)
             side.write_text("\n".join([HEADER_MARK, f"original: {p.name}", f"source: {p.name}",
@@ -480,6 +534,75 @@ def ensure(matter: Path, include_inbox: bool = False, dry_run: bool = False,
         if not d.searched and d.path in failures:
             d.note = (d.note + " | " if d.note else "") + failures[d.path]
     return final
+
+
+# ---------------------------------------------------------------------------
+# migrate: move what this tool wrote beside originals into derived/
+# ---------------------------------------------------------------------------
+
+def _tracked(matter: Path, path: Path) -> bool:
+    if not (matter / ".git").exists():
+        return False
+    proc = subprocess.run(["git", "ls-files", "--error-unmatch", str(_rel(matter, path))],
+                          cwd=matter, capture_output=True, text=True)
+    return proc.returncode == 0
+
+
+def _move(matter: Path, src: Path, dst: Path, dry_run: bool) -> str:
+    dst.parent.mkdir(parents=True, exist_ok=True)
+    how = "git mv" if _tracked(matter, src) else "mv"
+    if not dry_run:
+        if how == "git mv":
+            subprocess.run(["git", "mv", "-k", str(_rel(matter, src)), str(_rel(matter, dst))],
+                           cwd=matter, check=True, capture_output=True)
+            if src.exists():  # -k skipped it (e.g. dst tracked); fall back
+                os.replace(src, dst)
+        else:
+            os.replace(src, dst)
+    return f"{how} {_rel(matter, src)} -> {_rel(matter, dst)}"
+
+
+def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = False) -> list[str]:
+    """Move tool-written text files (header present) and the OCR copies the
+    tool made into derived/. Human text files stay where they are. Legacy
+    `_ocr.pdf` siblings the tool did not make move only on request."""
+    matter = matter.resolve()
+    moves: list[str] = []
+    for doc in iter_documents(matter):
+        legacy_txt = legacy_text_sibling(doc)
+        target_txt = derived_text_path(matter, doc)
+        tool_made_ocr = False
+        if legacy_txt.exists() and _header_pages(legacy_txt) is not None:
+            try:
+                head = legacy_txt.read_text(encoding="utf-8", errors="replace")[:600]
+                tool_made_ocr = "ocr: ocrmypdf" in head
+            except OSError:
+                pass
+            if target_txt.exists():
+                moves.append(f"skip {_rel(matter, legacy_txt)}: {_rel(matter, target_txt)} exists")
+            else:
+                moves.append(_move(matter, legacy_txt, target_txt, dry_run))
+        if doc.suffix.lower() in PDF_EXT:
+            sib = legacy_ocr_sibling(doc)
+            if sib.exists() and (tool_made_ocr or include_legacy_ocr):
+                target = derived_ocr_path(matter, doc)
+                if target.exists():
+                    moves.append(f"skip {_rel(matter, sib)}: {_rel(matter, target)} exists")
+                else:
+                    moves.append(_move(matter, sib, target, dry_run))
+    if not dry_run:
+        gi = matter / ".gitignore"
+        line = "derived/ocr/"
+        text = gi.read_text() if gi.exists() else ""
+        if line not in text.splitlines():
+            gi.write_text(text.rstrip("\n") + ("\n" if text else "")
+                          + "\n# OCR'd copies: regenerable by `sc text ensure`, large\n"
+                          + line + "\n")
+            moves.append(f"append {line} to .gitignore")
+        cache = _cache_path(matter)
+        if cache.exists():
+            cache.unlink()
+    return moves
 
 
 # ---------------------------------------------------------------------------
@@ -532,6 +655,11 @@ def format_audit(docs: list[Doc], show: int = 60) -> str:
 def main() -> int:
     ap = argparse.ArgumentParser(description=__doc__.split("\n")[1])
     sub = ap.add_subparsers(dest="cmd", required=True)
+    sp = sub.add_parser("migrate", help="move tool-written text and OCR copies under derived/")
+    sp.add_argument("matter", nargs="?", default=".")
+    sp.add_argument("--dry-run", action="store_true")
+    sp.add_argument("--include-legacy-ocr", action="store_true",
+                    help="also move _ocr.pdf siblings this tool did not make")
     for name in ("audit", "ensure"):
         sp = sub.add_parser(name)
         sp.add_argument("matter", nargs="?", default=".")
@@ -545,6 +673,10 @@ def main() -> int:
             sp.add_argument("--jobs", type=int, default=2)
     a = ap.parse_args()
     matter = Path(a.matter).resolve()
+    if a.cmd == "migrate":
+        for m in migrate(matter, dry_run=a.dry_run, include_legacy_ocr=a.include_legacy_ocr):
+            print(m)
+        return 0
     if a.cmd == "audit":
         docs = audit(matter, include_inbox=a.include_inbox, use_cache=not a.no_cache)
     else:
