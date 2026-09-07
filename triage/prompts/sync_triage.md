@@ -58,7 +58,10 @@ check its output rather than redoing it --- INDEX.md row, route to the right
 directory).
 
 Then, for ALL connectors:
-- Update KNOWLEDGE.md where content is case-significant (new events,
+- Update the knowledge vault where content is case-significant: the note
+  for the person, event or issue, or a new note via `sc knowledge new`,
+  with an absolute date and a source; then `sc knowledge check`. (Where
+  the matter still has a single KNOWLEDGE.md, update it there.) New events,
   orders, deadlines, admissions, evidence, posture changes).
 - Add TODO.md / QUESTIONS.md items only for genuinely new action items
   or open questions, per the live-list conventions (time-sensitive

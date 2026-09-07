@@ -209,8 +209,15 @@ counsel in working drafts are fine.
 
 ## Knowledge files
 
-- **KNOWLEDGE.md** — durable case knowledge. Integrate new facts into
-  the right section with absolute dates; never append a log.
+- **`knowledge/`** — durable case knowledge as a vault of typed notes
+  (person, organization, event, topic, issue, filing), one per subject,
+  with front matter `aliases`, `related`, `sources`, `updated`
+  (ADR-0043). A new fact goes into the note for its subject with an
+  absolute date and a source; a new subject gets `sc knowledge new`.
+  Never a dated heading, never a log. `KNOWLEDGE.md` is the generated
+  index; run `sc knowledge check` before a `record` commit. A matter
+  still carrying a single-file KNOWLEDGE.md is mid-migration: read
+  `knowledge/_migration/`, and see the `migrate-knowledge` skill.
 - **TODO.md / QUESTIONS.md** — live lists ordered by time-sensitivity,
   then importance. **Delete** resolved items; renumber to stay
   contiguous. Durable resolutions move to KNOWLEDGE.md.

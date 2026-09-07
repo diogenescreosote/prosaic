@@ -40,7 +40,8 @@ the skills; it stores no per-matter state.
    mechanically generated backfill index that says it is one.
    *(untested)*
 2. **Originals are sacred.** Processing supplements, never replaces:
-   OCR goes into `derived/ocr/<path>` (adding text only to pages
+   Durable knowledge is a vault of typed notes under `knowledge/` with
+   `KNOWLEDGE.md` as its generated index (ADR-0043). OCR goes into `derived/ocr/<path>` (adding text only to pages
    that lack it), extracted text into `derived/text/<path>.txt`, transcripts
    into sidecars with the raw machine output kept, redactions into
    new files. Received bytes are never modified — an altered

@@ -196,6 +196,20 @@ agent CLI is named (ADR-0020). Its promises:
   ago re-renders from the bytes alone, and the output is a pure
   function of (mbox, options). *(tested:
   tests/test_connectors_gmail.py)*
+- **`sc knowledge init|new|check|index|migrate [matter]`** manages the
+  knowledge vault (ADR-0043): `init` scaffolds `knowledge/` (refusing to
+  overwrite a single-file KNOWLEDGE.md unless `--migrate`); `new` creates
+  a typed note; `check` lints front matter, absolute dates, dated
+  headings, link resolution, duplicate aliases, source paths and index
+  sync, exit 1 on any error; `index` regenerates the KNOWLEDGE.md index
+  between its markers and `derived/knowledge/entities.json`; `migrate`
+  preserves a single-file KNOWLEDGE.md under `knowledge/_migration/` and
+  splits it into staging notes. *(tested: tests/test_knowledge_vault)*
+- **`sc upgrade [matter] [--dry-run]`** runs every deterministic
+  migration prosaic knows, idempotently and in order --- harness bundle,
+  derived text tree, knowledge vault, ignore rules, schedule check ---
+  and ends with the list of steps that still need a human or an agent.
+  `--dry-run` changes nothing. *(tested)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without

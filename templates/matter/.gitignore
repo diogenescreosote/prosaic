@@ -11,3 +11,6 @@ out/*/.build_manifest.json
 # OCR'd copies under the derived tree (ADR-0041): regenerable by `sc text ensure`, large.
 # derived/text/ (page-marked text) IS tracked: small, and what the record is searched through.
 derived/ocr/
+
+# Obsidian workspace state (optional viewer for knowledge/, ADR-0043)
+.obsidian/
