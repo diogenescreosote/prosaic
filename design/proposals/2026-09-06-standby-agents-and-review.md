@@ -57,15 +57,14 @@ The core bet holds: model drafts Markdown, deterministic code renders it, one se
 - *Retention.* `sc clean --older-than` for `out/` renders and `.flow/` run directories, still report-first, never touching `assets/`, `pleadings/` or `processed_files/`.
 - *Daily standup.* A `/standup` command that opens a 30-minute interactive session over the refinement's questions plus QUESTIONS.md, writes answers into the right knowledge files, and commits as `record`. The nightly flow queues, you answer once a day.
 
-**W3. Pre-signature adversarial gate (medium).** A `pre-signature.yaml` flow that `--final` builds and `sc sign` require, keyed to the source hash:
+**W3. Preflight review commands (medium; revised September 7 from a gate to optional checks).** Four slash commands a drafter runs by choice before signing, each its own skill, each runnable alone or together, none of them blocking `--final` or `sc sign`:
 
-1. *Cite check* (deterministic first): extract every statute, rule and case citation; verify form and existence against a local authority cache, flag anything unverified for a human.
-2. *Clerk persona:* filing compliance, form boxes, service, page limits, caption and exhibit rules.
-3. *Skeptical bench persona:* what the judge will not believe, what is unsupported, what is asked for without authority.
-4. *Opposing counsel persona*, briefed from an `oppo_profile.md` the refinement loop maintains from observed filings and correspondence: how they have attacked before, what they will move to strike, what they will say you omitted.
-5. Human gate with the four reports side by side.
+1. `/citecheck`: deterministic first, extract every statute, rule and case citation from the source, verify form and existence against a local authority cache, then a model pass on what the extractor cannot settle; output a cite table with a status per cite.
+2. `/clerkreview`: the clerk persona, filing compliance, form boxes, service, page limits, caption and exhibit rules against the built envelope.
+3. `/judgereview`: the skeptical bench persona, what is unsupported, what is asked without authority, what will not be believed, numbered worst first.
+4. `/oppo`: the opposing-counsel persona, briefed from a profile note the refinement loop maintains of how opposing counsel has actually argued in this matter; what they will move to strike, what they will say was omitted.
 
-Each step declares its own provider and effort so personas can run on different models. Until W5 exists, "different model" means a different Claude model or a local model, not another vendor (see below).
+Each writes its report under `derived/review/<envelope>/<date>_<check>.md`, cites the source by line, and never edits a source. Each declares its own model, so the opposing-counsel pass can run on a different model family from the drafter's. A `/preflight` runner invokes all four and collates. `flows/draft-review.yaml` remains the batch form for `sc flow`.
 
 **W4. Knowledge as a directory (medium).** An ADR replacing the single file with `knowledge/` topic and entity files, each with front matter (`aliases:`, `keywords:`, `entities:`, `related:`, `sources:`, `updated:`) that doubles as a link graph and a grep surface, and KNOWLEDGE.md reduced to an index with one line per topic. A linter, `sc knowledge check`, enforces absolute dates, no date-titled sections, every file indexed, every link resolving, and flags topics untouched since a later docket event. Migration of the live matters is a gated agent task you approve file by file. The nightly refinement loop and the session brief both become cheap once knowledge is topical.
 
@@ -135,7 +134,7 @@ Order: W0, W1, W2 (watcher and honest sync first), W3, W4, W5-now, then W5-later
 | W0 unblock and realign | done | leak scrub on `main`; 6 port commits; `sc form check` |
 | W1 fast path | done | ADR-0040; `sc brief/open/find/harness`; bundle; docs |
 | W2 standby supervisor | built | ADR-0044; `sc schedule` installs sync, inbox watcher, nightly refine, standup agenda; `agent-run --role`; `sc refine`; `sc standup agenda`; `/standup`; `sc clean --older-than` |
-| W3 pre-signature gate | planned | |
+| W3 preflight review commands | next | /citecheck, /clerkreview, /judgereview, /oppo, /preflight (optional, never a gate) |
 | W4 knowledge vault | built; the largest matter folded into 191 notes, staging awaits review | ADR-0043; `sc knowledge`; `sc upgrade`; migrate-knowledge skill |
 | W4a recall | first slice built | ADR-0041; `sc text`; `sc find` with summary, `--all`, related matters, checklist gate |
 | W5 backend choice, privilege boundary | planned | |
