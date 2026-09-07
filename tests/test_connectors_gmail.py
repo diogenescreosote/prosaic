@@ -1171,12 +1171,14 @@ def test_backfill_selection_skips_gone_threads_and_finds_missing_pdfs() -> None:
         fs.writeFileSync(path.join(outDir, 'mbox', 'b.mbox'), 'x');
         fs.writeFileSync(path.join(outDir, 'mbox', 'c.mbox'), 'x');
         fs.writeFileSync(path.join(outDir, 'c.pdf'), 'x');
+        fs.writeFileSync(path.join(outDir, 'mbox', 'f.mbox'), '');
         const ledger = { threads: {
           a: { filename: 'a.pdf' }, // owed an mbox
           b: { filename: 'b.pdf', mbox: 'mbox/b.mbox' }, // has mbox, no PDF
           c: { filename: 'c.pdf', mbox: 'mbox/c.mbox' }, // complete
           d: { filename: 'd.pdf', gone: '2024-01-01T00:00:00Z' }, // deleted in Gmail
           e: { filename: 'e.pdf', mbox: 'mbox/missing.mbox' }, // ledger says mbox, file absent
+          f: { filename: 'f.pdf', mbox: 'mbox/f.mbox' }, // empty mbox: nothing to render
         } };
         console.log(JSON.stringify({
           pending: pull.pendingBackfill(ledger).map(([id]) => id),
@@ -1185,4 +1187,4 @@ def test_backfill_selection_skips_gone_threads_and_finds_missing_pdfs() -> None:
         """
     )
     assert out["pending"] == ["a"], "gone threads are not retried; captured ones are done"
-    assert out["needPdf"] == ["b"], "only a thread with a real mbox and no PDF is rendered"
+    assert out["needPdf"] == ["b"], "only a thread with a non-empty mbox and no PDF is rendered"

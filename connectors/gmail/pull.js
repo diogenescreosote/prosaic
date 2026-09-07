@@ -752,6 +752,9 @@ function threadsNeedingPdf(ledger, outDir) {
       entry.mbox &&
       entry.filename &&
       fs.existsSync(path.join(outDir, entry.mbox)) &&
+      //: an mbox with no messages (a thread that was only drafts) has
+      //: nothing to render; an empty PDF would only be noise to triage.
+      fs.statSync(path.join(outDir, entry.mbox)).size > 0 &&
       !fs.existsSync(path.join(outDir, entry.filename))
   );
 }
