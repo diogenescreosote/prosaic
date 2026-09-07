@@ -17,6 +17,9 @@ You are answering "is this in the record, and where?" The failure this
 command exists to prevent is a confident "not found" after a partial
 look. Rules:
 
+0. Related matters (matter.yaml `related_matters:`) are searched too and
+   their hits appear under their own heading. A document about a shared
+   party may live in the other matter's record; cite it with its matter.
 1. A broad term (a surname, a place) comes back as a summary: files with
    hit counts, no snippets. Narrow it --- add a second term, a date, a
    first name --- and run `sc find` again until the hits are readable,

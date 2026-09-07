@@ -173,3 +173,17 @@ def test_find_all_keeps_only_files_with_every_term(matter: Path):
     out = sc("find", "--all", "Marlow", "364", "--matter-dir", str(matter)).stdout
     assert "files carrying every term: 1" in out
     assert "assets/both.txt" in out and "assets/one.txt" not in out and "assets/other.txt" not in out
+
+
+def test_find_searches_related_matters(matter: Path, tmp_path: Path):
+    other = tmp_path / "other"
+    (other / "assets").mkdir(parents=True)
+    (other / "matter.yaml").write_text("case:\n  name: Other v. Thing\n")
+    (other / "assets" / "prod.txt").write_text("Bates OTHER00050: a letter to Hubbard.\n")
+    (matter / "matter.yaml").write_text((matter / "matter.yaml").read_text() + "\nrelated_matters:\n  - ../other\n")
+    out = sc("find", "Hubbard", "--matter-dir", str(matter)).stdout
+    assert "# Matter: other (related)" in out and "assets/prod.txt" in out
+    only = sc("find", "Hubbard", "--this-matter-only", "--matter-dir", str(matter)).stdout
+    assert "prod.txt" not in only
+    brief = sc("brief", str(matter)).stdout
+    assert "related matters searched by `/find`: ../other" in brief

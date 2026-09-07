@@ -856,6 +856,9 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
         meta.append(f"type: {case['type']}")
     lines.append("- " + "; ".join(meta))
     lines.append(f"- matter dir: `{matter}`; prosaic: `{ROOT}`")
+    rel = (cfg.get("related_matters") or [])
+    if rel:
+        lines.append(f"- related matters searched by `/find`: {', '.join(str(r) for r in rel)}")
 
     env_file = matter / "envelopes.yaml"
     if env_file.is_file():
@@ -1160,23 +1163,54 @@ def _entity_hits(matter: Path, terms: list[str]) -> list[str]:
     return out
 
 
+def related_matters(matter: Path) -> list[Path]:
+    """Matters whose records bear on this one, declared in matter.yaml:
+
+        related_matters:
+          - ../other-matter   # a related matter with an overlapping record
+
+    A fact about a shared party can live in either record. A search that
+    stops at one matter's edge reports absence for the wrong reason; the
+    failure that motivated this was a Bates-stamped production sitting in
+    the neighbouring matter."""
+    import yaml
+    cfg = yaml.safe_load((matter / "matter.yaml").read_text()) or {}
+    out: list[Path] = []
+    for rel in cfg.get("related_matters") or []:
+        p = (matter / str(rel)).resolve()
+        if (p / "matter.yaml").is_file():
+            out.append(p)
+        else:
+            print(f"sc find: related matter {rel} has no matter.yaml; skipped", file=sys.stderr)
+    return out
+
+
 def cmd_find(args: argparse.Namespace) -> int:
     """Exit 0: hits and everything searchable. 1: no hits. 2: something
     was not searchable (whatever the hits) --- the caller must not read
-    silence as absence."""
+    silence as absence. Related matters (matter.yaml related_matters:)
+    are searched too unless --this-matter-only."""
     matter = _matter_root(Path(args.matter_dir))
     tc = _text_coverage()
-    docs = tc.ensure(matter, jobs=2) if args.ensure else tc.audit(matter)
-    ents = _entity_hits(matter, args.terms)
-    if ents:
-        sys.stdout.write("## Knowledge notes (alias index)\n" + "\n".join(ents) + "\n\n")
-    report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs,
-                            require_all=args.all)
+    targets = [matter] + ([] if args.this_matter_only else related_matters(matter))
+    any_hits = False
+    any_gap = False
     summary = True if args.summary else (False if args.full else None)
-    sys.stdout.write(format_find(report, matter=matter, summary=summary, max_files=args.max_files))
-    if report["unsearched"]:
+    for i, m in enumerate(targets):
+        docs = tc.ensure(m, jobs=2) if args.ensure else tc.audit(m)
+        if len(targets) > 1:
+            sys.stdout.write(("\n" if i else "") + f"# Matter: {m.name}" + ("" if i == 0 else " (related)") + "\n\n")
+        ents = _entity_hits(m, args.terms)
+        if ents:
+            sys.stdout.write("## Knowledge notes (alias index)\n" + "\n".join(ents) + "\n\n")
+        report = find_in_matter(m, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs,
+                                require_all=args.all)
+        sys.stdout.write(format_find(report, matter=m, summary=summary, max_files=args.max_files))
+        any_hits = any_hits or any(report["terms"].values())
+        any_gap = any_gap or bool(report["unsearched"])
+    if any_gap:
         return 2
-    return 0 if any(report["terms"].values()) else 1
+    return 0 if any_hits else 1
 
 
 def cmd_brief(args: argparse.Namespace) -> int:
@@ -1501,6 +1535,8 @@ def main() -> int:
                     help="run `sc text ensure` first so sidecars exist before searching")
     sp.add_argument("--all", action="store_true",
                     help="with several terms, keep only files that contain every term")
+    sp.add_argument("--this-matter-only", action="store_true",
+                    help="do not search the matters listed under related_matters in matter.yaml")
     sp.add_argument("--summary", action="store_true",
                     help="files with hit counts only (automatic above %d files)" % SUMMARY_ABOVE_FILES)
     sp.add_argument("--full", action="store_true", help="snippets even for a broad term")

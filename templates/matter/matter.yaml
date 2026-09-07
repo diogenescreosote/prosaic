@@ -16,6 +16,12 @@ backup:
   # path: ~/backups/smith.git       # local: defaults under `sc paths data-dir`
   # repo: youraccount/smith-matter  # github: MUST be a private repo; checked every push
 
+# Matters whose records bear on this one. `sc find` searches them too
+# (a shared party's document may live in either record), and the brief
+# names them. Paths are relative to this directory.
+# related_matters:
+#   - ../other-matter
+
 # Source connectors. Only configured connectors run during `sc sync`.
 # See prosaic docs/connectors.md for each connector's options.
 #
