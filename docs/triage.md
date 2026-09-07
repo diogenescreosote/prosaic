@@ -123,12 +123,14 @@ sc find "<term>" --ensure    # search; exit 2 if anything is still unsearchable
 ```
 
 `sc text audit` classifies every PDF, image, DOCX and audio file under
-the matter. A PDF counts as searchable only when a sidecar written by
-the tool covers every page; an `_ocr.pdf` sibling alone does not, since
-ripgrep cannot read a PDF. `ensure` repairs mechanically: `ocrmypdf
+the matter. A PDF counts as searchable only when a text file written by
+the tool covers every page; an OCR'd copy alone does not, since ripgrep
+cannot read a PDF. Everything the tool writes goes into a parallel tree
+(ADR-0041): `derived/text/<path>.txt` and `derived/ocr/<path>`, never
+beside the original. `ensure` repairs mechanically: `ocrmypdf
 --skip-text` for pages with no text layer, `--force-ocr --pages` for
 pages whose text is useless (a screenshot with a header, a garbled
-font), then a `.txt` dump of the best source with a header
+font), then a text dump of the best source with a header
 
 ```
 [[[ prosaic text sidecar ]]]
@@ -140,10 +142,12 @@ generated: 2026-09-06T21:40:12
 MACHINE TEXT --- VERIFY AGAINST THE DOCUMENT BEFORE CITING IN ANY FILING
 ```
 
-and `[[[ page k of N ]]]` markers so a hit names its page. Images get
-`<stem>.ocr.txt` through tesseract; a human transcription is a `.txt`
-beside the image and is never overwritten. Audio is only reported:
-transcription is the local pipeline in `stt.md`.
+and `[[[ page k of N ]]]` markers so a hit names its page. Images go
+through tesseract into the same tree; a human transcription (no header)
+is never overwritten wherever it sits. Legacy `_ocr.pdf` and `.txt`
+siblings from before ADR-0041 are still read; `sc text migrate` moves
+the tool's own into `derived/`. Audio is only reported: transcription is
+the local pipeline in `stt.md`.
 
 The sync runs `ensure` on every pass, so the agent's triage prompt can
 assume sidecars exist. `sc brief` prints the coverage line at every

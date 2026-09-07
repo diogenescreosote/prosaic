@@ -21,10 +21,10 @@ smith-v-smith/
 ├── assets/                # evidence, organized by topic
 │   ├── INDEX.md           # AUTHORITATIVE description of every asset
 │   ├── gmail/             # connector output: thread PDFs + CATALOG.md
-│   ├── audio/             # recordings + transcript sidecars
+│   ├── audio/             # recordings (transcripts under derived/text/)
 │   └── <topic>/...        # correspondence/, court_filings/, exhibits/, …
 ├── pleadings/             # filed/court documents:
-│                          #   YYYY-MM-DD_description.pdf (+ _ocr siblings)
+│                          #   YYYY-MM-DD_description.pdf (OCR copies under derived/ocr/)
 ├── discovery/             # records produced under subpoena/discovery
 ├── lawyer_drafts/         # drafts exchanged with counsel
 ├── unfiled/               # lodged-but-returned / otherwise unfiled
@@ -67,7 +67,11 @@ checkable state).
 - Dated documents: `YYYY-MM-DD_what_it_is.pdf` (ISO dates sort).
 - Undated evidence: literate snake_case that a stranger could
   understand — `sms_apology_demand_jul8_jul13.pdf`, not `IMG_4021.pdf`.
-- Derived artifacts: `<stem>_ocr.pdf`, `<stem>.txt`, `<stem>.srt`
+- Derived artifacts live in `derived/<kind>/<same relative path>` (ADR-0041):
+  `derived/text/<path>.txt` page-marked text (tracked), `derived/ocr/<path>` the
+  OCR'd copy (ignored, regenerable). Legacy `<stem>_ocr.pdf` / `<stem>.txt`
+  siblings are still read; `sc text migrate` moves the tool's own into the tree.
+  Older wording below refers to those legacy siblings
   siblings of the original stem.
 - Fix misspellings in *names* freely; never alter *contents*.
 

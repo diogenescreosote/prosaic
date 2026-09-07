@@ -163,12 +163,15 @@ agent CLI is named (ADR-0020). Its promises:
   file and sidecar in the matter (never out/, .state/, .git/) for each
   term and prints hits grouped by file. Every document the coverage
   audit calls not searchable is listed as UNSEARCHED with its reason,
-  the coverage line is printed, and the exit status is 2 whenever such a
+  the coverage line is printed, a hit under `derived/text/` is shown as
+  the original document and page, and the exit status is 2 whenever such a
   document exists (hits or not); 1 means searched everything and found
   nothing; 0 means hits and full coverage. `--ensure` runs
   `sc text ensure` first. A document that was not searched is reported,
   never silently skipped (ADR-0040). *(tested)*
-- **`sc text audit|ensure [matter] [--json] [--include-inbox] [--dry-run] [--redo-ocr] [--jobs N]`**
+- **`sc text audit|ensure|migrate [matter] [--json] [--include-inbox] [--dry-run] [--redo-ocr] [--jobs N] [--include-legacy-ocr]`**
+  writes under `derived/text/` and `derived/ocr/` (ADR-0041), reads legacy
+  siblings, and `migrate` moves the tool's own siblings into the tree;
   classifies every PDF, image, DOCX and audio file as searchable,
   unverified-sidecar, needs-sidecar, stale-sidecar, needs-ocr,
   transcript-needed, unsupported, unreadable or untriaged; `ensure`

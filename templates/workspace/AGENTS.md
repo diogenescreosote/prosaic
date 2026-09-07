@@ -185,13 +185,14 @@ Every document moved from `inbox/` into `assets/`:
 1. **OCR-supplement it** if any page lacks a text layer:
    `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>`.
    Supplements, never replaces: `foo.pdf` → `foo_ocr.pdf`, side by
-   side, original untouched. Already-searchable PDFs get no `_ocr`
-   copy — note that in INDEX.md instead. Every PDF gets a page-marked
-   `.txt` sidecar and every image a machine `.ocr.txt`; `sc text ensure`
-   writes them mechanically (and the sync runs it), so check
-   `sc text audit` rather than hand-writing sidecars. A human
-   transcription of an image is a `.txt` beside it and is never
-   overwritten. `sc find` treats anything the audit calls not
+   Already-searchable PDFs get no OCR copy — note that in INDEX.md
+   instead. Derived artifacts never sit beside originals (ADR-0041):
+   the OCR'd copy is `derived/ocr/<same path>`, the page-marked text is
+   `derived/text/<same path>.txt`, and `sc text ensure` writes both
+   mechanically (the sync runs it), so check `sc text audit` rather
+   than hand-writing anything. A human transcription goes under
+   `derived/text/` too (or stays where it is if it predates this) and
+   is never overwritten. `sc find` treats anything the audit calls not
    searchable as UNSEARCHED, never as absent.
 2. **Update `assets/INDEX.md` in the same change.** INDEX.md is the
    authoritative description of the evidence and must never drift from

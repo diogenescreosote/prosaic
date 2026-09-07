@@ -88,7 +88,8 @@ cheap reader) described in the v2 proposal. It greps every `.md`,
 matter except `out/`, `.state/`, `.git/`, `.flow/`. Its UNSEARCHED list
 comes from the text-coverage audit (ADR-0040): anything not provably
 covered by a current sidecar is listed with its reason, and the exit
-status is 2 whenever that list is non-empty, hits or not. The `/find`
+status is 2 whenever that list is non-empty, hits or not. A hit in
+`derived/text/` is printed as the original document and page. The `/find`
 skill runs `sc find --ensure`, so OCR and sidecars are produced before
 the search; the Sonnet-class reader then opens the hits, searches name
 variants and OCR misspellings, and says "not in the record" only after
