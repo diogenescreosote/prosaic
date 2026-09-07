@@ -1144,6 +1144,68 @@ def format_find(report: dict, show_unsearched: int = 40, matter: Path | None = N
     return "\n".join(lines) + "\n"
 
 
+def write_find_checklist(matter: Path, terms: list[str], reports: list[tuple[Path, dict]]) -> Path:
+    """One line per file that hit, to be marked read or skipped with a
+    reason before an answer is given. The gap this closes: at seventy
+    hits a model triages by filename and says nothing about it; the
+    checklist makes every dismissal explicit and auditable."""
+    import datetime as dt
+    import re
+    out_dir = matter / "derived" / "find"
+    out_dir.mkdir(parents=True, exist_ok=True)
+    stamp = dt.datetime.now().strftime("%Y%m%d-%H%M%S")
+    slug = re.sub(r"[^a-z0-9]+", "-", " ".join(terms).lower()).strip("-")[:40] or "search"
+    path = out_dir / f"{stamp}_{slug}.md"
+    lines = [f"# find checklist: {' | '.join(terms)}",
+             f"matter: {matter.name}; generated {dt.datetime.now().isoformat(timespec='seconds')}",
+             "",
+             "Mark every line before answering: replace `[ ]` with `[read]` or",
+             "`[skip: <reason>]`. Then run `sc find --verify <this file>`; it fails",
+             "while any line is unmarked. A skip on filename alone must say so.",
+             ""]
+    seen: set[str] = set()
+    for m, report in reports:
+        files: dict[str, int] = {}
+        for term, hits in report["terms"].items():
+            for f, hs in hits.items():
+                files[f] = files.get(f, 0) + len(hs)
+        if not files:
+            continue
+        lines.append(f"## {m.name}")
+        for f, n in sorted(files.items(), key=lambda kv: (-kv[1], kv[0])):
+            key = f"{m.name}:{f}"
+            if key in seen:
+                continue
+            seen.add(key)
+            lines.append(f"- [ ] {_original_of(f)} ({n})")
+        lines.append("")
+    path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+    return path
+
+
+def verify_find_checklist(path: Path) -> tuple[int, int, int, list[str]]:
+    """(unmarked, read, skipped, skip reasons)."""
+    import re
+    unmarked = read = skipped = 0
+    reasons: list[str] = []
+    for ln in path.read_text(encoding="utf-8", errors="replace").splitlines():
+        st = ln.strip()
+        if not st.startswith("- ["):
+            continue
+        if st.startswith("- [ ]"):
+            unmarked += 1
+        elif st.startswith("- [read]"):
+            read += 1
+        else:
+            mm = re.match(r"- \[skip:\s*(.*?)\]\s+(.*)$", st)
+            if mm:
+                skipped += 1
+                reasons.append(f"{mm.group(2)} --- {mm.group(1)}")
+            else:
+                unmarked += 1  # a malformed mark counts as not done
+    return unmarked, read, skipped, reasons
+
+
 def _entity_hits(matter: Path, terms: list[str]) -> list[str]:
     """Tier one of search: the knowledge vault's alias index."""
     ent = matter / "derived" / "knowledge" / "entities.json"
@@ -1188,14 +1250,30 @@ def related_matters(matter: Path) -> list[Path]:
 def cmd_find(args: argparse.Namespace) -> int:
     """Exit 0: hits and everything searchable. 1: no hits. 2: something
     was not searchable (whatever the hits) --- the caller must not read
-    silence as absence. Related matters (matter.yaml related_matters:)
-    are searched too unless --this-matter-only."""
+    silence as absence. 3 (--verify): a checklist still has unmarked
+    files. Related matters (matter.yaml related_matters:) are searched
+    too unless --this-matter-only."""
+    if not args.terms and not args.verify:
+        print("sc find: give at least one term, or --verify CHECKLIST", file=sys.stderr)
+        return 2
+    if args.verify:
+        unmarked, read, skipped, reasons = verify_find_checklist(Path(args.verify))
+        print(f"checklist {args.verify}: {read} read, {skipped} skipped, {unmarked} unmarked")
+        for r in reasons:
+            print(f"  skip: {r}")
+        if unmarked:
+            print(f"NOT DONE: {unmarked} file(s) neither read nor skipped with a reason. "
+                  "No answer about the record yet.")
+            return 3
+        return 0
     matter = _matter_root(Path(args.matter_dir))
     tc = _text_coverage()
     targets = [matter] + ([] if args.this_matter_only else related_matters(matter))
     any_hits = False
     any_gap = False
     summary = True if args.summary else (False if args.full else None)
+    reports: list[tuple[Path, dict]] = []
+    summarized = False
     for i, m in enumerate(targets):
         docs = tc.ensure(m, jobs=2) if args.ensure else tc.audit(m)
         if len(targets) > 1:
@@ -1206,8 +1284,17 @@ def cmd_find(args: argparse.Namespace) -> int:
         report = find_in_matter(m, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs,
                                 require_all=args.all)
         sys.stdout.write(format_find(report, matter=m, summary=summary, max_files=args.max_files))
+        reports.append((m, report))
+        if summary is True or (summary is None and any(len(h) > SUMMARY_ABOVE_FILES for h in report["terms"].values())):
+            summarized = True
         any_hits = any_hits or any(report["terms"].values())
         any_gap = any_gap or bool(report["unsearched"])
+    if any_hits and (summarized or args.checklist):
+        cl = write_find_checklist(matter, args.terms, reports)
+        n = sum(1 for ln in cl.read_text().splitlines() if ln.startswith("- [ ]"))
+        sys.stdout.write(f"\nCHECKLIST: {cl.relative_to(matter)} --- {n} file(s). Mark each `[read]` or "
+                         f"`[skip: reason]`, then `sc find --verify {cl.relative_to(matter)}` "
+                         "must pass before any answer about the record.\n")
     if any_gap:
         return 2
     return 0 if any_hits else 1
@@ -1527,7 +1614,11 @@ def main() -> int:
     sp.set_defaults(func=cmd_harness)
 
     sp = sub.add_parser("find", help="grep the record for terms; list every document that could not be searched (exit 2)")
-    sp.add_argument("terms", nargs="+")
+    sp.add_argument("terms", nargs="*")
+    sp.add_argument("--checklist", action="store_true",
+                    help="always write the per-file checklist (automatic in summary mode)")
+    sp.add_argument("--verify", metavar="CHECKLIST",
+                    help="check a marked checklist; exit 3 while any file is neither read nor skipped")
     sp.add_argument("--matter-dir", default=".", dest="matter_dir")
     sp.add_argument("--per-file", type=int, default=12, help="max hit lines shown per file")
     sp.add_argument("-F", "--fixed", action="store_true", help="literal terms, not regex")

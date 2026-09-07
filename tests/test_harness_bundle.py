@@ -187,3 +187,22 @@ def test_find_searches_related_matters(matter: Path, tmp_path: Path):
     assert "prod.txt" not in only
     brief = sc("brief", str(matter)).stdout
     assert "related matters searched by `/find`: ../other" in brief
+
+
+def test_find_checklist_gates_the_answer(matter: Path):
+    (matter / "assets").mkdir(exist_ok=True)
+    for i in range(45):
+        (matter / "assets" / f"n{i:02d}.txt").write_text(f"Quill {i}\n")
+    proc = sc("find", "Quill", "--matter-dir", str(matter))
+    m = re.search(r"CHECKLIST: (derived/find/\S+) --- 45 file", proc.stdout)
+    assert m, proc.stdout[-400:]
+    cl = matter / m.group(1)
+    assert cl.read_text().count("- [ ] ") == 45
+    v = sc("find", "--verify", str(cl), "--matter-dir", str(matter))
+    assert v.returncode == 3 and "45 unmarked" in v.stdout
+    text = cl.read_text().replace("- [ ] assets/n00.txt", "- [read] assets/n00.txt", 1)
+    text = re.sub(r"- \[ \] (assets/n\d+\.txt \(\d+\))", r"- [skip: filename only, a test note] \1", text)
+    cl.write_text(text)
+    v2 = sc("find", "--verify", str(cl), "--matter-dir", str(matter))
+    assert v2.returncode == 0 and "1 read, 44 skipped, 0 unmarked" in v2.stdout
+    assert "filename only" in v2.stdout

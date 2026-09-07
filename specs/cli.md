@@ -168,7 +168,10 @@ agent CLI is named (ADR-0020). Its promises:
   document exists (hits or not); a term hitting more than 40 files is
   reported as a summary (files with counts, capped by `--max-files`,
   `--full` for snippets) so a broad name costs the reading model about
-  2k tokens rather than 60k; 1 means searched everything and found
+  2k tokens rather than 60k, and writes a per-file checklist under
+  `derived/find/` that `--verify` accepts only when every file is marked
+  read or skipped with a reason (exit 3 otherwise); `related_matters:` in
+  matter.yaml are searched too; 1 means searched everything and found
   nothing; 0 means hits and full coverage. `--ensure` runs
   `sc text ensure` first. A document that was not searched is reported,
   never silently skipped (ADR-0041). *(tested)*
