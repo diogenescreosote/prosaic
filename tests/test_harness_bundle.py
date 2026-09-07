@@ -206,3 +206,12 @@ def test_find_checklist_gates_the_answer(matter: Path):
     v2 = sc("find", "--verify", str(cl), "--matter-dir", str(matter))
     assert v2.returncode == 0 and "1 read, 44 skipped, 0 unmarked" in v2.stdout
     assert "filename only" in v2.stdout
+
+
+def test_find_writes_a_checklist_above_ten_files_even_with_snippets(matter: Path):
+    (matter / "assets").mkdir(exist_ok=True)
+    for i in range(12):
+        (matter / "assets" / f"c{i:02d}.txt").write_text(f"Roth IRA line {i}\n")
+    out = sc("find", "-F", "Roth IRA", "--matter-dir", str(matter)).stdout
+    assert "Roth IRA line 3" in out, "snippets still shown below the summary threshold"
+    assert "CHECKLIST: derived/find/" in out and "12 file(s)" in out

@@ -1073,6 +1073,10 @@ def _page_index(text_file: Path) -> list[int]:
 #: surname on a live matter: 452 files, 59k tokens). Broad terms get a
 #: summary: files with counts, capped, and the advice to narrow.
 SUMMARY_ABOVE_FILES = 40
+#: Above this many files a checklist is written even when snippets are
+#: shown: a reader given twenty-five files reads the top few and stops
+#: unless every file must be marked read or skipped with a reason.
+CHECKLIST_ABOVE_FILES = 10
 
 
 def _original_of(path: str) -> str:
@@ -1289,7 +1293,8 @@ def cmd_find(args: argparse.Namespace) -> int:
             summarized = True
         any_hits = any_hits or any(report["terms"].values())
         any_gap = any_gap or bool(report["unsearched"])
-    if any_hits and (summarized or args.checklist):
+    many = any(len(h) > CHECKLIST_ABOVE_FILES for _, r in reports for h in r["terms"].values())
+    if any_hits and (summarized or many or args.checklist):
         cl = write_find_checklist(matter, args.terms, reports)
         n = sum(1 for ln in cl.read_text().splitlines() if ln.startswith("- [ ]"))
         sys.stdout.write(f"\nCHECKLIST: {cl.relative_to(matter)} --- {n} file(s). Mark each `[read]` or "
@@ -1616,7 +1621,7 @@ def main() -> int:
     sp = sub.add_parser("find", help="grep the record for terms; list every document that could not be searched (exit 2)")
     sp.add_argument("terms", nargs="*")
     sp.add_argument("--checklist", action="store_true",
-                    help="always write the per-file checklist (automatic in summary mode)")
+                    help="always write the per-file checklist (automatic above %d files)" % CHECKLIST_ABOVE_FILES)
     sp.add_argument("--verify", metavar="CHECKLIST",
                     help="check a marked checklist; exit 3 while any file is neither read nor skipped")
     sp.add_argument("--matter-dir", default=".", dest="matter_dir")
