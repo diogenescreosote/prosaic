@@ -35,4 +35,10 @@ req = urllib.request.Request(
 with urllib.request.urlopen(req, timeout=600) as r:
     data = json.load(r)
 print(data["choices"][0]["message"]["content"])
+# Usage travels on stderr as one tagged JSON line so the caller can price
+# the call (ADR-0045: the human is told what an outside model cost).
+u = data.get("usage") or {}
+print("@@USAGE " + json.dumps({"model": data.get("model", model),
+                               "input_tokens": u.get("prompt_tokens", 0),
+                               "output_tokens": u.get("completion_tokens", 0)}), file=sys.stderr)
 PY

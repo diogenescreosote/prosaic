@@ -110,7 +110,7 @@ def test_second_opinion_uses_the_role_command_and_writes_a_report(matter: Path, 
     proc = sc("review", "second-opinion", "motion", "--brief", "we must shorten time before the 28th",
               "--matter-dir", str(matter), cwd=matter)
     assert proc.returncode == 0, proc.stderr
-    rp = Path(proc.stdout.strip())
+    rp = Path(proc.stdout.splitlines()[0].strip())
     text = rp.read_text()
     assert "check: secondopinion" in text and "model=test-gpt" in text and "saw the brief" in text
     assert "narrow it" in text
@@ -118,3 +118,26 @@ def test_second_opinion_uses_the_role_command_and_writes_a_report(matter: Path, 
     (matter / "matter.yaml").write_text("case:\n  name: Smith v. Roe\n")
     proc = sc("review", "second-opinion", "motion", "--brief", "x", "--matter-dir", str(matter), cwd=matter)
     assert proc.returncode == 2 and "no command configured" in proc.stderr
+
+
+def test_second_opinion_reports_and_ledgers_the_cost(matter: Path, tmp_path: Path):
+    fake = tmp_path / "other_model.sh"
+    fake.write_text("#!/bin/bash\ncat >/dev/null\necho '1. **[x]** --- y --- **why** z'\n"
+                    "echo '@@USAGE {\"model\": \"gpt-test\", \"input_tokens\": 2000000, \"output_tokens\": 100000}' >&2\n")
+    fake.chmod(0o755)
+    (matter / "matter.yaml").write_text(
+        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: gpt-test\n"
+        "      price_per_million: {input: 1.0, output: 10.0}\n")
+    proc = sc("review", "second-opinion", "motion", "--brief", "b", "--matter-dir", str(matter), cwd=matter)
+    assert proc.returncode == 0, proc.stderr
+    assert "cost: $3.0000" in proc.stdout and "2,000,000 input + 100,000 output" in proc.stdout
+    rp = Path(proc.stdout.splitlines()[0].strip())
+    assert "cost: $3.0000" in rp.read_text()
+    ledger = (matter / ".state" / "external_model_calls.jsonl").read_text().strip().splitlines()
+    assert len(ledger) == 1 and '"usd": 3.0' in ledger[0]
+    brief = sc("brief", str(matter), cwd=matter).stdout
+    assert "outside-model calls this month: 1, $3.00" in brief
+    # without a price the tokens still show and the cost is marked unknown
+    (matter / "matter.yaml").write_text(f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n")
+    proc = sc("review", "second-opinion", "motion", "--brief", "b", "--matter-dir", str(matter), cwd=matter)
+    assert "cost: unknown (set agent.roles" in proc.stdout and "2,000,000 input" in proc.stdout

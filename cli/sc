@@ -1031,10 +1031,77 @@ def _second_opinion(matter: Path, target: str, srcs: list[Path], combined: str, 
     rp = report_path(matter, target, "secondopinion", combined[:7])
     header = report_header(target, "secondopinion", combined, per, matter)
     model = role.get("model") or "(configured command)"
-    rp.write_text(header + f"\n# Second opinion on {target}\n\nmodel: {model}\nbrief: {brief}\n\n"
+    cost_line = record_external_cost(matter, role, proc.stderr, purpose=f"second-opinion {target}")
+    rp.write_text(header + f"\n# Second opinion on {target}\n\nmodel: {model}\nbrief: {brief}\n{cost_line}\n\n"
                   + proc.stdout.strip() + "\n", encoding="utf-8")
     print(rp)
+    print(cost_line)
     return 0
+
+
+def record_external_cost(matter: Path, role: dict, stderr: str, purpose: str) -> str:
+    """Price one call to an outside model from the @@USAGE line its command
+    emitted, using the role's price_per_million (input/output, USD). The
+    line is returned for the report and appended to
+    .state/external_model_calls.jsonl, which the brief sums for the month.
+    Without a price the tokens are still reported and the cost is marked
+    unknown, so a missing number is visible rather than a silent zero."""
+    import datetime as dt
+    usage = None
+    for ln in stderr.splitlines():
+        if ln.startswith("@@USAGE "):
+            try:
+                usage = json.loads(ln[len("@@USAGE "):])
+            except json.JSONDecodeError:
+                usage = None
+    if not usage:
+        return "cost: unknown (the command reported no token usage)"
+    price = role.get("price_per_million") or {}
+    pin, pout = price.get("input"), price.get("output")
+    i, o = int(usage.get("input_tokens", 0)), int(usage.get("output_tokens", 0))
+    if pin is not None and pout is not None:
+        usd = i * float(pin) / 1e6 + o * float(pout) / 1e6
+        cost = f"${usd:.4f}"
+    else:
+        usd = None
+        cost = "unknown (set agent.roles.<role>.price_per_million: {input: X, output: Y} in matter.yaml)"
+    line = (f"cost: {cost} --- {usage.get('model')}: {i:,} input + {o:,} output tokens"
+            + (f" @ ${pin}/${pout} per million" if usd is not None else ""))
+    ledger = matter / ".state" / "external_model_calls.jsonl"
+    ledger.parent.mkdir(parents=True, exist_ok=True)
+    with ledger.open("a", encoding="utf-8") as fh:
+        fh.write(json.dumps({"when": dt.datetime.now().isoformat(timespec="seconds"), "purpose": purpose,
+                             "model": usage.get("model"), "input_tokens": i, "output_tokens": o,
+                             "usd": usd}) + "\n")
+    return line
+
+
+def external_spend_line(matter: Path) -> str | None:
+    """Month-to-date spend on outside models, for the brief and the agenda."""
+    import datetime as dt
+    ledger = matter / ".state" / "external_model_calls.jsonl"
+    if not ledger.is_file():
+        return None
+    month = dt.date.today().strftime("%Y-%m")
+    n = 0; usd = 0.0; unknown = 0
+    for ln in ledger.read_text(encoding="utf-8").splitlines():
+        try:
+            rec = json.loads(ln)
+        except json.JSONDecodeError:
+            continue
+        if not str(rec.get("when", "")).startswith(month):
+            continue
+        n += 1
+        if rec.get("usd") is None:
+            unknown += 1
+        else:
+            usd += float(rec["usd"])
+    if not n:
+        return None
+    s = f"outside-model calls this month: {n}, ${usd:.2f}"
+    if unknown:
+        s += f" ({unknown} unpriced)"
+    return s
 
 
 def cmd_review(args: argparse.Namespace) -> int:
@@ -1467,6 +1534,9 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     dirty = _git_lines(matter, "status", "--short")
     if (matter / ".git").exists():
         lines.append(f"- working tree: {len(dirty)} changed path(s)")
+    spend = external_spend_line(matter)
+    if spend:
+        lines.append(f"- {spend}")
     know = matter / "KNOWLEDGE.md"
     if know.is_file():
         n = sum(1 for _ in know.open(errors="replace"))

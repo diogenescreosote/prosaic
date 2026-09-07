@@ -35,6 +35,7 @@ backup:
 #       cmd: <prosaic>/sync/second_opinion_openai.sh
 #       credential: prosaic.openai      # Keychain item; exported as OPENAI_API_KEY at run time
 #       model: gpt-5
+#       price_per_million: {input: 1.25, output: 10}   # USD; the cost of every call is reported and ledgered
 
 # Source connectors. Only configured connectors run during `sc sync`.
 # See prosaic docs/connectors.md for each connector's options.
