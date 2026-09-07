@@ -209,7 +209,8 @@ def classify_pdf(matter: Path, pdf: Path) -> Doc:
     newest = max(pdf.stat().st_mtime, sib.stat().st_mtime if sib.exists() else 0)
     if side.stat().st_mtime < newest or hp != pages:
         d.state = "stale-sidecar"
-        d.note = "document newer than sidecar" if hp == pages else f"sidecar says {hp} pages, document has {pages}"
+        d.note = ("document newer than sidecar" if hp == pages
+                  else f"sidecar says {hp} pages, document has {pages}")
         return d
     d.state = "searchable"
     return d
@@ -319,7 +320,9 @@ def write_pdf_sidecar(matter: Path, original: Path, source: Path, sidecar: Path,
                  f"original: {original.name}",
                  f"source: {source.name}",
                  f"pages: {total}",
-                 f"tool: pymupdf {getattr(fitz, 'VersionBind', getattr(fitz, '__version__', '?'))}; ocr: {ocr_note}",
+                 "tool: pymupdf "
+                 f"{getattr(fitz, 'VersionBind', getattr(fitz, '__version__', '?'))}; "
+                 f"ocr: {ocr_note}",
                  f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
                  BANNER, ""]
         unc: list[int] = []

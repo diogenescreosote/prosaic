@@ -25,7 +25,8 @@ import text_coverage as tc  # noqa: E402
 SC = REPO_ROOT / "cli" / "sc"
 
 
-def make_text_pdf(path: Path, pages: int = 2, text: str = "The quick brown fox and the lazy dog") -> None:
+def make_text_pdf(path: Path, pages: int = 2,
+                  text: str = "The quick brown fox and the lazy dog") -> None:
     doc = fitz.open()
     for i in range(pages):
         page = doc.new_page()
@@ -163,7 +164,8 @@ def test_ensure_ocrs_an_image(matter: Path):
 
 
 def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(SC), *argv], cwd=cwd, capture_output=True, text=True, timeout=300)
+    return subprocess.run([sys.executable, str(SC), *argv], cwd=cwd,
+                          capture_output=True, text=True, timeout=300)
 
 
 def test_sc_find_exits_2_while_anything_is_unsearchable(matter: Path, monkeypatch):
