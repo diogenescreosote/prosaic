@@ -163,3 +163,13 @@ def test_find_summarizes_a_broad_term(matter: Path):
     assert "Quill wrote" in full
     narrow = sc("find", "-F", "day 7.", "--matter-dir", str(matter)).stdout
     assert "note07.txt" in narrow and "Quill wrote on day 7" in narrow
+
+
+def test_find_all_keeps_only_files_with_every_term(matter: Path):
+    (matter / "assets").mkdir(exist_ok=True)
+    (matter / "assets" / "both.txt").write_text("Marlow sent the 364 notice.\n")
+    (matter / "assets" / "one.txt").write_text("Marlow only.\n")
+    (matter / "assets" / "other.txt").write_text("Section 364 only.\n")
+    out = sc("find", "--all", "Marlow", "364", "--matter-dir", str(matter)).stdout
+    assert "files carrying every term: 1" in out
+    assert "assets/both.txt" in out and "assets/one.txt" not in out and "assets/other.txt" not in out

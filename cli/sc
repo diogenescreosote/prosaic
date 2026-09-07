@@ -985,7 +985,7 @@ FIND_EXCLUDE_DIRS = ("out", ".state", ".git", ".flow", "node_modules", ".claude"
 
 
 def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
-                   fixed: bool = False, docs=None) -> dict:
+                   fixed: bool = False, docs=None, require_all: bool = False) -> dict:
     """ripgrep every term over the matter's text; every document the
     coverage audit says is not searchable is listed as UNSEARCHED with
     its reason. Returns a structured report."""
@@ -1019,6 +1019,14 @@ def find_in_matter(matter: Path, terms: list[str], per_file: int = 12,
             path = path[2:] if path.startswith("./") else path
             hits.setdefault(path, []).append(rest[:300])
         report["terms"][term] = hits
+    if require_all and len(terms) > 1:
+        # Narrowing: keep only files that carry every term. The grep is
+        # per line, so a document mentioning both terms on different
+        # pages still qualifies, which is the right unit for a record.
+        common = set.intersection(*(set(h) for h in report["terms"].values()))
+        for term in terms:
+            report["terms"][term] = {p: v for p, v in report["terms"][term].items() if p in common}
+        report["require_all"] = sorted(common)
     # what could not be searched: the coverage audit decides, so a PDF
     # with an _ocr sibling but no .txt, or a stale sidecar, is never
     # counted as searched just because a file with the right name exists.
@@ -1077,6 +1085,9 @@ def format_find(report: dict, show_unsearched: int = 40, matter: Path | None = N
     (more than SUMMARY_ABOVE_FILES files, or --summary) list files with hit
     counts instead of snippets, capped at max_files."""
     lines: list[str] = []
+    if "require_all" in report:
+        lines.append(f"## files carrying every term: {len(report['require_all'])}")
+        lines.append("")
     for term, hits in report["terms"].items():
         total = sum(len(v) for v in hits.values())
         lines.append(f"## {term!r}: {total} hit line(s) in {len(hits)} file(s)")
@@ -1159,7 +1170,8 @@ def cmd_find(args: argparse.Namespace) -> int:
     ents = _entity_hits(matter, args.terms)
     if ents:
         sys.stdout.write("## Knowledge notes (alias index)\n" + "\n".join(ents) + "\n\n")
-    report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs)
+    report = find_in_matter(matter, args.terms, per_file=args.per_file, fixed=args.fixed, docs=docs,
+                            require_all=args.all)
     summary = True if args.summary else (False if args.full else None)
     sys.stdout.write(format_find(report, matter=matter, summary=summary, max_files=args.max_files))
     if report["unsearched"]:
@@ -1487,6 +1499,8 @@ def main() -> int:
     sp.add_argument("-F", "--fixed", action="store_true", help="literal terms, not regex")
     sp.add_argument("--ensure", action="store_true",
                     help="run `sc text ensure` first so sidecars exist before searching")
+    sp.add_argument("--all", action="store_true",
+                    help="with several terms, keep only files that contain every term")
     sp.add_argument("--summary", action="store_true",
                     help="files with hit counts only (automatic above %d files)" % SUMMARY_ABOVE_FILES)
     sp.add_argument("--full", action="store_true", help="snippets even for a broad term")
