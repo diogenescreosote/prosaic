@@ -277,8 +277,13 @@ def _cache_path(matter: Path) -> Path:
     return matter / ".state" / CACHE_NAME
 
 
+#: Bump when classification or note text changes, so cached rows written
+#: by an older version are re-surveyed instead of carrying stale wording.
+CACHE_VERSION = "2"
+
+
 def _stamp(matter: Path, doc: Path) -> str:
-    bits = [f"{doc.stat().st_size}:{doc.stat().st_mtime_ns}"]
+    bits = [f"v{CACHE_VERSION}", f"{doc.stat().st_size}:{doc.stat().st_mtime_ns}"]
     for extra in (ocr_sibling(doc), sidecar_for(doc), doc.with_suffix(".txt")):
         if extra.exists() and extra != doc:
             st = extra.stat()
