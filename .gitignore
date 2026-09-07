@@ -31,3 +31,6 @@ node_modules/
 # Local modules overlay (ADR-0032): deployment-specific forms,
 # connectors, and config; never tracked here.
 /local/
+
+# The matter harness bundle has a skill named build; the rule above is for build outputs.
+!templates/matter/.claude/skills/build/
