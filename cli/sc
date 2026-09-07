@@ -803,11 +803,15 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     print(f"   {'would add' if dry else 'added'} {missing}" if missing else "   complete")
 
     print("-- scheduled sync")
-    label_old = Path.home() / "Library/LaunchAgents" / f"com.slopcannon.sync.{matter.name}.plist"
-    label_new = Path.home() / "Library/LaunchAgents" / f"com.prosaic.sync.{matter.name}.plist"
-    if label_old.exists() or label_new.exists():
-        print(f"   installed ({'legacy label' if label_old.exists() else 'current label'}); "
-              "matter_sync.sh is read from the checkout at run time, so no reinstall is needed")
+    agents = Path.home() / "Library/LaunchAgents"
+    label_current = agents / f"com.prosaic.supervisor.{matter.name}.plist"
+    labels_legacy = [agents / f"com.prosaic.sync.{matter.name}.plist",
+                     agents / f"com.slopcannon.sync.{matter.name}.plist"]
+    if label_current.exists():
+        print("   installed (supervisor); matter_supervisor.sh is read from the checkout at run time, "
+              "so no reinstall is needed")
+    elif any(p.exists() for p in labels_legacy):
+        todo.append("legacy sync agent installed but no supervisor: `sc schedule .` replaces it")
     else:
         todo.append("no scheduled sync for this matter: `sc schedule .` installs one")
 
