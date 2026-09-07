@@ -18,7 +18,7 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SC = REPO_ROOT / "cli" / "sc"
 BUNDLE = REPO_ROOT / "templates" / "matter" / ".claude"
 EXPECTED_COMMANDS = {"build", "build-doc", "open", "clean", "status", "commit", "find", "standup",
-                     "citecheck", "clerkreview", "judgereview", "oppo", "preflight"}
+                     "citecheck", "clerkreview", "judgereview", "oppo", "preflight", "secondopinion"}
 
 
 def frontmatter(text: str) -> dict[str, str]:
