@@ -21,6 +21,29 @@ details. Commands:
 
 from __future__ import annotations
 
+# launchd runs with a minimal PATH whose python3 often lacks PyYAML, and
+# every subcommand that reads matter.yaml needs it. Rather than fail in a
+# log nobody reads until morning, re-exec under the first interpreter
+# that has it (the same candidates sync/matter_sync.sh probes).
+try:
+    import yaml  # noqa: F401
+except ModuleNotFoundError:  # pragma: no cover --- environment-dependent
+    import os as _os
+    import sys as _sys
+    if not _os.environ.get("PROSAIC_SC_REEXEC"):
+        _home = _os.path.expanduser("~")
+        for _cand in (_os.environ.get("PROSAIC_PYTHON", ""),
+                      f"{_home}/miniforge3/bin/python3", f"{_home}/miniconda3/bin/python3",
+                      f"{_home}/.local/bin/python3", "/opt/homebrew/bin/python3",
+                      "/usr/local/bin/python3", "/usr/bin/python3"):
+            if _cand and _os.path.exists(_cand) and _os.path.realpath(_cand) != _os.path.realpath(_sys.executable):
+                import subprocess as _sp
+                if _sp.run([_cand, "-c", "import yaml"], capture_output=True).returncode == 0:
+                    _os.environ["PROSAIC_SC_REEXEC"] = "1"
+                    _os.execv(_cand, [_cand, _os.path.abspath(__file__), *_sys.argv[1:]])
+        _sys.stderr.write("sc: no python3 with PyYAML found; set PROSAIC_PYTHON\n")
+        _sys.exit(1)
+
 import argparse
 import json
 import os
