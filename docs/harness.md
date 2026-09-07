@@ -27,6 +27,7 @@ output on a small model at low effort.
 .claude/skills/status/         /status  (brief + git status + stale report)
 .claude/skills/commit/         /commit <type(scope): subject> [-- paths]
 .claude/skills/find/           /find <term> ...
+.claude/skills/standup/        /standup  (the daily thirty-minute knowledge loop)
 ```
 
 Each SKILL.md has the checkout path baked in at install time (the
@@ -60,6 +61,7 @@ failure is relayed rather than swallowed.
 | build, build-doc, open, clean, status | `claude-haiku-4-5`, effort low | pure relay of CLI output |
 | commit | `claude-sonnet-5`, effort medium | writes a commit body in the matter convention |
 | find | `claude-sonnet-5`, effort medium | reads hits, runs variants, OCRs unsearched PDFs |
+| standup | `claude-opus-5`, effort medium | scribes human decisions into the vault; the human directs every edit |
 
 Drafting, triage and integration of new documents are not routine and
 are not in this bundle; they stay on the strongest model available.

@@ -82,3 +82,37 @@ Nothing in the sync script is macOS-specific except the Keychain
 `connectors/core/portal_common.js`) and the installer. Use a systemd
 user timer with `Persistent=true` for equivalent catch-up-once
 semantics; contributions welcome.
+
+## The standby supervisor (ADR-0044)
+
+`sc schedule <matter>` installs four agents, all through the same
+Full Disk Access shim:
+
+| Label | Trigger | Runs |
+|---|---|---|
+| `com.prosaic.sync.<matter>` | 08:00, 20:00, and at load | connectors, `sc text ensure`, triage |
+| `com.prosaic.watch.<matter>` | any change under `inbox/` (throttle 60 s) | `matter_sync.sh --watch`: triage of files that landed and stopped changing |
+| `com.prosaic.refine.<matter>` | 02:30 | `sc refine --scheduled`: proposals and questions to `derived/refine/<date>.md` |
+| `com.prosaic.standup.<matter>` | 08:50 (`PROSAIC_STANDUP_TIME`) | `sc standup agenda --notify` |
+
+Every sync or watch run writes `.state/sync_last_run.json` (mode,
+outcome, new files, triage result, per-connector status); `sc brief`
+and the standup agenda read it. A legacy `com.slopcannon.sync.<matter>`
+agent is unloaded and renamed `.disabled` on install. If
+`~/.local/bin/gmail-pull-runner` already holds the FDA grant and no
+`prosaic-runner` exists, the installer keeps using it.
+
+Headless jobs run under a role: `matter_sync.sh` triages with
+`agent-run --role triage`, `sc refine` with `--role refine`. A role's
+model and turn cap come from the matter's `matter.yaml`:
+
+```yaml
+agent:
+  roles:
+    triage: {max_turns: 80}
+    refine: {max_turns: 40}
+    judge:  {model: claude-sonnet-5, max_turns: 20}
+```
+
+Unset means the harness default, uncapped.
+

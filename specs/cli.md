@@ -216,6 +216,21 @@ agent CLI is named (ADR-0020). Its promises:
   derived text tree, knowledge vault, ignore rules, schedule check ---
   and ends with the list of steps that still need a human or an agent.
   `--dry-run` changes nothing. *(tested)*
+- **`sc refine [matter] [--since-days N] [--inputs-only] [--scheduled]`**
+  gathers refinement inputs deterministically into
+  `derived/refine/<date>_inputs.md` and runs one agent pass (role
+  `refine`) that writes proposals, contradictions and questions to
+  `derived/refine/<date>.md` and nothing else; files touched elsewhere
+  are reported. *(tested: inputs only)*
+- **`sc standup agenda [matter] [--notify]`** writes
+  `derived/standup/<date>.md` from the brief, the last sync summary, the
+  latest proposal, QUESTIONS.md and the vault state, optionally with a
+  desktop notification. *(tested)*
+- **`sc clean --older-than DAYS [--apply]`** reports (or removes)
+  regenerable files older than DAYS under `out/`, `.flow/` and
+  `derived/{find,refine,standup}` only. *(tested)*
+- **`sc schedule <matter>`** installs the four standby agents (ADR-0044).
+  *(untested: launchd)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without

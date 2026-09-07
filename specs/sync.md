@@ -66,3 +66,14 @@ collecting evidence and nobody notices until a filing deadline.
   schedule never self-skips.
 - **Manual sync bypasses the guard** — a human asking for a sync
   now means now.
+
+- **Every run leaves a summary.** `matter_sync.sh` writes
+  `.state/sync_last_run.json` with mode, outcome, new-file count,
+  triage result and per-connector status, so the brief and the standup
+  agenda can show a failed connector (ADR-0044). *(tested: watch mode
+  smoke test)*
+- **`--watch` triages what landed.** Fired by launchd on a change under
+  `inbox/`, it runs no connectors, skips files still being written and
+  files it has already listed, and hands the rest to triage under the
+  `triage` role. *(tested: smoke)*
+
