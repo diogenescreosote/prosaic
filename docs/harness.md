@@ -28,6 +28,11 @@ output on a small model at low effort.
 .claude/skills/commit/         /commit <type(scope): subject> [-- paths]
 .claude/skills/find/           /find <term> ...
 .claude/skills/standup/        /standup  (the daily thirty-minute knowledge loop)
+.claude/skills/citecheck/      /citecheck <env>     optional preflight (ADR-0045)
+.claude/skills/clerkreview/    /clerkreview <env>
+.claude/skills/judgereview/    /judgereview <env>
+.claude/skills/oppo/           /oppo <env>
+.claude/skills/preflight/      /preflight <env>     runs the four and collates
 ```
 
 Each SKILL.md has the checkout path baked in at install time (the
@@ -62,6 +67,9 @@ failure is relayed rather than swallowed.
 | commit | `claude-sonnet-5`, effort medium | writes a commit body in the matter convention |
 | find | `claude-sonnet-5`, effort medium | reads hits, runs variants, OCRs unsearched PDFs |
 | standup | `claude-opus-5`, effort medium | scribes human decisions into the vault; the human directs every edit |
+| citecheck, clerkreview, judgereview | `claude-opus-5`, effort high | judgment on a draft; each reads cold |
+| oppo | `claude-fable-5-1`, effort high | the adversary gets the strongest model |
+| preflight | `claude-sonnet-5`, effort medium | collates four reports; adds nothing |
 
 Drafting, triage and integration of new documents are not routine and
 are not in this bundle; they stay on the strongest model available.

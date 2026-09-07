@@ -232,6 +232,16 @@ agent CLI is named (ADR-0020). Its promises:
 - **`sc schedule <matter>`** installs the one supervisor agent per matter
   (ADR-0044); `sync/matter_supervisor.sh` dispatches what is due. *(tested:
   the dispatcher; launchd itself untested)*
+- **`sc review paths|cites|report|status <envelope|src path>`** is the
+  plumbing under the optional preflight commands (ADR-0045): `paths`
+  lists sources, built outputs, the opposing-counsel profile and the
+  current and stale reports; `cites` prints a deterministic citation
+  table (statutes, court and local rules, federal, cases) with the
+  authority-cache status of each; `report --check NAME` creates the
+  report file with a header carrying the combined and per-file source
+  hashes; `status` marks reports whose sources changed as stale and
+  `--tidy` moves them into `superseded/`. Nothing here gates a build or a
+  signature. *(tested: tests/test_review)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without
