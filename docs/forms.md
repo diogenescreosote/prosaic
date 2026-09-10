@@ -40,7 +40,7 @@ engine's countermeasures:
 | Failure mode | What you see | Countermeasure |
 |---|---|---|
 | Text longer than the box | Silent clipping — words simply vanish | `fit:` strategies — `shrink`, `wrap`, `shrink_wrap`, and `overflow_attachment` (below); a multiline widget wraps under `shrink` |
-| Text floating in its box | A name flush left above its signature line; a case number tucked in a corner | Single-line values center in their box, horizontally and vertically; blocks anchor top-left; `align:`/`valign:` pin exceptions |
+| Text floating in its box | A phone number far from "TELEPHONE NO.:"; a name flush left above its signature line; a case number tucked in a corner | The blank's own labels, rules and cells decide: beside the label, centered on the rule, centered in the cell; blocks anchor top-left; `layout:`/`align:`/`valign:` pin exceptions |
 | Field names lie | `Dismissal_Type_cb3` is actually "with prejudice" | Descriptors document the *verified* meaning; names are treated as opaque IDs |
 | Caption repeats per page as separate fields | Page 3's caption silently blank | Descriptor maps every occurrence; each binds the same `auto:` value |
 | No widget where the value goes | Signature-line names, hand-drawn boxes | A hand-authored `rect:` on the field |
@@ -157,9 +157,9 @@ fields:
     inline_checkbox: facts_listed_below  # checked iff it fit on-form
   phone:
     map: "..."
-    align: left              # a wide line after an inline label reads
-                             # better left; default is center/middle for
-                             # one line, left/top for a block
+    layout: labeled          # normally detected from the blank (labeled |
+                             # line | box); pin it when the geometry is
+                             # ambiguous. align:/valign: override outright.
   signature_line_name:
     page: 2
     rect: [72, 640, 540, 700]   # no widget: PDF points, [x0, y0, x1, y1]
@@ -205,12 +205,16 @@ the lines itself, the height a block needs is exact — first baseline
 one em below the top, then 1.15 em per line — and nothing is left to a
 viewer's layout.
 
-Placement: a single-line value is centered in its box both ways, so a
-name sits on its signature line and a case number sits in its box; a
-block of lines (an address, a wrapped answer) anchors at the top left.
-`align: left | center | right` and `valign: top | middle | bottom` on a
-field pin the exceptions — decide them by looking at a fill, not by
-reasoning about the widget.
+Placement: the engine reads what the blank prints around each field
+and places a single-line value accordingly — beside its label
+(`labeled`: left, vertically centered), centered on its signature rule
+(`line`), or centered in the free area of its bordered cell (`box`,
+under a "CASE NUMBER:"-style label); with none of those it centers in
+the widget's rectangle. A block of lines (an address, a wrapped answer)
+anchors at the top left. `layout: labeled | line | box`, `align: left |
+center | right` and `valign: top | middle | bottom` on a field pin the
+exceptions; `sc form fill <id> ... --verbose` prints every decision and
+the geometry behind it, so decide overrides by looking at a fill.
 
 Fields may carry an e-sign tag — `esign: {type: date, party: filer}` —
 marking areas reserved for signing rather than machine fill. The type

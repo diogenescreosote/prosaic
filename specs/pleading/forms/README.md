@@ -61,10 +61,11 @@ of programming.
 - **Every fill is flattened ink** (ADR-0046): values are drawn at the
   widget rectangles and the form layer — LiveCycle/XFA packet, widgets,
   form dictionary — is removed, so nothing is left for a viewer to
-  interpret differently. Single-line values center in their box;
-  blocks anchor top-left; `align:`/`valign:` pin exceptions.
-  *(tested: test_output_carries_no_form_layer,
-  test_overlay_forms.test_single_line_centers_in_its_box_by_default)*
+  interpret differently. A single-line value is placed by the blank's
+  own geometry — beside its label, centered on its rule, or centered in
+  its cell; blocks anchor top-left; `layout:`/`align:`/`valign:` pin
+  exceptions. *(tested: test_output_carries_no_form_layer,
+  test_overlay_forms.test_layout_classifier_reads_the_blank)*
 - **The blank is part of the artifact.** Fills run against the blank
   shipped in-repo (pinned revision), never against whatever
   courts.ca.gov serves today.

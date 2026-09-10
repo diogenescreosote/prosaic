@@ -50,14 +50,29 @@ have.
    what makes it a migration is the fill-render-look pass on each
    form's page 1 that accompanies it.
 
-4. **Text is centered in its box by default.** A single-line value is
-   drawn centered horizontally and vertically in its rectangle: a name
-   on a signature line sits on the line, a case number in its box sits
-   in the box. A block of several lines anchors top-left. Descriptors
-   pin exceptions per field with `align: left | center | right` and
-   `valign: top | middle | bottom`. The rule was set by looking at a
-   filled SUBP-025: "when there's a line to put stuff, try to center the
-   text on the line; when there's a box, center it in the box."
+4. **A single-line value is placed by what the blank prints around
+   it.** The engine reads the blank's page — text spans, horizontal and
+   vertical rules, bordered cells — once per page, and classifies each
+   field:
+   - *labeled*: a printed label ends on the same row just left of the
+     field, with no border between ("TELEPHONE NO.:", "TO (name):"). The
+     value sits left, beside its label, vertically centered.
+   - *line*: a rule spans the field just below it and no label precedes
+     it (a parenthesized caption under the rule — "(TYPE OR PRINT NAME)"
+     — settles it). The value centers on the rule, baseline just above
+     it.
+   - *box*: the field lies in a bordered cell whose only text is a label
+     above it ("CASE NUMBER:"), or on a rule with such a label touching
+     its top. The value centers in the cell's free area — between the
+     label and the next printed row or the border.
+   Anything else centers in the widget's rectangle. A block of several
+   lines anchors top-left. Descriptors pin exceptions per field with
+   `layout: labeled | line | box`, `align: left | center | right` and
+   `valign: top | middle | bottom`; `sc form fill --verbose` prints each
+   decision and why. The rule was set by looking at a filled SUBP-025:
+   fields beside labels "should be left aligned, near their labels",
+   the case number "vertically centered in the box", a name centered
+   on its signature line.
 
 5. **Fit is measured against our own leading.** Because the engine draws
    the lines, the height a block needs is known exactly; no allowance for

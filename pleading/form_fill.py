@@ -343,26 +343,187 @@ def _wrap_to_width(text: str, font: str, size: float, width: float) -> list[str]
 
 ALIGNMENTS = ("left", "center", "right")
 VALIGNMENTS = ("top", "middle", "bottom")
+LAYOUTS = ("labeled", "line", "box")
 TEXT_INSET = 2.0  # horizontal breathing room from a box edge, in points
+LABEL_GAP = 10.5  # a label ends within this many points of the field's left edge
+RULE_GAP = 5.0    # a signature rule lies within this many points below the field
+RULE_LIFT = 2.0   # baseline sits this far above the rule
+
+
+# ---------------------------------------------------------------------------
+# Blank geometry: what the page prints around each field
+# ---------------------------------------------------------------------------
+
+@dataclass
+class PageGeometry:
+    """Printed text spans, horizontal rules and bordered cells of one page
+    of a blank, in PDF user space (origin bottom-left)."""
+    spans: list[tuple[float, float, float, float, str]]
+    rules: list[tuple[float, float, float]]          # (x0, y, x1) horizontal
+    vrules: list[tuple[float, float, float]]         # (x, y0, y1) vertical
+    cells: list[tuple[float, float, float, float]]   # bordered rectangles
+
+
+_GEOMETRY_CACHE: dict[tuple[str, int], PageGeometry] = {}
+
+
+def page_geometry(blank: Path, page_idx: int) -> PageGeometry:
+    key = (str(blank.resolve()), page_idx)
+    if key in _GEOMETRY_CACHE:
+        return _GEOMETRY_CACHE[key]
+    import fitz  # pymupdf
+    doc = fitz.open(str(blank))
+    try:
+        page = doc[page_idx]
+        h = page.rect.height
+        spans = []
+        for block in page.get_text("dict")["blocks"]:
+            for line in block.get("lines", []):
+                for s in line["spans"]:
+                    if s["text"].strip():
+                        bx0, by0, bx1, by1 = s["bbox"]
+                        spans.append((bx0, h - by1, bx1, h - by0, s["text"]))
+        rules: list[tuple[float, float, float]] = []
+        vrules: list[tuple[float, float, float]] = []
+        cells: list[tuple[float, float, float, float]] = []
+        for d in page.get_drawings():
+            for item in d["items"]:
+                if item[0] == "l":
+                    a, b = item[1], item[2]
+                    if abs(a.y - b.y) < 0.6 and abs(a.x - b.x) > 20:
+                        rules.append((min(a.x, b.x), h - a.y, max(a.x, b.x)))
+                    elif abs(a.x - b.x) < 0.6 and abs(a.y - b.y) > 8:
+                        vrules.append((a.x, h - max(a.y, b.y), h - min(a.y, b.y)))
+                elif item[0] == "re":
+                    r = item[1]
+                    if r.height < 0.9 and r.width > 20:
+                        rules.append((r.x0, h - (r.y0 + r.y1) / 2.0, r.x1))
+                    elif r.width < 0.9 and r.height > 8:
+                        vrules.append(((r.x0 + r.x1) / 2.0, h - r.y1, h - r.y0))
+                    elif r.width > 20 and r.height > 8:
+                        cells.append((r.x0, h - r.y1, r.x1, h - r.y0))
+                        vrules.append((r.x0, h - r.y1, h - r.y0))
+                        vrules.append((r.x1, h - r.y1, h - r.y0))
+    finally:
+        doc.close()
+    geom = PageGeometry(spans=spans, rules=rules, vrules=vrules, cells=cells)
+    _GEOMETRY_CACHE[key] = geom
+    return geom
+
+
+@dataclass
+class Layout:
+    kind: str                                   # labeled | line | box
+    why: str
+    rule: Optional[tuple[float, float, float]] = None      # for line
+    area: Optional[tuple[float, float, float, float]] = None  # for box
+
+
+def classify_layout(rect: list[float], geom: Optional[PageGeometry]) -> Optional[Layout]:
+    """Decide, from what the blank prints around ``rect``, how a
+    single-line value should sit in it.
+
+    LABELED: a printed label ends on the same row just left of the
+    field ("TELEPHONE NO.:", "TO (name):"). The value belongs beside its
+    label — left, vertically centered. Checked first, because a
+    labeled field may also sit on a rule.
+    LINE: a horizontal rule spans the field just below it and no label
+    precedes it — a signature or printed-name line. The value centers
+    on the rule's span, its baseline just above the rule.
+    BOX: the field lies inside a bordered cell whose only printed text
+    is a label above it ("CASE NUMBER:") or nothing. The value centers
+    in the cell's free area below the label.
+    Anything else returns None and the caller centers in the rect.
+    """
+    if geom is None:
+        return None
+    x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
+    y0, y1 = min(rect[1], rect[3]), max(rect[1], rect[3])
+    mid = (y0 + y1) / 2.0
+    labels = [s for s in geom.spans
+              if s[1] < y1 and s[3] > y0 and s[2] <= x0 + 2.0 and x0 - s[2] < LABEL_GAP
+              and not any(s[2] - 0.5 < v[0] < x0 + 0.5 and v[1] <= mid <= v[2]
+                          for v in geom.vrules)]
+    if labels:
+        label = max(labels, key=lambda s: s[2])
+        return Layout("labeled", f"label {label[4].strip()!r} ends {x0 - label[2]:.1f}pt left")
+    # A bordered cell is checked before a rule: a cell's bottom border
+    # is also a horizontal rule under the widget, and a case number in
+    # its box is not a name on a signature line.
+    cells = [c for c in geom.cells
+             if c[0] <= x0 + 1.0 and c[1] <= y0 + 1.0 and c[2] >= x1 - 1.0 and c[3] >= y1 - 1.0]
+    if cells:
+        cell = min(cells, key=lambda c: (c[2] - c[0]) * (c[3] - c[1]))
+        inside = [s for s in geom.spans
+                  if s[0] >= cell[0] - 1 and s[2] <= cell[2] + 1 and s[1] >= cell[1] - 1 and s[3] <= cell[3] + 1]
+        # A label whose bottom touches the widget's top is above it, not
+        # beside it; only real vertical overlap disqualifies the cell.
+        beside = [s for s in inside if min(s[3], y1) - max(s[1], y0) > 1.0]
+        if not beside:
+            above = [s for s in inside if s[1] >= y1 - 1.0]
+            top = min((s[1] for s in above), default=cell[3])
+            # A cell may carry more rows under the widget (a caption box
+            # with hearing date/time/dept beneath the case number); the
+            # free area stops where that text starts.
+            below = [s for s in inside if s[3] <= y0 + 1.0]
+            bottom = max((s[3] for s in below), default=cell[1])
+            area = (cell[0], bottom, cell[2], top)
+            why = f"cell {cell[0]:.0f},{cell[1]:.0f}-{cell[2]:.0f},{cell[3]:.0f}"
+            why += f", label {above[0][4].strip()!r} above" if above else ", no label"
+            return Layout("box", why, area=area)
+    rules = [r for r in geom.rules
+             if r[1] <= y0 + 1.0 and y0 - r[1] < RULE_GAP
+             and min(r[2], x1) - max(r[0], x0) > 0.6 * (x1 - x0)]
+    if rules:
+        rule = max(rules, key=lambda r: r[2] - r[0])
+        # A parenthesized caption right under the rule — "(TYPE OR PRINT
+        # NAME)", "(SIGNATURE OF DECLARANT)" — is the signature-line
+        # convention, whatever is printed above. Otherwise a label
+        # touching the field's top ("CASE NUMBER:") makes this a box
+        # whose border is drawn with lines: center between label and rule.
+        caption = [s for s in geom.spans
+                   if s[3] <= y0 + 1.0 and y0 - s[3] < 3.5 and s[4].strip().startswith("(")
+                   and min(s[2], x1) - max(s[0], x0) > 0]
+        above = [s for s in geom.spans
+                 if s[1] >= y1 - 1.0 and s[1] - y1 < 2.5
+                 and min(s[2], x1) - max(s[0], x0) > 0]
+        if above and not caption:
+            top = min(s[1] for s in above)
+            area = (rule[0], rule[1], rule[2], top)
+            return Layout("box", f"rule {rule[0]:.0f}-{rule[2]:.0f} at y={rule[1]:.1f}, "
+                          f"label {above[0][4].strip()!r} above", area=area)
+        return Layout("line", f"rule {rule[0]:.0f}-{rule[2]:.0f} at y={rule[1]:.1f}", rule=rule)
+    return None
 
 
 def text_origins(lines: list[str], rect: list[float], size: float, font: str,
                  align: Optional[str] = None, valign: Optional[str] = None,
+                 layout: Optional[Layout] = None,
                  ) -> list[tuple[float, float]]:
     """Baseline origin (x, y) for each line of text drawn into ``rect``.
 
-    A single line is centered in its box, horizontally and vertically,
-    unless the descriptor says otherwise: a value on a signature or
-    caption line reads as belonging to the line when it sits mid-way
-    along it and on it, not flush left and floating above. A block of
-    several lines (an address block, a wrapped answer) anchors at the
-    top left, the way a typed block reads. ``align`` (left, center,
-    right) and ``valign`` (top, middle, bottom) pin exceptions per
-    field — a wide box that follows an inline label wants left.
+    A block of several lines (an address block, a wrapped answer)
+    anchors at the top left, the way a typed block reads. A single line
+    goes where the blank's geometry says (``layout``, from
+    :func:`classify_layout`): beside its label, centered on its rule, or
+    centered in its cell; with no geometry it centers in the rect.
+    ``align`` (left, center, right) and ``valign`` (top, middle, bottom)
+    pin exceptions per field and override the layout's placement.
     """
     x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
     y0, y1 = min(rect[1], rect[3]), max(rect[1], rect[3])
     multi = len(lines) > 1
+    if not multi and layout is not None and not align and not valign:
+        [line] = lines
+        w = stringWidth(line, font, size)
+        if layout.kind == "labeled":
+            return [(x0 + TEXT_INSET, (y0 + y1) / 2.0 - size * 0.36)]
+        if layout.kind == "line" and layout.rule:
+            rx0, ry, rx1 = layout.rule
+            return [((rx0 + rx1) / 2.0 - w / 2.0, ry + RULE_LIFT)]
+        if layout.kind == "box" and layout.area:
+            ax0, ay0, ax1, ay1 = layout.area
+            return [((ax0 + ax1) / 2.0 - w / 2.0, (ay0 + ay1) / 2.0 - size * 0.36)]
     align = (align or ("left" if multi else "center")).lower()
     valign = (valign or ("top" if multi else "middle")).lower()
     if align not in ALIGNMENTS:
@@ -393,6 +554,28 @@ def text_origins(lines: list[str], rect: list[float], size: float, font: str,
             x = (x0 + x1) / 2.0 - w / 2.0
         origins.append((x, first - j * size * LEADING_RATIO))
     return origins
+
+
+def resolve_layout(rect: list[float], spec: dict, geom: Optional[PageGeometry]) -> Optional[Layout]:
+    """The layout a field renders with: the descriptor's ``layout:``
+    override, else the classifier's reading of the blank."""
+    forced = spec.get("layout")
+    detected = classify_layout(rect, geom)
+    if not forced:
+        return detected
+    forced = str(forced).lower()
+    if forced not in LAYOUTS:
+        raise ValueError(f"layout must be one of {LAYOUTS}, not {forced!r}")
+    if detected is not None and detected.kind == forced:
+        return detected
+    # Forced to a kind the geometry did not find: use what geometry can
+    # supply for that kind, else the kind's placement against the rect.
+    if forced == "line":
+        x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
+        return Layout("line", "forced by descriptor", rule=(x0, min(rect[1], rect[3]), x1))
+    if forced == "box":
+        return Layout("box", "forced by descriptor", area=tuple(rect))  # type: ignore[arg-type]
+    return Layout("labeled", "forced by descriptor")
 
 
 @dataclass
@@ -673,8 +856,10 @@ def _strip_all_form_machinery(writer: PdfWriter) -> None:
 
 
 def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
-         data: Optional[dict] = None, strict: bool = False) -> FillResult:
-    """Fill a form per its descriptor. See module docstring."""
+         data: Optional[dict] = None, strict: bool = False,
+         verbose: bool = False) -> FillResult:
+    """Fill a form per its descriptor. See module docstring. ``verbose``
+    prints each single-line field's layout decision to stderr."""
     desc = load_descriptor(form_id)
     blank = blank_path(desc)
     if not blank.exists():
@@ -730,9 +915,14 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         # shrinks rather than warns.
         if not spec.get("fit"):
             spec = {**spec, "fit": "shrink"}
+        layout = resolve_layout(rect, spec, page_geometry(blank, page_no))
+        if verbose:
+            print(f"  layout {name}: {layout.kind} ({layout.why})" if layout
+                  else f"  layout {name}: centered in rect (no label, rule or cell found)",
+                  file=sys.stderr)
         pending_overlay.append({
             "name": name, "value": value, "rect": rect,
-            "page": page_no, "spec": spec,
+            "page": page_no, "spec": spec, "layout": layout,
         })
 
     # Fit the pending overlay text, then enforce size-group consistency:
@@ -758,7 +948,8 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
             op["fit"] = fit_text(op["value"], op["rect"], locked)
     for op in pending_overlay:
         overlay_ops.setdefault(op["page"], []).append(
-            {"rect": op["rect"], "fit": op["fit"], "spec": op["spec"]})
+            {"rect": op["rect"], "fit": op["fit"], "spec": op["spec"],
+             "layout": op.get("layout")})
 
     # Overflow-linked checkboxes: a field spec may declare
     # ``overflow_checkbox`` (checked iff the value spilled to an
@@ -845,7 +1036,8 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
                 for line, (x, y) in zip(
                         fitted.lines,
                         text_origins(fitted.lines, rect, fitted.font_size, font,
-                                     spec.get("align"), spec.get("valign"))):
+                                     spec.get("align"), spec.get("valign"),
+                                     op.get("layout"))):
                     c.drawString(x, y, line)
             c.showPage()
         c.save()
@@ -1318,6 +1510,8 @@ def main() -> int:
 
     sp = sub.add_parser("fill", help="fill a form from a YAML data file")
     sp.add_argument("form_id")
+    sp.add_argument("--verbose", action="store_true",
+                    help="print each field's layout decision (labeled / line / box) and why")
     sp.add_argument("--data", help="YAML file of logical field values")
     sp.add_argument("--meta", help="YAML file of pleading front matter (caption autos)")
     sp.add_argument("-o", "--output", required=True)
@@ -1394,7 +1588,8 @@ def main() -> int:
     if args.cmd == "fill":
         data = yaml.safe_load(Path(args.data).read_text()) if args.data else {}
         meta = yaml.safe_load(Path(args.meta).read_text()) if args.meta else {}
-        res = fill(args.form_id, Path(args.output), meta=meta, data=data)
+        res = fill(args.form_id, Path(args.output), meta=meta, data=data,
+                   verbose=bool(getattr(args, "verbose", False)))
         for w in res.warnings:
             print(f"warning: {w}", file=sys.stderr)
         print(f"wrote {res.output_path}")

@@ -394,6 +394,91 @@ def test_align_and_valign_overrides():
         _origin(["x"], rect, align="middle")
 
 
+def _layout_of(form_id, name):
+    import probe
+    desc = form_fill.load_descriptor(form_id)
+    page_idx, rect = probe.rect_of(form_id, name)
+    geom = form_fill.page_geometry(form_fill.blank_path(desc), page_idx)
+    return form_fill.resolve_layout(rect, desc["fields"][name], geom)
+
+
+@pytest.mark.parametrize("form_id,name,kind", [
+    ("subp025", "phone", "labeled"),
+    ("subp025", "email", "labeled"),
+    ("subp025", "attorney_for", "labeled"),     # sits on a rule too; the label wins
+    ("subp025", "court_branch", "labeled"),
+    ("subp025", "plaintiff", "labeled"),
+    ("subp025", "consumer", "labeled"),         # "TO (name):"
+    ("subp025", "requesting_party", "labeled"),
+    ("subp025", "production_date", "labeled"),
+    ("subp025", "witness", "labeled"),
+    ("subp025", "notice_signer", "line"),       # "(TYPE OR PRINT NAME)" under the rule
+    ("subp025", "case_number", "box"),          # bordered cell, "CASE NUMBER:" above
+    ("subp025", "case_number_p2", "box"),
+    ("mc040", "phone", "labeled"),
+    ("mc040", "print_name", "line"),
+    ("mc040", "case_number", "box"),            # cell drawn with lines, not a rect
+    ("mc040", "dept", "box"),
+    ("subp010", "issuer_print_name", "line"),
+    ("subp010", "case_number", "box"),
+    ("fw001", "court_county", "box"),           # a left-column sentence ends near it, across a border
+])
+def test_layout_classifier_reads_the_blank(form_id, name, kind):
+    """Three placements, decided from what the blank prints around the
+    field (ADR-0046): beside a label, on a signature rule, or in a cell."""
+    lay = _layout_of(form_id, name)
+    assert lay is not None and lay.kind == kind, (form_id, name, lay)
+
+
+def test_labeled_layout_sits_beside_its_label():
+    import probe
+    lay = _layout_of("subp025", "phone")
+    _pg, rect = probe.rect_of("subp025", "phone")
+    [(x, y)] = form_fill.text_origins(["(555) 555-0100"], rect, 9.0, form_fill.DEFAULT_FONT,
+                                      layout=lay)
+    assert x == pytest.approx(min(rect[0], rect[2]) + form_fill.TEXT_INSET)
+    assert y == pytest.approx((rect[1] + rect[3]) / 2.0 - 9.0 * 0.36)
+
+
+def test_line_layout_centers_on_the_rule():
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    import probe
+    lay = _layout_of("subp025", "notice_signer")
+    _pg, rect = probe.rect_of("subp025", "notice_signer")
+    [(x, y)] = form_fill.text_origins(["Jane Roe"], rect, 9.0, form_fill.DEFAULT_FONT, layout=lay)
+    rx0, ry, rx1 = lay.rule
+    assert x == pytest.approx((rx0 + rx1) / 2.0 - stringWidth("Jane Roe", form_fill.DEFAULT_FONT, 9.0) / 2.0)
+    assert y == pytest.approx(ry + form_fill.RULE_LIFT)
+
+
+def test_box_layout_centers_in_the_cells_free_area():
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    import probe
+    lay = _layout_of("subp025", "case_number")
+    _pg, rect = probe.rect_of("subp025", "case_number")
+    ax0, ay0, ax1, ay1 = lay.area
+    assert ay1 <= max(rect[1], rect[3]) + 0.1, "free area starts under the CASE NUMBER label"
+    [(x, y)] = form_fill.text_origins(["24CV000123"], rect, 9.0, form_fill.DEFAULT_FONT, layout=lay)
+    assert x == pytest.approx((ax0 + ax1) / 2.0 - stringWidth("24CV000123", form_fill.DEFAULT_FONT, 9.0) / 2.0)
+    assert y == pytest.approx((ay0 + ay1) / 2.0 - 9.0 * 0.36)
+
+
+def test_descriptor_layout_override_and_align_win():
+    import probe
+    desc = form_fill.load_descriptor("subp025")
+    _pg, rect = probe.rect_of("subp025", "phone")
+    geom = form_fill.page_geometry(form_fill.blank_path(desc), 0)
+    forced = form_fill.resolve_layout(rect, {"layout": "line"}, geom)
+    assert forced.kind == "line" and forced.why == "forced by descriptor"
+    with pytest.raises(ValueError, match="layout"):
+        form_fill.resolve_layout(rect, {"layout": "middle"}, geom)
+    # align/valign on the field override whatever the layout would do.
+    lay = _layout_of("subp025", "phone")
+    [(x, _y)] = form_fill.text_origins(["x"], rect, 9.0, form_fill.DEFAULT_FONT,
+                                       align="right", layout=lay)
+    assert x > (rect[0] + rect[2]) / 2.0
+
+
 def test_centered_text_never_leaves_its_box():
     """Every origin lies inside the rect, and a fitted line's extent does
     too — the property the rule exists for."""

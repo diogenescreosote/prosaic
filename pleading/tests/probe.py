@@ -90,8 +90,26 @@ def text_in_rect(pdf: Path, page_idx: int, rect: list[float], inset: float = 1.0
         doc.close()
 
 
-def field_text(pdf: Path, form_id: str, logical: str) -> str:
+def draw_rect(form_id: str, logical: str) -> tuple[int, list[float]]:
+    """Where the fill actually draws ``logical``: its widget rect widened
+    to the layout the blank's geometry gives it — the cell's free area
+    for a box, the rule's span for a line (ADR-0046)."""
+    desc = form_fill.load_descriptor(form_id)
     page_idx, rect = rect_of(form_id, logical, "fields")
+    lay = form_fill.resolve_layout(rect, desc["fields"][logical],
+                                   form_fill.page_geometry(form_fill.blank_path(desc), page_idx))
+    x0, y0, x1, y1 = min(rect[0], rect[2]), min(rect[1], rect[3]), max(rect[0], rect[2]), max(rect[1], rect[3])
+    if lay is not None and lay.kind == "box" and lay.area:
+        ax0, ay0, ax1, ay1 = lay.area
+        x0, y0, x1, y1 = min(x0, ax0), min(y0, ay0), max(x1, ax1), max(y1, ay1)
+    elif lay is not None and lay.kind == "line" and lay.rule:
+        rx0, ry, rx1 = lay.rule
+        x0, y0, x1 = min(x0, rx0), min(y0, ry), max(x1, rx1)
+    return page_idx, [x0, y0, x1, y1]
+
+
+def field_text(pdf: Path, form_id: str, logical: str) -> str:
+    page_idx, rect = draw_rect(form_id, logical)
     return text_in_rect(pdf, page_idx, rect)
 
 
