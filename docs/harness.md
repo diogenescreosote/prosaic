@@ -88,6 +88,21 @@ KNOWLEDGE.md length; and the routine commands. It is deterministic and
 takes well under a second. The hook fires on `startup`, `resume`,
 `clear` and `compact`.
 
+Three things the brief will not let pass quietly:
+
+- **A failing connector** is the first line, above the case name:
+  `!! CONNECTOR FAILURE: gmail --- token rejected --- run: node
+  connectors/gmail/auth.js (since 2026-09-10 02:44, 3 failed run(s))`.
+  The sync also posts a desktop notification on every failing run.
+- **New correspondence since the last brief** (never less than a day
+  back): every thread the gmail connector exported, inbound first, with
+  the sender's domain, subject and file. Followed by **unsent drafts in
+  captured threads** --- a reply sitting in Drafts is not a reply.
+- **Correspondents not on the address list**: addresses the mailbox
+  owner has written to that `connectors.gmail.addresses` does not
+  cover. Nothing from them is in the record until someone adds them
+  to `matter.yaml`; `connectors.gmail.ignore_unlisted` silences noise.
+
 Habit that goes with it: one session per task. The month of transcripts
 that motivated this had twenty sessions running for days carrying four
 fifths of all calls.

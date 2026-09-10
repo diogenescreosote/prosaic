@@ -154,7 +154,15 @@ agent CLI is named (ADR-0020). Its promises:
   TODO.md, recent `docket` commits, sync and inbox state, and the routine
   commands --- the SessionStart hook installed by the harness bundle runs
   it, so a session begins from the brief rather than the knowledge file
-  (ADR-0040). *(tested: tests/test_harness_bundle)*
+  (ADR-0040). *(tested: tests/test_harness_bundle)* Above all of that,
+  a failing connector is the first line (`!! CONNECTOR FAILURE: …`),
+  and directly under the case line the brief announces what the mail
+  connector did since the last brief (floor: one day, because the hook
+  also fires on resume and compact): threads exported, inbound first;
+  unsent drafts sitting in captured threads; and correspondents the
+  owner has written to whom `connectors.gmail.addresses` does not
+  cover. Each section appears only when it has something to say.
+  *(tested: tests/test_mail_guard.py)*
 - **`sc open <envelope|path…> [--variant V] [--print-only]`** opens an
   envelope's built PDFs in the system viewer (newest variant plus the
   envelope root when variants exist) and prints the paths; a missing

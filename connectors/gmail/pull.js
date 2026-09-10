@@ -18,6 +18,20 @@
 //       - address: someone@example.com
 //         after: 2024/04/01
 //     quoted: show          # show (default) | hide, in the rendered PDF
+//     ignore_unlisted:      # addresses/domains never reported as unlisted
+//       - newsletter.example
+//
+// The address list is the only capture criterion. What the connector
+// adds beside it is a WATCH on the list's edges, never a second net:
+//   - after each listing it reads the metadata (To/Cc/Date/Subject,
+//     never a body) of the mailbox owner's SENT messages in the same
+//     window and writes every recipient the list does not cover to
+//     .state/gmail_unlisted.json, so a correspondent the owner has
+//     written to but nobody listed is named in the brief instead of
+//     silently absent from the record;
+//   - a thread's unsent drafts are counted in its ledger entry
+//     (draftCount, latestDraftAt) so the brief can say a reply is
+//     still sitting in Drafts.
 //
 // Credentials: OAuth client keys + one token per account live in
 // $PROSAIC_GMAIL_CREDS_DIR (default ~/.config/prosaic/gmail/); see
@@ -451,6 +465,176 @@ async function captureThread(gmail, threadId, mboxPath, { known = [] } = {}) {
   };
 }
 
+// --- unlisted correspondents -------------------------------------------
+//
+// The address list defines the corpus (spec promise 6) and nothing here
+// widens it. But a list is only as complete as the last person who
+// edited it, and the mailbox owner writing to someone is the strongest
+// signal that the someone belongs on it. So each run looks at the
+// owner's SENT messages in the same window — headers only, never a
+// body, nothing exported — and reports every recipient the list does
+// not cover. The brief prints the report; a human edits matter.yaml.
+
+const UNLISTED_STATE = 'gmail_unlisted';
+const UNLISTED_LIMIT = 200; // sent messages examined per run
+const NOISE_LOCALS = /^(no-?reply|noreply|do-?not-?reply|donotreply|notifications?|mailer-daemon|postmaster|bounce|alerts?)([+.-]|$)/i;
+
+/** Every address in a To/Cc header value, lowercased. */
+function parseAddresses(headerValue) {
+  if (!headerValue) return [];
+  const out = [];
+  const re = /<([^<>\s]+@[^<>\s]+)>|([^\s<>,;"']+@[^\s<>,;"']+)/g;
+  let m;
+  while ((m = re.exec(headerValue))) out.push((m[1] || m[2]).toLowerCase().replace(/[.,;]+$/, ''));
+  return out;
+}
+
+/** Gmail treats dots and +tags in the local part as the same mailbox. */
+function canonicalAddress(address) {
+  const a = String(address || '').toLowerCase().trim();
+  const at = a.lastIndexOf('@');
+  if (at === -1) return a;
+  let local = a.slice(0, at);
+  const domain = a.slice(at + 1);
+  if (domain === 'gmail.com' || domain === 'googlemail.com') {
+    local = local.split('+')[0].replace(/\./g, '');
+    return `${local}@gmail.com`;
+  }
+  return `${local.split('+')[0]}@${domain}`;
+}
+
+/**
+ * Does a configured entry (address, bare domain, or {address}) cover
+ * this recipient? A bare domain covers the domain and its subdomains,
+ * exactly as Gmail's from:/to: domain match does.
+ */
+function addressCovered(address, entries) {
+  const a = canonicalAddress(address);
+  const domain = a.slice(a.lastIndexOf('@') + 1);
+  for (const entry of entries || []) {
+    const e = String(typeof entry === 'string' ? entry : entry && entry.address).toLowerCase().trim();
+    if (!e) continue;
+    if (e.includes('@')) {
+      if (canonicalAddress(e) === a) return true;
+    } else if (domain === e || domain.endsWith(`.${e}`)) {
+      return true;
+    }
+  }
+  return false;
+}
+
+/** Automated senders and the owner's own mailboxes are never "correspondents". */
+function isNoiseAddress(address, ownAddresses = []) {
+  const a = canonicalAddress(address);
+  if (ownAddresses.some((o) => canonicalAddress(o) === a)) return true;
+  return NOISE_LOCALS.test(a.slice(0, a.lastIndexOf('@')));
+}
+
+/**
+ * Recipients of the owner's sent mail that no configured entry covers,
+ * newest first, one row per address. Pure over the injected client:
+ * messages.list for `in:sent` in the window, then metadata-only
+ * messages.get (To, Cc, Date, Subject). No body is ever requested.
+ */
+async function collectUnlisted(gmail, { addresses, ignore = [], ownAddresses = [], newerThanDays, limit = UNLISTED_LIMIT }) {
+  const ids = [];
+  let pageToken;
+  const q = `in:sent newer_than:${newerThanDays}d`;
+  do {
+    const res = await apiCall(
+      (o) => gmail.users.messages.list({ userId: 'me', q, maxResults: Math.min(100, limit - ids.length), pageToken }, o),
+      'messages.list in:sent'
+    );
+    for (const m of res.data.messages || []) if (ids.length < limit) ids.push(m);
+    pageToken = ids.length < limit ? res.data.nextPageToken : undefined;
+  } while (pageToken);
+
+  const found = new Map();
+  const metas = await mapLimit(ids, METADATA_CONCURRENCY, async (stub) => {
+    const res = await apiCall(
+      (o) => gmail.users.messages.get({ userId: 'me', id: stub.id, format: 'metadata', metadataHeaders: ['To', 'Cc', 'Date', 'Subject'] }, o),
+      `messages.get ${stub.id}`
+    );
+    return res.data;
+  });
+  for (const msg of metas) {
+    const headers = (msg.payload && msg.payload.headers) || [];
+    const dateStr = getHeader(headers, 'Date');
+    const date = dateStr && !Number.isNaN(Date.parse(dateStr)) ? new Date(dateStr).toISOString() : null;
+    const subject = getHeader(headers, 'Subject') || 'no_subject';
+    const recipients = [...parseAddresses(getHeader(headers, 'To')), ...parseAddresses(getHeader(headers, 'Cc'))];
+    for (const address of recipients) {
+      if (isNoiseAddress(address, ownAddresses)) continue;
+      if (addressCovered(address, addresses) || addressCovered(address, ignore)) continue;
+      const prev = found.get(address);
+      if (prev && prev.date && date && prev.date >= date) continue;
+      found.set(address, {
+        address,
+        domain: address.slice(address.lastIndexOf('@') + 1),
+        date,
+        subject,
+        threadId: msg.threadId || null,
+      });
+    }
+  }
+  return [...found.values()].sort((a, b) => String(b.date || '').localeCompare(String(a.date || '')));
+}
+
+/**
+ * Merge this run's findings into .state/gmail_unlisted.json. An address
+ * already recorded keeps its newest sighting; one the list now covers
+ * (someone edited matter.yaml) or that ignore_unlisted names is dropped,
+ * so the report only ever names what is still uncaptured.
+ */
+function mergeUnlisted(previous, rows, { addresses, ignore = [], windowDays }) {
+  const byAddress = {};
+  for (const row of Object.values((previous && previous.correspondents) || {})) {
+    if (row && row.address && !addressCovered(row.address, addresses) && !addressCovered(row.address, ignore)) {
+      byAddress[row.address] = row;
+    }
+  }
+  for (const row of rows) {
+    const prev = byAddress[row.address];
+    if (!prev || !prev.date || (row.date && row.date > prev.date)) byAddress[row.address] = row;
+  }
+  return {
+    version: 1,
+    updatedAt: new Date().toISOString(),
+    windowDays,
+    correspondents: byAddress,
+  };
+}
+
+async function reportUnlisted(ctx, gmail, userEmail, windowDays) {
+  const { cfg, matterDir, dryRun } = ctx;
+  const ownAddresses = [userEmail, ...(cfg.accounts || []).filter((a) => typeof a === 'string')];
+  let rows;
+  try {
+    rows = await collectUnlisted(gmail, {
+      addresses: cfg.addresses,
+      ignore: cfg.ignore_unlisted || [],
+      ownAddresses,
+      newerThanDays: windowDays,
+    });
+  } catch (err) {
+    console.error(`[${userEmail}] unlisted-correspondent check failed: ${err.message}`);
+    return null;
+  }
+  const previous = loadState(matterDir, UNLISTED_STATE, {});
+  const merged = mergeUnlisted(previous, rows, {
+    addresses: cfg.addresses,
+    ignore: cfg.ignore_unlisted || [],
+    windowDays,
+  });
+  const n = Object.keys(merged.correspondents).length;
+  console.error(
+    `[${userEmail}] ${n} correspondent(s) the address list does not cover` +
+      (n ? ` (see .state/${UNLISTED_STATE}.json; add to connectors.gmail.addresses to capture)` : '')
+  );
+  if (!dryRun) saveState(matterDir, UNLISTED_STATE, merged);
+  return merged;
+}
+
 // --- main -------------------------------------------------------------
 
 //: Flags that take a value, so the value is not mistaken for the
@@ -496,19 +680,33 @@ async function fetchThreadMeta(gmail, t) {
       ),
     `threads.get ${t.id}`
   );
-  const msgs = (res.data.messages || []).filter(isNotDraft);
+  const all = res.data.messages || [];
+  const msgs = all.filter(isNotDraft);
   if (msgs.length === 0) return null;
   const firstMsg = msgs[0];
   const subject = getHeader(firstMsg.payload.headers, 'Subject') || 'no_subject';
   const dateStr = getHeader(firstMsg.payload.headers, 'Date');
   const date = dateStr ? new Date(dateStr) : new Date();
   const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
+  //: Drafts are not mail (see isNotDraft), but a reply that never left
+  //: Drafts is a fact the matter needs: the record would otherwise show
+  //: a letter answered when nothing went out. Counted, never captured.
+  const drafts = all.filter((m) => !isNotDraft(m));
+  const draftDates = drafts
+    .map((m) => getHeader((m.payload && m.payload.headers) || [], 'Date'))
+    .filter(Boolean)
+    .map((s) => new Date(s))
+    .filter((d) => !Number.isNaN(d.getTime()));
   return {
     threadId: t.id,
     historyId: t.historyId,
     subject,
     messageCount: msgs.length,
     messageIds: msgs.map((m) => m.id),
+    draftCount: drafts.length,
+    latestDraftAt: draftDates.length
+      ? new Date(Math.max(...draftDates.map((d) => d.getTime()))).toISOString()
+      : null,
     defaultFilename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
   };
 }
@@ -548,6 +746,9 @@ async function pullAccountListed(ctx, account) {
     cfg.addresses,
     plan.full ? {} : { newerThanDays: plan.newerThanDays }
   );
+  //: The watch on the list's edges. A full listing has no window; the
+  //: sent-mail check then looks back one full-listing period.
+  await reportUnlisted(ctx, gmail, userEmail, plan.full ? FULL_LIST_EVERY_DAYS : plan.newerThanDays);
   const seen = new Set();
   const uniqueThreads = threadList.filter((t) => {
     if (seen.has(t.id)) return false;
@@ -619,6 +820,8 @@ async function pullAccountListed(ctx, account) {
           historyId: meta.historyId,
           messageCount: meta.messageCount,
           messageIds: meta.messageIds,
+          draftCount: meta.draftCount || 0,
+          latestDraftAt: meta.latestDraftAt || null,
         };
         if (!dryRun) saveState(ctx.matterDir, 'gmail', state);
       }
@@ -716,6 +919,9 @@ async function pullAccountListed(ctx, account) {
         historyId: meta.historyId,
         messageCount: meta.messageCount,
         messageIds: meta.messageIds,
+        draftCount: meta.draftCount || 0,
+        latestDraftAt: meta.latestDraftAt || null,
+        subject: meta.subject,
         filename: meta.filename,
         mbox: path.relative(outDir, mboxPath),
         exportedAt: new Date().toISOString(),
@@ -951,6 +1157,13 @@ module.exports = {
   loadLedger,
   ledgerFor,
   claimedFilenames,
+  fetchThreadMeta,
+  parseAddresses,
+  canonicalAddress,
+  addressCovered,
+  isNoiseAddress,
+  collectUnlisted,
+  mergeUnlisted,
 };
 
 if (require.main === module) {

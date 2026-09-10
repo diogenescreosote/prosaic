@@ -53,7 +53,7 @@ RUN_MODE="manual"; [ "$SCHEDULED" = 1 ] && RUN_MODE="scheduled"; [ "$WATCH" = 1 
 SOURCE="${BASH_SOURCE[0]}"
 while [ -L "$SOURCE" ]; do SOURCE="$(readlink "$SOURCE")"; done
 PROSAIC_ROOT="${PROSAIC_ROOT:-$(cd "$(dirname "$SOURCE")/.." && pwd)}"
-CONNECTORS_DIR="$PROSAIC_ROOT/connectors"
+CONNECTORS_DIR="${PROSAIC_CONNECTORS_DIR:-$PROSAIC_ROOT/connectors}"
 # Local modules (ADR-0032): a gitignored local/ overlay may carry extra
 # connectors; the local copy wins when a name exists in both.
 LOCAL_CONNECTORS_DIR="$PROSAIC_ROOT/local/connectors"
@@ -96,22 +96,72 @@ log() { echo "[$(date '+%Y-%m-%d %H:%M:%S')] $*" >> "$LOG_FILE"; }
 # and the standup agenda read, so a failed connector is seen the next
 # morning rather than found in a log weeks later.
 CONNECTOR_STATUS=""
+CONNECTOR_HINTS=""   # name=hint pairs, '|' separated; what a human must do
 write_summary() {   # $1 = outcome word, $2 = new-file count, $3 = triage status
   mkdir -p "$STATE_DIR"
   local py; py="$(sc_python 2>/dev/null || echo python3)"
-  "$py" - "$STATE_DIR/sync_last_run.json" "$RUN_MODE" "$RUN_STARTED" "$1" "$2" "$3" "$CONNECTOR_STATUS" <<'PY' 2>/dev/null || true
-import json, sys, time
-path, mode, started, outcome, new, triage, conns = sys.argv[1:8]
+  "$py" - "$STATE_DIR/sync_last_run.json" "$RUN_MODE" "$RUN_STARTED" "$1" "$2" "$3" "$CONNECTOR_STATUS" "$CONNECTOR_HINTS" <<'PY' 2>/dev/null || true
+import json, os, sys, time
+path, mode, started, outcome, new, triage, conns, hints = sys.argv[1:9]
 status = {}
 for item in conns.split():
     name, _, st = item.partition("=")
     status[name] = st
+failed = sorted(n for n, st in status.items() if st != "ok")
+hint_map = {}
+for item in [h for h in hints.split("|") if h]:
+    name, _, hint = item.partition("=")
+    hint_map[name] = hint
+# A failure is a streak, not a moment: the brief must say how long the
+# record has been blind, so the first failing run's time and the count
+# of failing runs carry forward until a run with no failures.
+prev = {}
+if os.path.exists(path):
+    try:
+        prev = json.load(open(path))
+    except Exception:
+        prev = {}
+if failed and mode != "watch":
+    first_failure = prev.get("first_failure") if prev.get("failed_connectors") else None
+    first_failure = first_failure or int(started)
+    failed_runs = int(prev.get("failed_runs_since_success") or 0) + 1 if prev.get("failed_connectors") else 1
+elif mode == "watch":
+    first_failure = prev.get("first_failure")
+    failed_runs = int(prev.get("failed_runs_since_success") or 0)
+else:
+    first_failure, failed_runs = None, 0
 json.dump({"mode": mode, "started": int(started), "finished": int(time.time()),
            "outcome": outcome, "new_files": int(new or 0), "triage": triage,
            "connectors": status,
-           "failed_connectors": sorted(n for n, st in status.items() if st != "ok")},
+           "failed_connectors": failed,
+           "failure_hints": {n: hint_map[n] for n in failed if n in hint_map},
+           "first_failure": first_failure,
+           "failed_runs_since_success": failed_runs},
           open(path, "w"), indent=1)
 PY
+}
+
+# A connector that fails has left the record blind; that is worth an
+# interruption, every run, until it is fixed. macOS only; anywhere else
+# the log line is the alert. PROSAIC_NO_NOTIFY=1 silences it (tests).
+notify_failure() {   # $1 = message
+  log "NOTIFY: $1"
+  [ -n "${PROSAIC_NO_NOTIFY:-}" ] && return 0
+  [ "$(uname -s 2>/dev/null)" = "Darwin" ] || return 0
+  command -v osascript >/dev/null 2>&1 || return 0
+  local msg; msg="$(printf '%s' "$1" | sed 's/["\\]/ /g')"
+  osascript -e "display notification \"$msg\" with title \"prosaic: $MATTER_NAME\" subtitle \"connector failure\"" >/dev/null 2>&1 || true
+}
+
+# What a failed connector's output says a human must do next.
+failure_hint() {   # $1 = connector name, $2 = its stderr file
+  if grep -q "invalid_grant" "$2" 2>/dev/null; then
+    echo "token rejected --- run: node connectors/$1/auth.js"
+  elif grep -qi "no token at" "$2" 2>/dev/null; then
+    echo "not authorized --- run: node connectors/$1/auth.js"
+  else
+    echo "see $(basename "$LOG_FILE")"
+  fi
 }
 
 # --- sanity: matter reachable (cloud-synced volume may be unmounted) ---------
@@ -188,6 +238,8 @@ PY
 
 [ "$WATCH" = 1 ] || NEW_LIST=$(mktemp)
 FAILURES=0
+FAILED_NAMES=""
+FAILED_HINT=""
 
 SC_PY="$(sc_python)" || {
   log "ERROR: no python3 with PyYAML found (tried PROSAIC_PYTHON, PATH, common locations)."
@@ -215,18 +267,30 @@ for name in $CONNECTORS; do
   fi
   log "CONNECTOR $name start"
   # The pipe's status is sed's, not node's, so a crashed connector used
-  # to log `ok` and advance the success guard. Test node's status.
-  NODE_PATH="$CONNECTORS_DIR/node_modules" node "$entry" "$MATTER_DIR" 2>> "$LOG_FILE" \
+  # to log `ok` and advance the success guard. Test node's status. Its
+  # stderr is kept for the run so a failure can say what to do about it.
+  ERR_TMP="$(mktemp)"
+  NODE_PATH="$CONNECTORS_DIR/node_modules" node "$entry" "$MATTER_DIR" 2> "$ERR_TMP" \
       | sed -n "s/^NEW /$name /p" >> "$NEW_LIST"
-  if [ "${PIPESTATUS[0]}" = 0 ]; then
+  status="${PIPESTATUS[0]}"
+  cat "$ERR_TMP" >> "$LOG_FILE"
+  if [ "$status" = 0 ]; then
     log "CONNECTOR $name ok"
     CONNECTOR_STATUS="$CONNECTOR_STATUS $name=ok"
   else
-    log "ERROR: connector $name failed (exit ${PIPESTATUS[0]})"
+    hint="$(failure_hint "$name" "$ERR_TMP")"
+    log "ERROR: connector $name failed (exit $status): $hint"
     CONNECTOR_STATUS="$CONNECTOR_STATUS $name=failed"
+    CONNECTOR_HINTS="$CONNECTOR_HINTS|$name=$hint"
+    FAILED_NAMES="${FAILED_NAMES:+$FAILED_NAMES, }$name"
+    FAILED_HINT="$hint"
     FAILURES=$((FAILURES+1))
   fi
+  rm -f "$ERR_TMP"
 done
+if [ "$FAILURES" != 0 ]; then
+  notify_failure "$FAILED_NAMES failed; the record is not receiving new mail/documents. $FAILED_HINT"
+fi
 
 # --- text coverage -----------------------------------------------------------
 # Every document the matter holds gets a page-marked text sidecar (and an

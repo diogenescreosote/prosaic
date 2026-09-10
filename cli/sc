@@ -1196,6 +1196,173 @@ def _last_run(matter: Path) -> dict:
         return {}
 
 
+def _read_json(p: Path) -> dict:
+    if not p.is_file():
+        return {}
+    try:
+        data = json.loads(p.read_text())
+    except (json.JSONDecodeError, OSError):
+        return {}
+    return data if isinstance(data, dict) else {}
+
+
+def _fmt_ts(ts) -> str:
+    import datetime as dt
+    try:
+        if isinstance(ts, (int, float)):
+            return dt.datetime.fromtimestamp(ts).strftime("%Y-%m-%d %H:%M")
+        d = dt.datetime.fromisoformat(str(ts).replace("Z", "+00:00"))
+        return d.astimezone().strftime("%Y-%m-%d %H:%M")
+    except (ValueError, TypeError, OverflowError):
+        return str(ts)
+
+
+def connector_failure_line(run: dict) -> str | None:
+    """The one line that goes above everything else in the brief when a
+    connector is failing: which one, since when, and what to do. A blind
+    record is the first fact of the session, not a footnote."""
+    bad = run.get("failed_connectors") or []
+    if not bad:
+        return None
+    since = run.get("first_failure") or run.get("started")
+    hints = run.get("failure_hints") or {}
+    parts = []
+    for name in bad:
+        hint = hints.get(name)
+        parts.append(f"{name}" + (f" --- {hint}" if hint else ""))
+    n = run.get("failed_runs_since_success") or 1
+    return (f"!! CONNECTOR FAILURE: {'; '.join(parts)} (since {_fmt_ts(since)}, {n} failed run(s)). "
+            "Nothing from the failing connector has reached the record since then.")
+
+
+def _gmail_ledger_threads(matter: Path) -> list[tuple[str, dict, dict]]:
+    """(account, thread id, entry) for every thread in the gmail ledger."""
+    state = _read_json(matter / ".state" / "gmail.json")
+    out = []
+    for account, ledger in (state.get("accounts") or {}).items():
+        for tid, entry in (ledger.get("threads") or {}).items():
+            if isinstance(entry, dict):
+                out.append((account, {"id": tid, "identity": ledger.get("identity") or account}, entry))
+    return out
+
+
+def _mbox_last_from(matter: Path, entry: dict) -> tuple[str, str]:
+    """(from, subject) of the newest message in a thread's mbox, cheaply:
+    the file is read once, headers only. Falls back to the ledger."""
+    import mailbox
+    subject = entry.get("subject") or Path(entry.get("filename") or "").stem
+    rel = entry.get("mbox")
+    if not rel:
+        return "", subject
+    p = matter / "assets" / "gmail" / rel
+    if not p.is_file():
+        return "", subject
+    try:
+        msgs = list(mailbox.mbox(str(p)))
+    except Exception:
+        return "", subject
+    if not msgs:
+        return "", subject
+    last = msgs[-1]
+    return str(last.get("From") or ""), str(msgs[0].get("Subject") or subject)
+
+
+def new_correspondence(matter: Path, since_ts: float) -> list[str]:
+    """Threads the gmail connector exported after `since_ts`, inbound
+    first, each as `date --- from --- subject --- filename`."""
+    import datetime as dt
+    rows = []
+    for _account, meta, entry in _gmail_ledger_threads(matter):
+        exported = entry.get("exportedAt")
+        if not exported:
+            continue
+        try:
+            when = dt.datetime.fromisoformat(exported.replace("Z", "+00:00")).timestamp()
+        except ValueError:
+            continue
+        if when <= since_ts:
+            continue
+        sender, subject = _mbox_last_from(matter, entry)
+        identity = str(meta.get("identity") or "")
+        own = identity.split("<")[-1].rstrip(">").strip().lower()
+        inbound = bool(sender) and own not in sender.lower()
+        domain = sender.split("@")[-1].rstrip("> ").strip() if "@" in sender else (sender or "?")
+        rows.append((0 if inbound else 1, -when,
+                     f"{_fmt_ts(exported)} --- {'from' if inbound else 'to/own'} {domain} --- {subject[:90]} --- {entry.get('filename', '')}"))
+    rows.sort()
+    return [r[2] for r in rows]
+
+
+def unsent_drafts(matter: Path) -> list[str]:
+    rows = []
+    for _account, _meta, entry in _gmail_ledger_threads(matter):
+        n = int(entry.get("draftCount") or 0)
+        if n <= 0:
+            continue
+        subject = entry.get("subject") or Path(entry.get("filename") or "").stem
+        when = entry.get("latestDraftAt")
+        rows.append((str(when or ""), f"{subject[:90]} --- {n} draft(s)" + (f", latest {_fmt_ts(when)}" if when else "")
+                     + f" --- {entry.get('filename', '')}"))
+    rows.sort(reverse=True)
+    return [r[1] for r in rows]
+
+
+def unlisted_correspondents(matter: Path) -> list[str]:
+    data = _read_json(matter / ".state" / "gmail_unlisted.json")
+    rows = []
+    for row in (data.get("correspondents") or {}).values():
+        if not isinstance(row, dict) or not row.get("address"):
+            continue
+        rows.append((str(row.get("date") or ""), f"{row['address']} --- {_fmt_ts(row.get('date')) if row.get('date') else '?'} --- {str(row.get('subject') or '')[:80]}"))
+    rows.sort(reverse=True)
+    return [r[1] for r in rows]
+
+
+def mail_watch_sections(matter: Path, since_ts: float) -> list[str]:
+    """The mail-watch block of the brief: what arrived, what never left,
+    who is not being captured. Empty when there is nothing to say."""
+    lines: list[str] = []
+    fresh = new_correspondence(matter, since_ts)
+    if fresh:
+        lines += ["", f"## New correspondence since {_fmt_ts(since_ts)} ({len(fresh)})"]
+        lines += [f"- {r}" for r in fresh[:25]]
+    drafts = unsent_drafts(matter)
+    if drafts:
+        lines += ["", f"## Unsent drafts in captured threads ({len(drafts)})"]
+        lines += [f"- {r}" for r in drafts[:15]]
+        lines.append("- a draft is not a reply; nothing above has been sent")
+    unlisted = unlisted_correspondents(matter)
+    if unlisted:
+        lines += ["", f"## Correspondents not on the address list ({len(unlisted)})"]
+        lines += [f"- {r}" for r in unlisted[:25]]
+        lines.append("- add to connectors.gmail.addresses in matter.yaml to capture; nothing from them is in the record "
+                     "(connectors.gmail.ignore_unlisted silences noise)")
+    return lines
+
+
+#: The window the brief's "new correspondence" section covers: since the
+#: previous brief, but never less than a day, because the hook also fires
+#: on resume and compact and a letter must not vanish from the brief the
+#: same morning it arrived.
+BRIEF_MIN_WINDOW_SECONDS = 86400
+
+
+def _brief_window(matter: Path) -> float:
+    import time
+    p = matter / ".state" / "brief_last.json"
+    prev = _read_json(p).get("at")
+    now = time.time()
+    since = now - BRIEF_MIN_WINDOW_SECONDS
+    if isinstance(prev, (int, float)):
+        since = min(since, float(prev))
+    try:
+        p.parent.mkdir(parents=True, exist_ok=True)
+        p.write_text(json.dumps({"at": now}))
+    except OSError:
+        pass
+    return since
+
+
 def refine_inputs(matter: Path, since_days: int = 1) -> str:
     """Everything the refinement agent may read, gathered deterministically
     so the agent starts from facts rather than from a scan of the tree."""
@@ -1443,6 +1610,11 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     cfg = yaml.safe_load((matter / "matter.yaml").read_text()) or {}
     case = cfg.get("case") or {}
     lines: list[str] = []
+    run = _last_run(matter)
+    failure = connector_failure_line(run)
+    if failure:
+        lines.append(failure)
+        lines.append("")
     name = case.get("name") or matter.name
     head = f"# Matter brief: {name}"
     bits = [b for b in (case.get("number"), case.get("court")) if b]
@@ -1459,6 +1631,10 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     rel = (cfg.get("related_matters") or [])
     if rel:
         lines.append(f"- related matters searched by `/find`: {', '.join(str(r) for r in rel)}")
+    try:
+        lines.extend(mail_watch_sections(matter, _brief_window(matter)))
+    except Exception as exc:  # the brief must never fail on a ledger error
+        lines.append(f"- mail watch: unavailable ({type(exc).__name__})")
 
     env_file = matter / "envelopes.yaml"
     if env_file.is_file():
@@ -1517,8 +1693,9 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     lines.append("## State")
     guard = matter / ".state" / "sync_last_success"
     if guard.is_file():
-        lines.append(f"- last successful sync: {_age(guard.stat().st_mtime)}")
-    run = _last_run(matter)
+        n_failed = int(run.get("failed_runs_since_success") or 0) if run.get("failed_connectors") else 0
+        lines.append(f"- last successful sync: {_age(guard.stat().st_mtime)}"
+                     + (f" ({n_failed} failed run(s) since)" if n_failed else ""))
     if run:
         bad = run.get("failed_connectors") or []
         lines.append(f"- last {run.get('mode')} run: {run.get('outcome')}, {run.get('new_files', 0)} new, "

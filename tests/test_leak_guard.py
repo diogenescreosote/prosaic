@@ -108,6 +108,16 @@ def test_commit_messages_contain_no_prior_matter_content() -> None:
 ALLOWED_EMAILS = frozenset(
     {
         "andrewpcone@gmail.com",  # the author's own published contact
+        # Fixtures for the gmail connector's address canonicalization
+        # (tests/test_mail_guard.py): dots and +tags are meaningful only
+        # on gmail.com, so the rule cannot be exercised on example.com.
+        # Nonsense locals, no person behind any of them.
+        "First.Last+tag@gmail.com",
+        "firstlast@gmail.com",
+        "owner+service@gmail.com",
+        "o.w.ner@gmail.com",
+        "me+service@gmail.com",
+        "m.e@gmail.com",
     }
 )
 

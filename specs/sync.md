@@ -72,6 +72,18 @@ collecting evidence and nobody notices until a filing deadline.
   triage result and per-connector status, so the brief and the standup
   agenda can show a failed connector (ADR-0044). *(tested: watch mode
   smoke test)*
+- **A failing connector interrupts, every run, until fixed.** A
+  connector's failure leaves the record blind, which is worse than
+  anything it could have pulled. So a failed run posts a desktop
+  notification (macOS; elsewhere the log line is the alert;
+  `PROSAIC_NO_NOTIFY=1` silences it) naming the matter, the connector
+  and what to do --- a rejected or missing OAuth token says
+  `run: node connectors/<name>/auth.js` --- and the summary carries the
+  streak: `first_failure` (when the record went blind),
+  `failed_runs_since_success`, and `failure_hints`. `sc brief` prints
+  that as its first line, above the case name, and the "last successful
+  sync" line counts the failed runs since. *(tested:
+  tests/test_mail_guard.py)*
 - **`--watch` triages what landed.** Fired by launchd on a change under
   `inbox/`, it runs no connectors, skips files still being written and
   files it has already listed, and hands the rest to triage under the

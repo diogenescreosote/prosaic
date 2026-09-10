@@ -134,6 +134,27 @@ what is stored, and can be produced again.
    bounds sit well under Gmail's 250-units-per-second per-user quota.
    Ledger writes stay ordered; results keep input order. *(tested)*
 
+13. **The list's edges are watched; the list is never widened.** The
+    address list is the only capture criterion (promise 6), and its
+    failure mode is silence: a correspondent nobody listed leaves no
+    trace in the record, however much they matter. So every run also
+    reads the *metadata* of the mailbox owner's own sent messages in
+    the same window --- To, Cc, Date, Subject; never a body; capped at
+    200 messages --- and writes every recipient the list does not cover
+    to `.state/gmail_unlisted.json` (one row per address, newest
+    sighting, dropped once the list covers it). The brief prints the
+    report; `connectors.gmail.ignore_unlisted` silences addresses and
+    domains that are noise, and automated locals (`noreply`,
+    `notifications`, `mailer-daemon`, …) and the owner's own mailboxes
+    are never reported. Nothing is exported from that check.
+    *(tested: tests/test_mail_guard.py)*
+14. **An unsent draft is reported, not captured.** A thread's ledger
+    entry records how many `DRAFT`-labelled messages it holds and the
+    newest one's date (`draftCount`, `latestDraftAt`), so the brief
+    can say that a reply is still sitting in Drafts --- the record
+    would otherwise show a letter answered when nothing went out.
+    *(tested: tests/test_mail_guard.py)*
+
 ## Non-obvious constraints
 
 - **The mbox is deliberately not announced.** The connector contract
@@ -186,4 +207,6 @@ connectors:
         after: 2024/04/01            # Gmail search bounds (optional)
     quoted: show                     # show (default) | hide, in the PDF
     out_dir: assets/gmail            # optional
+    ignore_unlisted:                 # never reported as uncaptured
+      - newsletter.example
 ```

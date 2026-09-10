@@ -105,8 +105,13 @@ already holds the FDA grant and no `prosaic-runner` exists, the installer
 keeps using it.
 
 Every sync or watch run writes `.state/sync_last_run.json` (mode,
-outcome, new files, triage result, per-connector status); `sc brief`
-and the standup agenda read it.
+outcome, new files, triage result, per-connector status, and for a
+failure the streak: `first_failure`, `failed_runs_since_success`,
+`failure_hints`); `sc brief` and the standup agenda read it. A run
+with a failed connector also posts a macOS notification naming the
+matter, the connector and the fix (a rejected OAuth token says
+`run: node connectors/gmail/auth.js`); set `PROSAIC_NO_NOTIFY=1` to
+silence it.
 
 Headless jobs run under a role: triage as `agent-run --role triage`,
 refinement as `--role refine`. A role's model and turn cap come from the
