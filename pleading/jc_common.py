@@ -12,6 +12,9 @@ Extracted from the original per-form fillers; behavior is unchanged.
 
 from __future__ import annotations
 
+import re
+import sys
+
 from pathlib import Path
 from typing import Optional
 
@@ -113,8 +116,33 @@ def attorney_block_lines(meta: dict, max_lines: int = 4) -> list[str]:
         for x in (meta.get("filer_address_lines") or [])
         if str(x).strip() and not (str(x).strip().startswith("[") and str(x).strip().endswith("]"))
     ]
+    address = _join_unit_lines(address)
     lines = [ln for ln in [line1, *address] if ln]
+    if len(lines) > max_lines:
+        # Dropping a line silently loses the city or the ZIP, and the
+        # form still looks filled. Say so; the caller may pass a larger
+        # max_lines or the author may shorten the address.
+        print(f"WARNING: attorney block has {len(lines)} lines; only {max_lines} fit, "
+              f"dropping: {lines[max_lines:]!r}", file=sys.stderr)
     return lines[:max_lines] + [""] * (max_lines - len(lines))
+
+
+_UNIT_DESIGNATOR = re.compile(
+    r"^(?:PMB|Suite|Ste\.?|Apt\.?|Apartment|Unit|Bldg\.?|Building|Fl\.?|Floor|Rm\.?|Room|#)\b",
+    re.IGNORECASE)
+
+
+def _join_unit_lines(address: list[str]) -> list[str]:
+    """Fold a unit designator ("PMB 224", "Suite 300", "#4") onto the
+    street line before it: postal style, and one line fewer in a block
+    whose box holds three or four."""
+    out: list[str] = []
+    for ln in address:
+        if out and _UNIT_DESIGNATOR.match(ln):
+            out[-1] = f"{out[-1]}, {ln}"
+        else:
+            out.append(ln)
+    return out
 
 
 def filer_address_parts(meta: dict) -> dict:

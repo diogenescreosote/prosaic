@@ -90,6 +90,43 @@ def test_filer_role_binding_is_verbatim():
     assert jc_common.AUTO_BINDINGS["filer_role"]({}) == ""
 
 
+def test_attorney_block_folds_unit_designator_and_keeps_city():
+    """A PMB/Suite/Apt line joins the street line, postal style, so a
+    four-line box never loses the city line; and nothing is dropped
+    silently when the block does fit."""
+    lines = jc_common.attorney_block_lines({
+        "filer_name": "Jane Roe",
+        "filer_address_lines": ["100 Main St", "PMB 42", "Springfield, CA 90000"],
+    })
+    assert lines == ["Jane Roe", "100 Main St, PMB 42", "Springfield, CA 90000", ""]
+    lines = jc_common.attorney_block_lines({
+        "filer_name": "Jane Roe",
+        "filer_address_lines": ["Roe & Doe LLP", "100 Main St", "Suite 300", "Springfield, CA 90000"],
+    })
+    assert lines == ["Jane Roe", "Roe & Doe LLP", "100 Main St, Suite 300", "Springfield, CA 90000"]
+
+
+def test_attorney_block_warns_instead_of_silently_truncating(capsys):
+    lines = jc_common.attorney_block_lines({
+        "filer_name": "Jane Roe",
+        "filer_address_lines": ["Roe & Doe LLP", "Tower Two", "100 Main St", "Springfield, CA 90000"],
+    })
+    assert len(lines) == 4
+    err = capsys.readouterr().err
+    assert "WARNING" in err and "Springfield, CA 90000" in err
+
+
+def test_multiline_fit_leaves_room_for_viewer_leading():
+    """Four 9 pt lines in a 45 pt box: 1.15x leading says it fits, real
+    viewers clip the last line. The fit must shrink instead."""
+    import form_fill
+    text = "Jane Roe\n100 Main St, PMB 42\nSpringfield, CA 90000\nfourth line"
+    r = form_fill.fit_text(text, [0, 0, 350, 45.2], {"fit": "shrink_wrap", "multiline": True})
+    assert r.fits
+    assert r.font_size < 9.0
+    assert len(r.lines) == 4
+
+
 def test_attorney_for_self_represented():
     assert jc_common.attorney_for({"filer_role": "Respondent, In Pro Per"}) == (
         "Respondent, In Pro Per")

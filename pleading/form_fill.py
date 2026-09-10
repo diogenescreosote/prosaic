@@ -139,6 +139,11 @@ DEFAULT_FONT = "Helvetica"
 DEFAULT_FONT_SIZE = 9.0
 DEFAULT_MIN_FONT_SIZE = 6.0
 LEADING_RATIO = 1.15
+# Multiline widgets: viewers lay out AcroForm text at roughly 1.2-1.3x
+# the font size and inset it ~2 pt top and bottom, so a block judged to
+# fit at 1.15x with no inset clips its last line in Preview and Acrobat.
+MULTILINE_LEADING_RATIO = 1.3
+MULTILINE_INSET = 2.0
 
 # E-sign field taxonomy: the least common multiple of DocuSeal,
 # DocuSign, and Dropbox Sign field types — every type here maps onto a
@@ -402,7 +407,7 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
         widest = max((stringWidth(l, font, size) for l in lines), default=0.0)
         if len(lines) > 1:
-            fits_h = len(lines) * size * LEADING_RATIO <= height
+            fits_h = len(lines) * size * MULTILINE_LEADING_RATIO + MULTILINE_INSET <= height
         else:
             # Single line: viewers vertically center the text in the
             # widget, and JC forms routinely give one-line fields a rect
