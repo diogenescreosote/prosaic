@@ -74,6 +74,7 @@ of the court**, no appearance required.
   authors to state concrete, case-specific reasons.
 - **The blank is the pinned 2012-01 revision**; the descriptor-vs-blank
   test alarms on drift, like every registered form.
-- **XFA must be stripped after filling** (LiveCycle hybrid, same
-  generation as SUBP-010), and the page-3 privacy-banner underlay is
-  painted out by a whiteout.
+- **The output is flattened** (the blank is a LiveCycle hybrid of the
+  same generation as SUBP-010; its form layer never reaches the service
+  copy, ADR-0046), and the page-3 privacy-banner underlay is painted out
+  by a whiteout.

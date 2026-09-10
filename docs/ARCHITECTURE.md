@@ -26,7 +26,7 @@ pleading/       the renderer and the form filler.
   md_to_txt.py        plain-text envelopes, for filings that take them.
   build_envelope.py   assembles the sources named in envelopes.yaml into
                       one filing packet, incrementally and dependency-aware.
-  form_fill.py        one AcroForm engine, driven by the YAML descriptors
+  form_fill.py        one overlay form engine, driven by the YAML descriptors
                       in forms/registry/. Jurisdiction knowledge lives in
                       the descriptors, never in the engine (ADR-0006).
   ocr_supplement.py   adds a text layer only to pages that lack one.

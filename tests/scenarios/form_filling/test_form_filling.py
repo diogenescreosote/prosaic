@@ -61,30 +61,36 @@ def test_each_notice_names_its_own_consumer_and_carries_the_caption(built_subpoe
     # name legitimately appears in every caption; "MARY MAJOR" does not.)
     expected = {"john_smith": ("JOHN SMITH", "MARY MAJOR"),
                 "mary_major": ("MARY MAJOR", "Example Bank")}
+    # The envelope build stamps a banner on these (they are drafts), which
+    # scales the page content, so the checks read page text rather than
+    # probing rectangles.
     for slug, (mine, foreign) in expected.items():
         pdf = out_dir / f"Subpoena to Example Bank.subp025.{slug}.pdf"
-        vals = scenario.widget_values(pdf)
-        addressed = [v for n, v in vals if n.endswith("SubTitle1[0].FillText1[0]")]
-        assert addressed == [mine], f"{pdf.name}: TO (name) = {addressed}"
-        assert foreign not in " ".join(v for _n, v in vals), (
-            f"{pdf.name} carries the other notice's values")
+        assert scenario.has_no_form_layer(pdf), f"{pdf.name}: not flattened"
+        p1, p2 = scenario.page_text(pdf, 1), scenario.page_text(pdf, 2)
+        assert f"TO (name): {mine}" in " ".join(p1.split()), f"{pdf.name}: TO (name) missing {mine!r}"
+        assert foreign not in p1 + p2, f"{pdf.name} carries the other notice's values"
         # Caption on both pages, from the same front matter as the subpoena.
-        assert sum(1 for _n, v in vals if v == "24CV00000") == 2
-        text = scenario.pdf_text(pdf)
-        assert "NOTICE TO CONSUMER OR EMPLOYEE" in text
-        assert "September 15, 2026" in text, "production date missing from the notice"
+        assert "24CV00000" in p1 and "24CV00000" in p2
+        assert "NOTICE TO CONSUMER OR EMPLOYEE" in p1
+        assert "September 15, 2026" in p1, "production date missing from the notice"
 
 
 def test_notice_signature_and_service_blocks_stay_blank(built_subpoena):
     """The notice is signed and served by humans; the recipient owns the
-    objection half. Nothing on either may arrive pre-filled."""
+    objection half and page 2's two proofs of service. Nothing on either
+    may arrive pre-filled: page 2 carries no notice value at all beyond
+    the caption echo, and the filer's name appears on page 1 exactly
+    where it is ours — the attorney block and the (TYPE OR PRINT NAME)
+    line — and nowhere else."""
     _m, _p, out_dir = built_subpoena
+    filer_name = "Jane Roe"  # the scenario source's filer_name
     for pdf in out_dir.glob("*.subp025.*.pdf"):
-        for name, value in scenario.widget_values(pdf):
-            if any(tok in name for tok in ("Date1[0]", "Sign2[0]", "Sign3[0]",
-                                           "Sign4[0]", "TextField6[0]",
-                                           "TextField7[0]")):
-                assert not value.strip(), f"{pdf.name}: {name} = {value!r}"
+        p1, p2 = scenario.page_text(pdf, 1), scenario.page_text(pdf, 2)
+        for value in (filer_name, "September 15, 2026", "Example Bank",
+                      "Example Employer", "JANE ROE, Respondent"):
+            assert value not in p2, f"{pdf.name}: {value!r} on the recipient's page 2"
+        assert p1.count(filer_name) == 2, f"{pdf.name}: filer name count on page 1"
 
 
 def test_notice_is_a_separate_document_not_part_of_the_subpoena(built_subpoena):

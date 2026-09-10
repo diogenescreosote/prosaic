@@ -309,52 +309,99 @@ def test_module_repo_forms_are_discovered(tmp_path, monkeypatch):
     assert form_fill.blank_path(loaded).exists()
 
 
-# --- ADR-0037: AcroForm filling is prohibited ------------------------------
+# --- ADR-0037 / ADR-0046: overlay is the only technology --------------------
 
 
-def test_a_new_non_overlay_descriptor_is_refused(tmp_path):
-    """No new form may be authored the AcroForm way.
-
-    The rule has to bite at load, not at review: an agent copying the
-    shape of an older descriptor would otherwise reproduce a fill whose
-    rendering is a property of the reader rather than of the file.
-    """
+@pytest.mark.parametrize("technology", ["acroform", "xfa", "Overlay ", "pdf"])
+def test_any_other_technology_is_refused(technology, tmp_path):
+    """The rule bites at load, not at review: an agent copying the shape
+    of a descriptor from another era would otherwise reproduce a fill
+    whose rendering is a property of the reader rather than the file."""
     import yaml
     desc = yaml.safe_load(
-        "form: zz999\nblank: zz999.pdf\ntechnology: acroform\nfields: {}\n"
+        f"form: zz999\nblank: zz999.pdf\ntechnology: {technology}\nfields: {{}}\n"
     )
-    with pytest.raises(ValueError, match="not permitted"):
+    if technology.strip().lower() == "overlay":
+        form_fill._require_overlay("zz999", desc, tmp_path / "zz999.yaml")
+        return
+    with pytest.raises(ValueError, match="ADR-0046"):
         form_fill._require_overlay("zz999", desc, tmp_path / "zz999.yaml")
 
 
-def test_a_listed_legacy_form_warns_but_still_loads(capsys, tmp_path):
+def test_a_descriptor_without_a_technology_key_is_refused(tmp_path):
+    """No default: a descriptor states how it fills, or it does not load."""
     import yaml
-    desc = yaml.safe_load(
-        "form: mc050\nblank: mc050.pdf\ntechnology: acroform\nfields: {}\n"
-    )
-    form_fill._require_overlay("mc050", desc, tmp_path / "mc050.yaml")
-    assert "ADR-0037" in capsys.readouterr().err
+    desc = yaml.safe_load("form: zz999\nblank: zz999.pdf\nfields: {}\n")
+    with pytest.raises(ValueError, match="no technology key"):
+        form_fill._require_overlay("zz999", desc, tmp_path / "zz999.yaml")
 
 
-def test_overlay_passes_without_complaint(capsys, tmp_path):
-    import yaml
-    desc = yaml.safe_load(
-        "form: zz999\nblank: zz999.pdf\ntechnology: overlay\nfields: {}\n"
-    )
-    form_fill._require_overlay("zz999", desc, tmp_path / "zz999.yaml")
-    assert capsys.readouterr().err == ""
+def test_every_registered_descriptor_declares_overlay():
+    """There is no legacy list any more (ADR-0046); the registry itself
+    is the proof."""
+    for form_id in form_fill.list_forms():
+        assert form_fill.load_descriptor(form_id).get("technology") == "overlay", form_id
 
 
-def test_the_legacy_list_only_shrinks():
-    """A canary on the list itself.
+def test_no_form_layer_code_survives():
+    """The form-layer path was deleted, not disabled: nothing in the
+    engine writes a field value, strips XFA, or sets NeedAppearances."""
+    import inspect
+    src = inspect.getsource(form_fill)
+    for token in ("LEGACY_ACROFORM_FORMS", "update_page_form_field_values",
+                  "NeedAppearances", "_strip_xfa", "_apply_font_size"):
+        assert token not in src, token
 
-    The list is debt, enumerated so it stays visible. This pins its
-    current contents so that adding to it is a deliberate act someone has
-    to justify, rather than the path of least resistance when a new form
-    is awkward to overlay.
-    """
-    assert form_fill.LEGACY_ACROFORM_FORMS <= {
-        "civ110", "efs020", "mc025", "mc030", "mc050",
-        "subp001", "subp002", "subp010", "subp025",
-        "fl323", "fl327", "fl330", "fl335",
-    }
+
+# --- ADR-0046: text is centered in its box -----------------------------------
+
+
+def _origin(lines, rect, size=9.0, **kw):
+    return form_fill.text_origins(lines, rect, size, form_fill.DEFAULT_FONT, **kw)
+
+
+def test_single_line_centers_in_its_box_by_default():
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    rect = [100.0, 500.0, 300.0, 520.0]
+    [(x, y)] = _origin(["24CV000123"], rect)
+    w = stringWidth("24CV000123", form_fill.DEFAULT_FONT, 9.0)
+    assert x == pytest.approx(200.0 - w / 2.0)
+    assert y == pytest.approx(510.0 - 9.0 * 0.36)
+
+
+def test_a_block_anchors_top_left_by_default():
+    rect = [100.0, 500.0, 300.0, 560.0]
+    origins = _origin(["Jane Roe", "100 Main St, PMB 42", "Springfield, CA 90000"], rect)
+    xs = [x for x, _y in origins]
+    ys = [y for _x, y in origins]
+    assert xs == [pytest.approx(100.0 + form_fill.TEXT_INSET)] * 3
+    assert ys[0] == pytest.approx(560.0 - 9.0)
+    assert ys[1] - ys[2] == pytest.approx(9.0 * form_fill.LEADING_RATIO)
+    assert ys[2] > 500.0, "the last line stays inside the box"
+
+
+def test_align_and_valign_overrides():
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    rect = [100.0, 500.0, 300.0, 520.0]
+    w = stringWidth("x", form_fill.DEFAULT_FONT, 9.0)
+    [(xl, yt)] = _origin(["x"], rect, align="left", valign="top")
+    [(xr, yb)] = _origin(["x"], rect, align="right", valign="bottom")
+    assert xl == pytest.approx(100.0 + form_fill.TEXT_INSET)
+    assert xr == pytest.approx(300.0 - form_fill.TEXT_INSET - w)
+    assert yt == pytest.approx(520.0 - 9.0)
+    assert yb == pytest.approx(500.0 + form_fill.TEXT_INSET)
+    with pytest.raises(ValueError, match="align"):
+        _origin(["x"], rect, align="middle")
+
+
+def test_centered_text_never_leaves_its_box():
+    """Every origin lies inside the rect, and a fitted line's extent does
+    too — the property the rule exists for."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    rect = [37.5, 56.5, 394.9, 101.8]   # a real attorney-block box
+    fit = form_fill.fit_text("Andrew Roe\n100 Main St, PMB 42\nSpringfield, CA 90000",
+                             rect, {"fit": "shrink_wrap", "multiline": True})
+    assert fit.fits
+    for line, (x, y) in zip(fit.lines, _origin(fit.lines, rect, fit.font_size)):
+        assert rect[0] <= x and x + stringWidth(line, form_fill.DEFAULT_FONT, fit.font_size) <= rect[2]
+        assert rect[1] <= y <= rect[3] - fit.font_size * 0.72

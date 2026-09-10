@@ -65,12 +65,12 @@ wants testimony wants a different form, not a different checkbox.
    driven by case metadata. *(tested:
    test_mandatory_blanks_survive_a_rich_fill covers the pos_* text
    fields; pos_* checkboxes have no defaults)*
-7. **The output is a clean service copy**: the XFA layer is stripped
-   so viewers render the values we filled, the Print/Save/Clear
-   buttons and the privacy banner are removed, and the gray block the
-   banner leaves behind is painted out. *(tested:
-   test_xfa_layer_stripped_from_output; the whiteout is confirmed by
-   the AI visual judgment)*
+7. **The output is a clean service copy**: flattened ink with no form
+   layer at all (ADR-0046), so every viewer renders the values we drew;
+   the Print/Save/Clear buttons and the privacy banner are removed, and
+   the gray block the banner leaves behind is painted out. *(tested:
+   test_output_carries_no_form_layer; the whiteout is confirmed by the
+   AI visual judgment)*
 8. **The descriptor matches the shipped blank's revision**
    (Rev. January 1, 2012), including the two odd checkbox on-states.
    *(tested: test_descriptor_matches_blank)*

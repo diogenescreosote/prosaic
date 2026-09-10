@@ -42,9 +42,10 @@ revision: "2012-01"           # form face: "SUBP-002 [Rev. January 1, 2012]"
 source_url: https://courts.ca.gov/documents/subp002.pdf
 blank: subp002.pdf
 
-# XFA: LiveCycle hybrid, same generation as SUBP-010; the engine
-# strips /XFA after filling so AcroForm values actually display.
-technology: xfa
+# Overlay: every value is drawn at its widget's rectangle and the
+# output is flattened, so the blank's LiveCycle/XFA layer never reaches
+# a service copy (ADR-0046).
+technology: overlay
 
 # UI chrome under SUBP-002[0].#pageSet[0].LastPage[0].P3Footer[0].
 # FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,

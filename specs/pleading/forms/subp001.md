@@ -42,8 +42,9 @@ SUBP-010/015/020.
 
 - **The blank is the pinned 2007-01 revision**; the
   descriptor-vs-blank test alarms on drift.
-- **XFA must be stripped after filling** (LiveCycle hybrid), and the
-  page-2 privacy-banner underlay is painted out by a whiteout.
+- **The output is flattened** (the blank is a LiveCycle hybrid whose
+  form layer never reaches the service copy, ADR-0046), and the page-2
+  privacy-banner underlay is painted out by a whiteout.
 - The item-1a department/division/room selector checkboxes use
   on-state `/Yes`, while the page-2 proof-of-service boxes use `/1`
   except the registered-photocopier and § 22451 boxes, which use `/3`

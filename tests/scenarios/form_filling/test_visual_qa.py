@@ -35,7 +35,10 @@ META = {
 # form -> (realistic data, form-specific rubric emphasis)
 CASES = {
     "mc030": ({}, "the body should read 'See attached Declaration of JANE ROE.'; "
-                  "date, signature, and all role checkboxes empty"),
+                  "the (TYPE OR PRINT NAME) line under the signature IS filled "
+                  "with the declarant's name JANE ROE — that is correct and "
+                  "expected; only the date, the signature line itself, and all "
+                  "role checkboxes are empty"),
     "mc025": ({"attachment_number": "9",
                "body": "Continued facts in support of the motion."},
               "short title 'JOHN SMITH v. JANE ROE', case number, attachment "
@@ -103,7 +106,10 @@ def test_ai_form_render_is_court_ready(form_id, tmp_path):
             "(≥ ~8pt), semantically in the RIGHT field; nothing clipped, "
             "struck through by rules, or overlapping; no leftover "
             "interactive buttons or privacy banners; fields that belong to "
-            "the court, a signer, or a future human are EMPTY. "
+            "the court, a signer, or a future human are EMPTY. The small "
+            "solid black arrowhead printed at the left end of each signature "
+            "line is part of the Judicial Council's blank form (it points the "
+            "signer to the line) and is NOT a filled value or a defect. "
             f"Form-specific: {emphasis}. Judge every page provided."),
         hard_failures=[
             "a signature or signature-date line is pre-filled",

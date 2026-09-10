@@ -29,8 +29,10 @@ revision: "2007-01"           # form face: "SUBP-001 [Rev. January 1, 2007]"
 source_url: https://courts.ca.gov/documents/subp001.pdf
 blank: subp001.pdf
 
-# XFA: LiveCycle hybrid; the engine strips /XFA after filling.
-technology: xfa
+# Overlay: every value is drawn at its widget's rectangle and the
+# output is flattened, so the blank's LiveCycle/XFA layer never reaches
+# a service copy (ADR-0046).
+technology: overlay
 
 # UI chrome under SUBP-001[0].#pageSet[0].LastPage[0].PXFooter[0].
 # FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,

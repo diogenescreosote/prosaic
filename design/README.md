@@ -66,6 +66,7 @@ project accretes decisions instead of middleware.
 - [0043](adr/0043-knowledge-is-a-vault-of-notes.md) Knowledge is a vault of typed notes with front matter; Obsidian-compatible, Obsidian-optional; `sc knowledge`
 - [0044](adr/0044-standby-supervisor.md) A standby supervisor per matter: inbox watcher, honest sync summaries, agent roles, nightly refine that proposes, the daily standup
 - [0045](adr/0045-preflight-review-is-optional.md) Preflight review is four optional persona checks with hash-tied reports and computed staleness; never a gate
+- [0046](adr/0046-overlay-is-the-only-form-technology.md) Form-layer filling removed outright; overlay is the only technology, required explicitly; text centers in its box
 
 Also:
 

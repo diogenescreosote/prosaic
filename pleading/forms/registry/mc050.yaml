@@ -19,7 +19,7 @@ domain: ca/civil
 revision: "2009-01"           # form face: "MC-050 [Rev. January 1, 2009]"
 source_url: https://courts.ca.gov/sites/default/files/courts/default/2024-11/mc050.pdf
 blank: mc050.pdf
-technology: acroform
+technology: overlay           # draw at each widget's rect and flatten (ADR-0046)
 
 # Interactive-use chrome stripped from filing copies: privacy banners
 # and Save/Print/Clear buttons (identical set to mc025/mc030).
@@ -29,21 +29,25 @@ fields:
   # -- Page 1: attorney/party block --------------------------------------
   attorney_line1:
     map: FillText45
+    align: left
     page: 1
     doc: "Attorney/party block line 1 — name (and SBN)"
     auto: attorney_line1
   attorney_line2:
     map: FillText43
+    align: left
     page: 1
     doc: "Attorney/party block line 2 — firm or street address"
     auto: attorney_line2
   attorney_line3:
     map: FillText42
+    align: left
     page: 1
     doc: "Attorney/party block line 3"
     auto: attorney_line3
   attorney_line4:
     map: FillText41
+    align: left
     page: 1
     doc: "Attorney/party block line 4"
     auto: attorney_line4

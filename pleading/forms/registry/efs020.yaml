@@ -14,7 +14,7 @@ domain: ca/general             # e-filing cover sheet; any CA case type
 revision: "2017-02"            # form revision this map was verified against
 source_url: https://courts.ca.gov/documents/efs020.pdf
 blank: efs020.pdf
-technology: xfa                # XFA layer is stripped; flat AcroForm is filled
+technology: overlay            # draw at each widget's rect and flatten (ADR-0046)
 
 # Interactive-use chrome stripped from filing copies: Save/Print/Clear
 # buttons. (XFA leaf widget names carry an "[0]" index suffix.)

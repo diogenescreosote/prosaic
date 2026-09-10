@@ -17,9 +17,11 @@ import pytest
 
 PLEADING = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLEADING))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import form_fill  # noqa: E402
 import jc_common  # noqa: E402
+import probe  # noqa: E402
 
 from pypdf import PdfReader  # noqa: E402
 
@@ -116,17 +118,6 @@ def test_attorney_block_warns_instead_of_silently_truncating(capsys):
     assert "WARNING" in err and "Springfield, CA 90000" in err
 
 
-def test_multiline_fit_leaves_room_for_viewer_leading():
-    """Four 9 pt lines in a 45 pt box: 1.15x leading says it fits, real
-    viewers clip the last line. The fit must shrink instead."""
-    import form_fill
-    text = "Jane Roe\n100 Main St, PMB 42\nSpringfield, CA 90000\nfourth line"
-    r = form_fill.fit_text(text, [0, 0, 350, 45.2], {"fit": "shrink_wrap", "multiline": True})
-    assert r.fits
-    assert r.font_size < 9.0
-    assert len(r.lines) == 4
-
-
 def test_attorney_for_self_represented():
     assert jc_common.attorney_for({"filer_role": "Respondent, In Pro Per"}) == (
         "Respondent, In Pro Per")
@@ -214,60 +205,14 @@ def test_smoke_fill(form_id, tmp_path):
     assert not drift, f"{form_id}: {drift}"
 
     desc = form_fill.load_descriptor(form_id)
-    reader = PdfReader(str(out))
     has_case_number = any(spec.get("auto") == "case_number"
                           for spec in (desc.get("fields") or {}).values())
-    if desc.get("technology") == "overlay":
-        # Overlay outputs are flattened: no form machinery at all, and
-        # the values live in the page CONTENT, not in field /V's.
-        assert not (reader.get_fields() or {}), (
-            f"{form_id}: overlay output must carry no AcroForm fields")
-        if has_case_number:
-            text = "".join(p.extract_text() for p in reader.pages)
-            assert "24CV00000" in text, (
-                f"{form_id}: case number not drawn into page content")
-    else:
-        # The case number must actually land in some field's /V.
-        fields = reader.get_fields() or {}
-        values = " | ".join(str(f.get("/V") or "") for f in fields.values())
-        if has_case_number:
-            assert "24CV00000" in values, f"{form_id}: case number not present in field values"
-
-
-@pytest.mark.parametrize("form_id", FORMS)
-def test_blank_default_fields_are_never_set_as_empty_string(form_id, tmp_path, monkeypatch):
-    """A field left at its default "" must never reach pypdf as an
-    explicit empty-string value via ``update_page_form_field_values``.
-
-    Caught by hand, filling a real CIV-110: pypdf's generated appearance
-    stream for an explicitly-set empty text value computes a vertical
-    text position that lands a few ULPs off zero (e.g.
-    "7.105427357601002e-15") and writes it in Python's scientific
-    notation, which is not a valid PDF real number token -- the
-    resulting `Td` operator is unparseable garbage to a strict reader
-    (poppler included), even though the field is invisible either way.
-    Reproducing the exact float-precision coincidence needs specific
-    field geometry that fictional fixture data doesn't reliably hit, so
-    this asserts the actual invariant the fix establishes -- an empty
-    string is never handed to pypdf as a value to set -- rather than
-    chasing the byte pattern it happens to produce.
-    """
-    from pypdf import PdfWriter
-
-    calls = []
-    original = PdfWriter.update_page_form_field_values
-
-    def recording(self, page, values, *args, **kwargs):
-        calls.append(dict(values))
-        return original(self, page, values, *args, **kwargs)
-
-    monkeypatch.setattr(PdfWriter, "update_page_form_field_values", recording)
-
-    out = tmp_path / f"{form_id}.pdf"
-    form_fill.fill(form_id, out, meta=dict(FIXTURE_META))
-
-    empties = [name for call in calls for name, v in call.items() if v == ""]
-    assert not empties, f"{form_id}: empty-string value(s) set explicitly: {empties}"
+    # A fill is flattened: no form machinery at all, and the values
+    # live in the page CONTENT (ADR-0046).
+    assert probe.has_no_form_layer(out), f"{form_id}: output must carry no form layer"
+    if has_case_number:
+        assert "24CV00000" in probe.all_text(out), (
+            f"{form_id}: case number not drawn into page content")
 
 
 @pytest.mark.skipif("mc025" not in FORMS, reason="mc025 descriptor not present")
@@ -280,9 +225,7 @@ def test_overflow_spills_to_mc025(tmp_path):
     base_pages = len(PdfReader(str(form_fill.blank_path(
         form_fill.load_descriptor("mc030")))).pages)
     assert len(reader.pages) > base_pages, "MC-025 attachment page(s) not appended"
-    fields = reader.get_fields() or {}
-    values = " ".join(str(f.get("/V") or "") for f in fields.values())
-    assert "See Attachment 1." in values
+    assert "See Attachment 1." in probe.page_text(out, 1).replace("\n", " ")
 
 
 def test_unknown_data_key_is_reported(tmp_path):
@@ -366,16 +309,13 @@ def test_civ110_dismissal_and_pleading_type_checkboxes_render_checked(tmp_path):
         "cross_complaint_1_name": "JOHN SMITH",
     })
 
-    reader = PdfReader(str(out))
-    fields = reader.get_fields() or {}
-    desc = form_fill.load_descriptor("civ110")
-
     def value_of(logical_name, section="checkboxes"):
-        mapped = desc[section][logical_name]["map"]
-        return str((fields.get(mapped) or {}).get("/V") or "")
+        if section == "fields":
+            return probe.field_text(out, "civ110", logical_name)
+        return probe.CHECK_MARK if probe.checkbox_marked(out, "civ110", logical_name) else ""
 
-    assert value_of("dismissal_with_prejudice") == "/1"
-    assert value_of("pleading_type_cross_complaint_1") == "/Yes"
+    assert value_of("dismissal_with_prejudice") == probe.CHECK_MARK
+    assert value_of("pleading_type_cross_complaint_1") == probe.CHECK_MARK
     assert value_of("cross_complaint_1_date", "fields") == "1/1/2026"
     assert value_of("cross_complaint_1_name", "fields") == "JOHN SMITH"
 
@@ -401,10 +341,6 @@ def test_civ110_dismissal_checkboxes_default_unchecked_on_a_rich_fill(tmp_path):
     out = tmp_path / "civ110_no_checkboxes.pdf"
     form_fill.fill("civ110", out, meta=dict(FIXTURE_META))
 
-    reader = PdfReader(str(out))
-    fields = reader.get_fields() or {}
-    desc = form_fill.load_descriptor("civ110")
-
     checkbox_names = [
         "dismissal_with_prejudice", "dismissal_without_prejudice",
         "dismissal_without_prejudice_664_6", "pleading_type_complaint",
@@ -419,12 +355,7 @@ def test_civ110_dismissal_checkboxes_default_unchecked_on_a_rich_fill(tmp_path):
         "item3_role_plaintiff_petitioner", "item3_role_defendant_respondent",
         "item3_role_cross_complainant",
     ]
-    leaks = []
-    for name in checkbox_names:
-        mapped = desc["checkboxes"][name]["map"]
-        v = (fields.get(mapped) or {}).get("/V")
-        if v:
-            leaks.append(f"{name} -> {mapped} = {v!r}")
+    leaks = [name for name in checkbox_names if probe.checkbox_marked(out, "civ110", name)]
     assert not leaks, f"machine checked a box without human instruction: {leaks}"
 
     text_names = ["cross_complaint_1_date", "cross_complaint_1_name",
@@ -432,10 +363,9 @@ def test_civ110_dismissal_checkboxes_default_unchecked_on_a_rich_fill(tmp_path):
                   "pleading_type_other_specify"]
     leaks = []
     for name in text_names:
-        mapped = desc["fields"][name]["map"]
-        v = str((fields.get(mapped) or {}).get("/V") or "")
+        v = probe.field_text(out, "civ110", name)
         if v.strip():
-            leaks.append(f"{name} -> {mapped} = {v!r}")
+            leaks.append(f"{name} = {v!r}")
     assert not leaks, f"machine filled a fill-in without human instruction: {leaks}"
 
 
@@ -449,16 +379,9 @@ def test_civ110_fee_waiver_checkboxes_render_checked(tmp_path):
     form_fill.fill("civ110", out, meta=dict(FIXTURE_META), data={
         "fee_waiver_did_not": True,
     })
-    reader = PdfReader(str(out))
-    fields = reader.get_fields() or {}
-    desc = form_fill.load_descriptor("civ110")
-
-    def value_of(name):
-        mapped = desc["checkboxes"][name]["map"]
-        return str((fields.get(mapped) or {}).get("/V") or "")
-
-    assert value_of("fee_waiver_did_not") == "/2"
-    assert value_of("fee_waiver_did") == "", "sibling fee-waiver box unexpectedly checked"
+    assert probe.checkbox_marked(out, "civ110", "fee_waiver_did_not")
+    assert not probe.checkbox_marked(out, "civ110", "fee_waiver_did"), (
+        "sibling fee-waiver box unexpectedly checked")
 
 
 @pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
@@ -483,19 +406,15 @@ def test_civ110_item2_role_and_identification_checkboxes_do_not_leak_to_item3(tm
         "item3_signer_is_attorney": True,
         "item3_role_cross_complainant": True,
     })
-    reader = PdfReader(str(out))
-    fields = reader.get_fields() or {}
-    desc = form_fill.load_descriptor("civ110")
 
     def value_of(name):
-        mapped = desc["checkboxes"][name]["map"]
-        return str((fields.get(mapped) or {}).get("/V") or "")
+        return probe.checkbox_marked(out, "civ110", name)
 
     # The two checkboxes actually asked for, on each side, must land.
-    assert value_of("item2_signer_is_party") == "/2"
-    assert value_of("item2_role_defendant_respondent") == "/Yes"
-    assert value_of("item3_signer_is_attorney") == "/1"
-    assert value_of("item3_role_cross_complainant") == "/Yes"
+    assert value_of("item2_signer_is_party")
+    assert value_of("item2_role_defendant_respondent")
+    assert value_of("item3_signer_is_attorney")
+    assert value_of("item3_role_cross_complainant")
 
     # Every OTHER checkbox in both blocks -- including each block's own
     # sibling options and, critically, the other block's copy of the
@@ -539,14 +458,9 @@ def test_mc050_consent_and_service_fields_stay_blank(tmp_path):
     }
     form_fill.fill("mc050", out, meta=dict(FIXTURE_META), data=dict(rich_data))
 
-    reader = PdfReader(str(out))
-    fields = reader.get_fields() or {}
+    def value_of(name):
+        return probe.field_text(out, "mc050", name)
 
-    def value_of(map_name):
-        f = fields.get(map_name)
-        return str((f or {}).get("/V") or "")
-
-    desc = form_fill.load_descriptor("mc050")
     blank_fields = [
         "item4_date", "item4_print_name",
         "item5_date", "item5_print_name",
@@ -557,23 +471,21 @@ def test_mc050_consent_and_service_fields_stay_blank(tmp_path):
     ]
     leaks = []
     for name in blank_fields:
-        mapped = desc["fields"][name]["map"]
-        v = value_of(mapped)
+        v = value_of(name)
         if v.strip():
-            leaks.append(f"{name} -> {mapped} = {v!r}")
+            leaks.append(f"{name} = {v!r}")
     assert not leaks, f"machine filled human/event-owned fields: {leaks}"
 
     blank_checkboxes = ["item5_consent_applies", "item6_consent_applies"]
     for name in blank_checkboxes:
-        mapped = desc["checkboxes"][name]["map"]
-        f = fields.get(mapped) or {}
-        assert not f.get("/V"), f"{name} -> {mapped} was checked by a rich fill"
+        assert not probe.checkbox_marked(out, "mc050", name), (
+            f"{name} was checked by a rich fill")
 
     # And confirm the rich data DID land where it belongs, so this test
     # cannot pass by accident (e.g. a broken fill that fills nothing).
-    assert value_of("FillText29") == "JOHN SMITH"          # substituting_party_name
-    assert value_of("FillText27") == "Sam Sattler, Esq."   # new_rep_name
-    assert value_of("FillText51") == "Jane Roe"            # pos_recipient_1_name
+    assert value_of("substituting_party_name") == "JOHN SMITH"
+    assert value_of("new_rep_name") == "Sam Sattler, Esq."
+    assert value_of("pos_recipient_1_name") == "Jane Roe"
 
 
 @pytest.mark.skipif("subp010" not in FORMS or "mc025" not in FORMS,
@@ -583,19 +495,10 @@ class TestSubp010RecordsAttachment:
     must become 'See Attachment 3.' + an MC-025, with the form's own
     'Continued on Attachment 3.' box reflecting what happened."""
 
-    ATTACH_CB = "List3[0].item3[0].limited1[0]"
-
-    def _widget_values(self, path):
-        vals = []
-        for _p, name, obj in form_fill.iter_widgets(PdfReader(str(path))):
-            v = obj.get("/V")
-            if v is None and obj.get("/Parent") is not None:
-                v = obj["/Parent"].get_object().get("/V")
-            vals.append((name, "" if v is None else str(v)))
-        return vals
+    ATTACH_CB = "continued_on_attachment_3"
 
     def _attachment_box(self, path):
-        return [v for n, v in self._widget_values(path) if n.endswith(self.ATTACH_CB)]
+        return probe.checkbox_marked(path, "subp010", self.ATTACH_CB)
 
     def test_long_demand_overflows_and_checks_the_box(self, tmp_path):
         out = tmp_path / "subp010_overflow.pdf"
@@ -609,17 +512,17 @@ class TestSubp010RecordsAttachment:
         base = len(PdfReader(str(form_fill.blank_path(
             form_fill.load_descriptor("subp010")))).pages)
         assert len(PdfReader(str(out)).pages) > base, "MC-025 not appended"
-        joined = " ".join(v for _n, v in self._widget_values(out)).replace("\n", " ")
+        joined = probe.all_text(out).replace("\n", " ")
         assert "See Attachment 3." in joined
         assert "SENTINEL7742" in joined, "records demand truncated"
-        assert self._attachment_box(out) == ["/1"]
+        assert self._attachment_box(out)
 
     def test_short_demand_fits_and_unchecks_the_box(self, tmp_path):
         out = tmp_path / "subp010_inline.pdf"
         res = form_fill.fill("subp010", out, meta=dict(FIXTURE_META),
                              data={"records_description": "Personnel file."})
         assert not res.overflows
-        assert self._attachment_box(out) == [""], (
+        assert not self._attachment_box(out), (
             "a demand that fits inline must clear 'Continued on Attachment 3.'")
 
     def test_cover_sheet_flow_keeps_the_box_checked(self, tmp_path):
@@ -627,7 +530,7 @@ class TestSubp010RecordsAttachment:
         default stands and the box stays checked."""
         out = tmp_path / "subp010_cover.pdf"
         form_fill.fill("subp010", out, meta=dict(FIXTURE_META))
-        assert self._attachment_box(out) == ["/1"]
+        assert self._attachment_box(out)
 
 
 

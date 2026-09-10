@@ -572,28 +572,23 @@ efs020_proceeding_place: "N/A -- chambers"
 The Court has read and considered ...
 ```
 
-### XFA (LiveCycle Designer) cover forms
+### How a cover form is filled and cached
 
-Some Judicial Council forms are LiveCycle Designer (XFA) forms, unlike
-MC-030/CIV-110/EFS020: their AcroForm fields have long hierarchical
-dotted names (e.g.
-`MC-025[0].Page1[0].AttyInfo[0].AttyName_ft[0]`), and the same logical
-checkbox is repeated under different field names
-across pages, so filling one occurrence does not fill the
-others. Field names on such forms are NOT reliable indicators of
-meaning — unrelated items can share identical leaf names, reused from
-whatever template the form's designer copied. See the field-name `doc:`
-comments in the form's registry descriptor
-(`forms/registry/<form_id>.yaml`) if extending one — in particular,
-most checkboxes on a given form share a single "on" state (`/1`), but
-individual checkboxes can differ (`/3` has been observed on a single
-checkbox of an otherwise-uniform form); never assume a shared
-on-state for a new checkbox without checking its `/AP /N`
-state name directly.
+Every Judicial Council form is filled the same way (ADR-0046): the
+descriptor in `forms/registry/<form_id>.yaml` names, for each logical
+field, the widget on the blank whose rectangle the value is drawn
+into, the value is drawn as page content, and the output is flattened
+— no form fields survive, so the filled form renders identically in
+every viewer and survives being merged into a packet. The blank's own
+field names are used only to find rectangles, and they are NOT
+reliable indicators of meaning: LiveCycle-era forms give unrelated
+items identical leaf names copied from whatever template the designer
+used, and the same logical checkbox is often repeated under different
+names across pages. Trust only the `doc:` comments in the descriptor,
+each of which records an empirical fill-render-inspect pass.
 
-These forms go through the same descriptor-driven treatment as every
-other cover sheet: add `cover_sheet: <form_id>` to the YAML front
-matter, and at build time the generator:
+Add `cover_sheet: <form_id>` to the YAML front matter, and at build
+time the generator:
 
 1. Renders the document normally (caption, numbered paragraphs,
    exhibits, signature block — unchanged).
@@ -735,7 +730,11 @@ recipient:
 
 Values shared by every notice go in the ordinary per-form block,
 `forms: subp025:`. Precedence is the usual one: descriptor default →
-caption `auto:` binding → `forms.subp025` → the list entry.
+caption `auto:` binding → `forms.subp025` → the list entry. Checkboxes
+follow the same path as fields: a self-represented subpoenaing party
+sets `signed_by_requesting_party: true` once in `forms: subp025:` and
+every emitted notice carries the REQUESTING PARTY mark by the notice
+signature; an entry may set or clear it for one recipient.
 
 Output: one PDF per entry, written **next to the source's own PDF**
 (never merged into it — each notice is served on a different person),

@@ -11,7 +11,7 @@ domain: ca/general            # usable in any CA case type
 revision: "2006-01"           # form face: "MC-030 [Rev. January 1, 2006]"
 source_url: https://courts.ca.gov/documents/mc030.pdf
 blank: mc030.pdf
-technology: acroform
+technology: overlay           # draw at each widget's rect and flatten (ADR-0046)
 
 # Interactive-use chrome stripped from filing copies: privacy banners
 # and Save/Print/Clear buttons.
@@ -20,21 +20,25 @@ chrome_fields: [WhiteOut, NoticeHeader1, NoticeFooter1, Save, Print, ResetForm]
 fields:
   attorney_line1:
     map: FillText35
+    align: left
     page: 1
     doc: "Attorney/party block line 1 — name (and SBN)"
     auto: attorney_line1
   attorney_line2:
     map: FillText34
+    align: left
     page: 1
     doc: "Attorney/party block line 2 — firm or street address"
     auto: attorney_line2
   attorney_line3:
     map: FillText32
+    align: left
     page: 1
     doc: "Attorney/party block line 3"
     auto: attorney_line3
   attorney_line4:
     map: FillText37
+    align: left
     page: 1
     doc: "Attorney/party block line 4"
     auto: attorney_line4
@@ -100,6 +104,8 @@ fields:
     doc: "Case number"
   body:
     map: FillText19
+    align: left
+    valign: top
     page: 1
     doc: >-
       The declaration body. Practice commonly puts

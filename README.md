@@ -134,7 +134,7 @@ Run the test suite with `uv run pytest`.
   all of them, and overflow spills to an MC-025 attachment rather than
   truncating a filing ([docs/forms.md](docs/forms.md)). Six forms are
   registered: CIV-110, EFS-020, MC-025, MC-030, SUBP-010, SUBP-025. Blank
-  AcroForms for CM-010, CM-110, MC-031, POS-010 and SUM-100 are in
+  forms for CM-010, CM-110, MC-031, POS-010 and SUM-100 are in
   `pleading/forms/` awaiting descriptors.
 - **Companion documents.** A source declares its consumer and employee
   notices as data and the build emits one filled SUBP-025 per recipient

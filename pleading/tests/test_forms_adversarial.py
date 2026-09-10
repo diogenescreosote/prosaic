@@ -1,15 +1,15 @@
 """Adversarial form-filler tests (specs/pleading/forms/README.md).
 
-Principles: assert against the OUTPUT ARTIFACT (widget values, page
-text, page counts), never against the engine's self-reported success;
-plant unique sentinels so truncation anywhere is detected; include
-negative controls proving the alarms can actually fire.
+Principles: assert against the OUTPUT ARTIFACT (the text drawn on the
+page, where it was drawn, page counts), never against the engine's
+self-reported success; plant unique sentinels so truncation anywhere is
+detected; include negative controls proving the alarms can actually
+fire. A fill is flattened ink (ADR-0046), so every probe reads the page.
 """
 
 from __future__ import annotations
 
 import re
-import subprocess
 import sys
 from pathlib import Path
 
@@ -17,8 +17,11 @@ import pytest
 
 PLEADING = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(PLEADING))
+sys.path.insert(0, str(Path(__file__).resolve().parent))
 
 import form_fill  # noqa: E402
+import probe  # noqa: E402
+from probe import page_text  # noqa: E402
 from pypdf import PdfReader  # noqa: E402
 
 FORMS = form_fill.list_forms()
@@ -47,30 +50,12 @@ RICH_META = {
 }
 
 
-def out_widget_values(pdf: Path) -> list[tuple[str, str]]:
-    """(name, /V) tuples — a LIST, because merged attachment pages reuse
-    field names and a dict silently drops all but the last page."""
-    vals = []
-    for _p, name, obj in form_fill.iter_widgets(PdfReader(str(pdf))):
-        v = obj.get("/V")
-        if v is None and obj.get("/Parent") is not None:
-            v = obj["/Parent"].get_object().get("/V")
-        vals.append((name, "" if v is None else str(v)))
-    return vals
-
-
-def page_text(pdf: Path, page_no: int) -> str:
-    return subprocess.run(
-        ["pdftotext", "-f", str(page_no), "-l", str(page_no), str(pdf), "-"],
-        capture_output=True, text=True).stdout
-
-
 # ---------------------------------------------------------------------------
-# Own-name landing: every fillable field, exact widget, no collisions
+# Own-name landing: every fillable field, in its own box, no collisions
 # ---------------------------------------------------------------------------
 
 @pytest.mark.parametrize("form_id", FORMS)
-def test_every_field_lands_in_its_mapped_widget(form_id, tmp_path):
+def test_every_field_lands_in_its_own_box(form_id, tmp_path):
     desc = form_fill.load_descriptor(form_id)
     fields = desc.get("fields") or {}
     # Tokens must be SHORT: on dense table forms (an income/expense
@@ -79,30 +64,23 @@ def test_every_field_lands_in_its_mapped_widget(form_id, tmp_path):
     # poppler drops the mangled glyphs — the token is then "absent"
     # even though the draw landed exactly where the map said. A short
     # token fits inside any real box, so what this test proves stays
-    # exactly what it claims: each field draws on its mapped page (and,
-    # for acroform, in its own widget). Z{i}J is substring-safe: the
-    # index is delimited on both sides, so no token contains another.
+    # exactly what it claims: each field draws inside its own rectangle
+    # on its own page. Z{i}J is substring-safe: the index is delimited
+    # on both sides, so no token contains another.
     tokens = {name: f"Z{i}J" for i, name in enumerate(fields)}
-    data = dict(tokens)
     out = tmp_path / f"{form_id}.pdf"
-    form_fill.fill(form_id, out, meta={}, data=data)
+    form_fill.fill(form_id, out, meta={}, data=dict(tokens))
 
-    vals = dict(out_widget_values(out))  # single form: names unique
-    overlay_form = str(desc.get("technology") or "") == "overlay"
     problems = []
     for name, spec in fields.items():
         token = tokens[name]
-        if overlay_form or spec.get("method") == "overlay":
-            txt = page_text(out, int(spec.get("page", 1)))
-            if token not in txt.replace("\n", " "):
-                problems.append(f"{name}: overlay token absent from page {spec.get('page')}")
+        try:
+            drawn = probe.field_text(out, form_id, name)
+        except KeyError as exc:
+            problems.append(str(exc))
             continue
-        mapped = spec.get("map", "")
-        hit = vals.get(mapped)
-        if hit is None:  # bare-name map
-            hit = next((v for k, v in vals.items() if k.split(".")[-1] == mapped), None)
-        if hit != token:
-            problems.append(f"{name} -> {mapped}: expected own token, got {hit!r}")
+        if token not in drawn.split():
+            problems.append(f"{name}: expected own token in its box, found {drawn!r}")
     assert not problems, f"{form_id}: {problems}"
 
 
@@ -111,7 +89,7 @@ def test_no_two_fields_share_a_widget(form_id):
     desc = form_fill.load_descriptor(form_id)
     seen: dict[str, str] = {}
     for name, spec in (desc.get("fields") or {}).items():
-        if spec.get("method") == "overlay" or not spec.get("map"):
+        if not spec.get("map"):
             continue
         if spec["map"] in seen:
             pytest.fail(f"{form_id}: '{name}' and '{seen[spec['map']]}' both map {spec['map']}")
@@ -144,30 +122,27 @@ def test_mandatory_blanks_survive_a_rich_fill(form_id, tmp_path):
     desc = form_fill.load_descriptor(form_id)
     out = tmp_path / f"{form_id}.pdf"
     form_fill.fill(form_id, out, meta=dict(RICH_META))
-    vals = dict(out_widget_values(out))  # single form: names unique
     leaks = []
     for name in _blank_marked(desc):
-        mapped = desc["fields"][name].get("map", "")
-        v = vals.get(mapped)
-        if v is None:
-            v = next((x for k, x in vals.items() if k.split(".")[-1] == mapped), "")
-        if (v or "").strip():
-            leaks.append(f"{name} -> {mapped} = {v!r}")
+        v = probe.field_text(out, form_id, name)
+        if v.strip():
+            leaks.append(f"{name} = {v!r}")
     assert not leaks, f"{form_id}: machine filled human/court-owned fields: {leaks}"
 
 
 # ---------------------------------------------------------------------------
-# XFA and stress
+# Flattening and stress
 # ---------------------------------------------------------------------------
 
-@pytest.mark.parametrize("form_id", [f for f in FORMS
-                                     if form_fill.load_descriptor(f).get("technology") == "xfa"])
-def test_xfa_layer_stripped_from_output(form_id, tmp_path):
+@pytest.mark.parametrize("form_id", FORMS)
+def test_output_carries_no_form_layer(form_id, tmp_path):
+    """The blank's LiveCycle/XFA packet, its widgets, and its form
+    dictionary are all gone from a fill (ADR-0046): what remains renders
+    the same in every viewer because nothing is left for a viewer to
+    interpret."""
     out = tmp_path / f"{form_id}.pdf"
     form_fill.fill(form_id, out, meta=dict(RICH_META))
-    root = PdfReader(str(out)).trailer["/Root"]
-    assert "/AcroForm" in root and "/XFA" not in root["/AcroForm"].get_object(), (
-        f"{form_id}: XFA layer survived — form will render BLANK in XFA-aware viewers")
+    assert probe.has_no_form_layer(out), f"{form_id}: form machinery survived the fill"
 
 
 @pytest.mark.parametrize("form_id", FORMS)
@@ -191,11 +166,14 @@ def test_multipage_overflow_preserves_every_sentence(tmp_path):
     assert res.overflows
     reader = PdfReader(str(out))
     assert len(reader.pages) >= 4, "multi-page overflow did not span multiple MC-025s"
-    joined = " ".join(v for _n, v in out_widget_values(out)).replace("\n", " ")
+    joined = probe.all_text(out).replace("\n", " ")
     missing = [s for s in sentinels if s not in joined]
     assert not missing, f"overflow text truncated — missing sentinels: {missing[:5]}..."
-    # Page N of M must be filled on multi-page attachments.
-    assert any(v == "2" for _n, v in out_widget_values(out)), "page_number not filled"
+    # Page N of M must be filled on multi-page attachments: the second
+    # MC-025 (page 3 of the output, after MC-030's two) says "2".
+    assert "2" in probe.field_text(out, "mc025", "page_number").split() or any(
+        "2" in probe.text_in_rect(out, i, probe.rect_of("mc025", "page_number")[1]).split()
+        for i in range(2, len(reader.pages))), "page_number not filled"
 
 
 # ---------------------------------------------------------------------------
@@ -265,47 +243,56 @@ class TestConsumerNotices:
         ]
         assert all(p.exists() and p.stat().st_size > 1000 for p in paths)
 
+    # SUBP-025 is overlay-filled and flattened (ADR-0037), so the served
+    # copy has no widgets to read back; these assertions look at the
+    # page text a viewer would show, which is the only thing that matters.
+
     def test_each_notice_addresses_only_its_own_consumer(self, tmp_path):
         smith, major = self._emit(tmp_path)
-        to_field = "SubTitle1[0].FillText1[0]"
         for path, mine, theirs in ((smith, "JOHN SMITH", "MARY MAJOR"),
                                    (major, "MARY MAJOR", "JOHN SMITH")):
-            vals = dict(out_widget_values(path))
-            addressed = [v for k, v in vals.items() if k.endswith(to_field)]
-            assert addressed == [mine], f"{path.name}: TO (name) = {addressed}"
+            p1 = page_text(path, 1)
+            assert mine in p1, f"{path.name}: TO (name) missing {mine!r}"
             # The other recipient's name must appear nowhere in the file:
             # notices are served separately and disclose each other's
             # subjects otherwise.
-            assert theirs not in " ".join(vals.values())
+            assert theirs not in p1 + page_text(path, 2)
 
     def test_shared_block_fills_and_the_entry_overrides_it(self, tmp_path):
         smith, major = self._emit(tmp_path)
-        smith_vals = " | ".join(dict(out_widget_values(smith)).values())
-        assert "JANE ELIZABETH ROE, Respondent" in smith_vals
-        assert "September 15, 2026" in smith_vals
-        assert "Example Bank" in smith_vals
-        major_vals = " | ".join(dict(out_widget_values(major)).values())
-        assert "Example Employer" in major_vals, "entry did not override witness"
-        assert "Example Bank" not in major_vals
+        smith_p1 = page_text(smith, 1)
+        assert "JANE ELIZABETH ROE, Respondent" in smith_p1
+        assert "September 15, 2026" in smith_p1
+        assert "Example Bank" in smith_p1
+        major_p1 = page_text(major, 1)
+        assert "Example Employer" in major_p1, "entry did not override witness"
+        assert "Example Bank" not in major_p1
 
     def test_both_notices_carry_the_caption_on_both_pages(self, tmp_path):
         for path in self._emit(tmp_path):
-            vals = out_widget_values(path)
-            assert sum(1 for _n, v in vals if v == RICH_META["case_number"]) == 2, (
-                f"{path.name}: case number missing from a page's caption")
-            assert sum(1 for _n, v in vals if v == RICH_META["petitioner"]) == 2
+            for page_no in (1, 2):
+                text = page_text(path, page_no)
+                assert RICH_META["case_number"] in text, (
+                    f"{path.name}: case number missing from page {page_no}'s caption")
+                assert RICH_META["petitioner"] in text
 
     def test_notices_leave_the_recipients_half_of_the_form_blank(self, tmp_path):
         """Objection block and both proofs of service belong to other
-        people; nothing in the metadata may leak into them."""
+        people; nothing in the metadata may leak into them. Page 2 is
+        entirely theirs but for the caption echo, so no notice value may
+        appear on it; and the objection half of page 1 has no fields we
+        fill, so the notice values appear on page 1 exactly once each."""
         for path in self._emit(tmp_path):
-            for name, value in out_widget_values(path):
-                leaf = name.split(".")[-1]
-                if any(tok in name for tok in ("Sign2[0]", "Lis1[0]", "Lis2[0]",
-                                               "Lis3[0]")) or name.split(".")[1] == "Page2[0]":
-                    if leaf.startswith(("Party1", "Party2", "CaseNumber")):
-                        continue  # page-2 caption echo is ours
-                    assert not value.strip(), f"{path.name}: {name} = {value!r}"
+            p1, p2 = page_text(path, 1), page_text(path, 2)
+            for value in (self.SHARED["requesting_party"], self.SHARED["production_date"],
+                          RICH_META["filer_name"]):
+                assert value not in p2, f"{path.name}: {value!r} leaked onto page 2"
+            for value in (self.SHARED["requesting_party"], self.SHARED["production_date"]):
+                assert p1.count(value) == 1, f"{path.name}: {value!r} appears {p1.count(value)}x on page 1"
+            # The filer's name is ours twice on page 1 — the attorney
+            # block and the (TYPE OR PRINT NAME) line under the notice
+            # signature — and nowhere else.
+            assert p1.count(RICH_META["filer_name"]) == 2, path.name
 
     def test_no_notices_declared_writes_nothing(self, tmp_path):
         import md_pleading

@@ -9,10 +9,11 @@ that outlived the code are kept, renumbered. The architectural decisions
 that govern the system as it stands are the ADRs under
 [../design/adr/](../design/adr/).
 
-## 1. Fill official AcroForms; generate pleading paper from scratch
+## 1. Fill the official blank forms; generate pleading paper from scratch
 
-**Decision.** Where the Judicial Council publishes a fillable form, prosaic
-fills the official blank, shipped unmodified in `pleading/forms/`. Pleading paper,
+**Decision.** Where the Judicial Council publishes a form, prosaic draws
+onto the official blank, shipped unmodified in `pleading/forms/`, and
+flattens the result (ADR-0046: its form layer is never written). Pleading paper,
 which has no official fillable artifact, is generated from scratch per
 CRC 2.100–2.119.
 

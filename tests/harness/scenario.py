@@ -61,23 +61,34 @@ def pdf_text(pdf: Path, layout: bool = True) -> str:
     return subprocess.run(cmd, capture_output=True, text=True).stdout
 
 
-def field_values(pdf: Path) -> dict[str, str]:
-    """AcroForm field /V values by fully qualified name."""
-    from pypdf import PdfReader
-    fields = PdfReader(str(pdf)).get_fields() or {}
-    return {k: str(v.get("/V") or "") for k, v in fields.items()}
+def page_text(pdf: Path, page_no: int) -> str:
+    """pdftotext of one 1-based page, reading order."""
+    return subprocess.run(
+        ["pdftotext", "-f", str(page_no), "-l", str(page_no), str(pdf), "-"],
+        capture_output=True, text=True).stdout
 
 
-def widget_values(pdf: Path) -> list[tuple[str, str]]:
-    """(qualified_name, /V) for every widget, INCLUDING pages appended by
-    merge (whose fields don't appear in the root AcroForm tree that
-    ``get_fields`` reads)."""
-    from pypdf import PdfReader
-    import form_fill
-    out = []
-    for _page, name, obj in form_fill.iter_widgets(PdfReader(str(pdf))):
-        v = obj.get("/V")
-        if v is None and obj.get("/Parent") is not None:
-            v = obj["/Parent"].get_object().get("/V")
-        out.append((name, "" if v is None else str(v)))
-    return out
+def _probe():
+    """pleading/tests/probe.py: page-level inspection of a flattened
+    form (ADR-0046: there are no field values to read; the page is the
+    record)."""
+    for p in (PLEADING, PLEADING / "tests"):
+        if str(p) not in sys.path:
+            sys.path.insert(0, str(p))
+    import probe
+    return probe
+
+
+def form_field_text(pdf: Path, form_id: str, logical: str) -> str:
+    """Text drawn inside the box a logical field of ``form_id`` occupies."""
+    return _probe().field_text(pdf, form_id, logical)
+
+
+def form_widget_text(pdf: Path, form_id: str, name_suffix: str) -> list[str]:
+    """Text drawn inside every blank widget whose name ends with the
+    suffix — for proving a human-owned region received nothing."""
+    return _probe().widget_text(pdf, form_id, name_suffix)
+
+
+def has_no_form_layer(pdf: Path) -> bool:
+    return _probe().has_no_form_layer(pdf)

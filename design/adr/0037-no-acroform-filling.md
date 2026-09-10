@@ -1,6 +1,9 @@
 # ADR-0037: AcroForm filling is prohibited; overlay is the only technology
 
-**Status:** Accepted (August 26, 2026)
+**Status:** Accepted (August 26, 2026); legacy-list clause superseded by
+[ADR-0046](0046-overlay-is-the-only-form-technology.md) (September 10,
+2026), which removed the form-layer code path and migrated every listed
+form. The prohibition itself stands.
 
 Supersedes the migration clause of
 [ADR-0033](0033-overlay-form-technology.md), which introduced

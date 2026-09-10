@@ -58,9 +58,13 @@ of programming.
   the deposition officer, not a department). A descriptor entry is
   legitimate only after an empirical fill-render-inspect pass; no
   mapping may be inferred from a name.
-- **XFA forms must have their XFA layer stripped** — otherwise
-  XFA-aware viewers show the *unfilled* template while the AcroForm
-  layer silently carries values.
+- **Every fill is flattened ink** (ADR-0046): values are drawn at the
+  widget rectangles and the form layer — LiveCycle/XFA packet, widgets,
+  form dictionary — is removed, so nothing is left for a viewer to
+  interpret differently. Single-line values center in their box;
+  blocks anchor top-left; `align:`/`valign:` pin exceptions.
+  *(tested: test_output_carries_no_form_layer,
+  test_overlay_forms.test_single_line_centers_in_its_box_by_default)*
 - **The blank is part of the artifact.** Fills run against the blank
   shipped in-repo (pinned revision), never against whatever
   courts.ca.gov serves today.

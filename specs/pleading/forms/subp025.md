@@ -60,12 +60,12 @@ and one for the objection (the consumer's).
    for the signer; only the signer's printed name is pre-filled, from
    `filer_name` (SBN suffix stripped). *(tested: the blank sweep and
    the AI visual judgment)*
-7. **The output is a clean service copy**: the XFA layer is stripped
-   so viewers render the values we filled, the Print/Save/Clear
-   buttons and the privacy banner are removed, and the gray block the
-   banner leaves behind is painted out. *(tested:
-   test_xfa_layer_stripped_from_output; the whiteout is confirmed by
-   the AI visual judgment)*
+7. **The output is a clean service copy**: flattened ink with no form
+   layer at all (ADR-0046), so every viewer renders the values we drew;
+   the Print/Save/Clear buttons and the privacy banner are removed, and
+   the gray block the banner leaves behind is painted out. *(tested:
+   test_output_carries_no_form_layer; the whiteout is confirmed by the
+   AI visual judgment)*
 8. **The descriptor matches the shipped blank's revision**
    (Rev. January 1, 2008), including the checkbox on-states that are
    `/2`. *(tested: test_descriptor_matches_blank)*

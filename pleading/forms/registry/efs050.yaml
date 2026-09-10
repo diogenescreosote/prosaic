@@ -36,7 +36,7 @@ fields:
   atty_bar_no:
     map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyBarNo_dc[0]"
     page: 1
-    doc: "STATE BAR NO (blank for self-represented filers)"
+    doc: "STATE BAR NO (a self-represented filer has none; drawn only when filer_bar_number is set)"
     auto: filer_bar_number
   atty_firm:
     map: "topmostSubform[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyFirm_ft[0]"
@@ -163,6 +163,8 @@ fields:
   # -- Item 2: the documents served ---------------------------------------------
   efs050_documents:
     map: "topmostSubform[0].Page1[0].FillText20[0]"
+    align: left
+    valign: top
     page: 1
     doc: "Item 2: 'I electronically served the following documents (exact titles)'"
     default: ""

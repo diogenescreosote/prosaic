@@ -18,7 +18,7 @@ domain: ca/general            # "may be used with any Judicial Council form"
 revision: "2009-07"           # form face: "MC-025 [Rev. July 1, 2009]"
 source_url: https://courts.ca.gov/documents/mc025.pdf
 blank: mc025.pdf
-technology: acroform
+technology: overlay           # draw at each widget's rect and flatten (ADR-0046)
 
 # Interactive-use chrome stripped from filing copies: privacy banners
 # and Save/Print/Clear buttons.
@@ -44,6 +44,8 @@ fields:
       this from the parent field's attachment_label.
   body:
     map: FillText4
+    align: left
+    valign: top
     page: 1
     doc: >-
       The attachment body — one large multiline area covering nearly

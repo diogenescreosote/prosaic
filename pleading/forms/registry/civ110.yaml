@@ -28,7 +28,7 @@ domain: ca/civil
 revision: "2025-01"            # form revision this map was verified against
 source_url: https://courts.ca.gov/documents/civ110.pdf
 blank: civ110.pdf
-technology: xfa                # XFA layer is stripped; flat AcroForm is filled
+technology: overlay            # draw at each widget's rect and flatten (ADR-0046)
 
 # Interactive-use chrome stripped from filing copies: privacy banner,
 # Save/Print/Clear buttons, and the courts.ca.gov footer link button.

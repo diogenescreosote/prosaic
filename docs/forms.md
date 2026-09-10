@@ -19,23 +19,35 @@ PROSAIC_LAYERS_ROOT=/path/to/deployment sc form check   # same, against that dep
 
 ## Why "just fill the PDF" doesn't work
 
-JC forms are fillable PDFs in theory. In practice, filling them the
-normal way produces filings that look right in one viewer and broken
-on the clerk's screen. Failure modes we've hit, and the engine's
-countermeasures:
+JC forms are fillable PDFs in theory. In practice, how a value written
+into a PDF's form layer renders is a property of the viewer, not of the
+file: appearance streams go stale, auto-size text vanishes, multiline
+boxes clip their last line, an inherited value on a group node makes
+untouched siblings render garbage, XFA-aware viewers show the blank
+template, and a page-level merge into a packet drops the form
+dictionary altogether. A filing that looked right on the author's
+screen reaches the clerk saying something else.
+
+So prosaic never writes a form value (ADR-0037, ADR-0046). Every field
+is **drawn** as ordinary page content at its rectangle — a `map:` names
+a widget on the blank only to borrow its geometry — and the output is
+**flattened**: widget appearances are baked into the page, every widget
+annotation and the form dictionary are removed, viewer chrome is
+stripped first so it is never baked in. What is filed is ink that
+renders identically everywhere. The remaining failure modes, and the
+engine's countermeasures:
 
 | Failure mode | What you see | Countermeasure |
 |---|---|---|
-| Appearance streams don't regenerate | Filled values invisible in some viewers | `/NeedAppearances` set on every output |
-| XFA layer shadows the AcroForm | Form renders *blank* in XFA-aware viewers despite filled values | `technology: xfa` → the XFA layer is stripped so all viewers read the AcroForm |
-| Auto-size fields (`0 Tf`) | Microscopic or out-of-view text | Engine measures the text and pins an explicit font size (`/DA`) |
-| Text longer than the box | Silent clipping — words simply vanish | `fit:` strategies — `shrink`, `wrap`, `shrink_wrap`, and `overflow_attachment` (below) |
+| Text longer than the box | Silent clipping — words simply vanish | `fit:` strategies — `shrink`, `wrap`, `shrink_wrap`, and `overflow_attachment` (below); a multiline widget wraps under `shrink` |
+| Text floating in its box | A name flush left above its signature line; a case number tucked in a corner | Single-line values center in their box, horizontally and vertically; blocks anchor top-left; `align:`/`valign:` pin exceptions |
 | Field names lie | `Dismissal_Type_cb3` is actually "with prejudice" | Descriptors document the *verified* meaning; names are treated as opaque IDs |
 | Caption repeats per page as separate fields | Page 3's caption silently blank | Descriptor maps every occurrence; each binds the same `auto:` value |
-| Broken/missing widgets | Value lands nowhere, or in the wrong place | `method: overlay` — draw the text directly at a rectangle, ignoring the widget |
-| Interactive chrome on filing copies | "Clear this form" buttons, privacy banners | `chrome_fields:` stripped from output |
+| No widget where the value goes | Signature-line names, hand-drawn boxes | A hand-authored `rect:` on the field |
+| Two widgets share one name | A radio pair; only the first is ever found by name | A hand-authored `rect:` on the checkbox |
+| Interactive chrome on filing copies | "Clear this form" buttons, privacy banners | Pushbuttons are recognized and stripped; other chrome is listed in `chrome_fields:`; `whiteouts:` paint over static junk |
 | Silent form revisions by the JC | Field names change; everything above, silently | `test_descriptor_matches_blank` fails loudly; descriptors record the verified `revision` |
-| All of the above, viewer-dependently | The same filled PDF looks right in one viewer, wrong in another | `technology: overlay` — values are drawn as ordinary page content at each widget's rectangle and the output is **flattened** (no AcroForm at all), so every viewer renders identical ink |
+| Geometry that is simply wrong | The right value drawn in the wrong box | `sc form preview` — look before trusting any fill |
 
 ## Overflow: the legally correct escape hatch
 
@@ -122,17 +134,17 @@ domain: ca/civil             # ca/general, ca/civil, …
 revision: "2020-01"          # the JC revision this map was VERIFIED against
 source_url: https://courts.ca.gov/documents/subp010.pdf
 blank: subp010.pdf           # under pleading/forms/
-technology: acroform         # or xfa (strips the XFA layer), or
-                             # overlay (draw everything, flatten; below)
-chrome_fields: [Save, Print, ResetForm]
+technology: overlay          # required, and the only value (ADR-0046)
+chrome_fields: [Save, Print, ResetForm]   # non-button chrome to strip
+                                          # before the bake (optional)
 
-# technology: overlay only — abstract signer roles, in signing order;
-# fields reference them via esign: {type: ..., party: ...}
+# Abstract signer roles, in signing order; fields reference them via
+# esign: {type: ..., party: ...}
 esign_parties: [filer, server]
 
 fields:
   case_number:
-    map: "SUBP-010[0].Page1[0].CaseNumber[0]"  # AcroForm/XFA field name
+    map: "SUBP-010[0].Page1[0].CaseNumber[0]"  # the blank's widget, for geometry
     page: 1
     doc: "Case number"
     auto: case_number        # caption binding (jc_common.AUTO_BINDINGS)
@@ -143,13 +155,18 @@ fields:
     attachment_label: Attachment 9
     overflow_checkbox: attachment_9      # checked iff the value spilled
     inline_checkbox: facts_listed_below  # checked iff it fit on-form
-  broken_field:
-    method: overlay          # ignore the widget; draw at rect
+  phone:
+    map: "..."
+    align: left              # a wide line after an inline label reads
+                             # better left; default is center/middle for
+                             # one line, left/top for a block
+  signature_line_name:
     page: 2
-    rect: [72, 640, 540, 700]   # PDF points, [x0, y0, x1, y1]
+    rect: [72, 640, 540, 700]   # no widget: PDF points, [x0, y0, x1, y1]
     fit: shrink_wrap
     font_size: 9
     min_font_size: 6
+    valign: bottom
   date:
     map: "..."
     doc: "LEAVE BLANK — hand-dated at signature"
@@ -170,23 +187,30 @@ Value precedence, low → high: field `default` → `auto` binding over
 the front matter → `forms.<id>.<field>` block → explicit `--data` /
 API data dict. Unknown keys in data are *reported*, not ignored.
 
-## `technology: overlay` — flattened fills (ADR-0033)
+## `technology: overlay` — the only kind of fill (ADR-0033, ADR-0046)
 
-AcroForm rendering is viewer-dependent no matter how carefully values
-are set: appearance streams go stale, `/NeedAppearances` support
-varies, and an inherited `/V` from a group node can make untouched
-sibling fields render garbage. Under `technology: overlay` the engine
-never sets a field value at all. Each `map:` names its widget only to
-borrow the widget's **rectangle**; the value is drawn as ordinary page
-content (checkboxes get a centered bold X), and the output is
-flattened — no AcroForm dictionary, no widget annotations, identical
-rendering everywhere. Fields with no widget (signature lines) carry a
-hand-authored `rect:`.
+The engine never sets a form value. Each `map:` names its widget only
+to borrow the widget's **rectangle** (and its multiline flag); the
+value is drawn as ordinary page content (checkboxes get a centered
+bold X), and the output is flattened — no form dictionary, no widget
+annotations, identical rendering everywhere. Fields with no widget
+(signature lines) carry a hand-authored `rect:`. A descriptor must say
+`technology: overlay`; any other value, or none, is refused at load.
 
-Sizing under overlay balances fit against consistency: a field with no
-explicit `fit:` defaults to `shrink`, and fields sharing a
-`size_group:` all render at the smallest size any member needed, so a
-block of related boxes never shows three different type sizes.
+Sizing balances fit against consistency: a field with no explicit
+`fit:` defaults to `shrink`, and fields sharing a `size_group:` all
+render at the smallest size any member needed, so a block of related
+boxes never shows three different type sizes. Because the engine draws
+the lines itself, the height a block needs is exact — first baseline
+one em below the top, then 1.15 em per line — and nothing is left to a
+viewer's layout.
+
+Placement: a single-line value is centered in its box both ways, so a
+name sits on its signature line and a case number sits in its box; a
+block of lines (an address, a wrapped answer) anchors at the top left.
+`align: left | center | right` and `valign: top | middle | bottom` on a
+field pin the exceptions — decide them by looking at a fill, not by
+reasoning about the widget.
 
 Fields may carry an e-sign tag — `esign: {type: date, party: filer}` —
 marking areas reserved for signing rather than machine fill. The type

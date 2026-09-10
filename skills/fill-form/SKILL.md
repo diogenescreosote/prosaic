@@ -22,7 +22,7 @@ code path (ADR-0006).
 
 ## The verification discipline (non-negotiable)
 
-Never trust a JC field name: the official AcroForms misname fields
+Never trust a JC field name: the official blanks misname their widgets
 freely (`specs/pleading/forms/README.md` collects the horror stories).
 Any change to a descriptor requires empirical verification:
 

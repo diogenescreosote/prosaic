@@ -2,53 +2,46 @@
 """Descriptor-driven Judicial Council (and generic PDF) form filler.
 
 The problem this solves: JC forms are fillable PDFs in theory, but in
-practice their AcroForm/XFA layers are unreliable — fields are
-mislabeled, appearances don't regenerate in some viewers, auto-size
-text renders out of view, multiline fields clip silently, and long
-answers simply don't fit. Filling them "the normal PDF way" produces
-documents that look fine in one viewer and broken on the clerk's
-screen.
+practice how a filled field renders is a property of the viewer, not
+of the file — appearance streams go stale, auto-size text vanishes,
+multiline boxes clip, an inherited value on a group node makes
+untouched siblings render garbage, and a page-level merge into a
+packet drops the form dictionary altogether. What a clerk sees is
+then a guess about the clerk's PDF reader.
 
-The fix is to treat each form as *data*: a YAML descriptor in
-``forms/registry/<form_id>.yaml`` records, for every logical field,
-where it lives (AcroForm name or overlay rectangle), how it can fail,
-and what to do about it (shrink, wrap, spill to a Judicial Council
-MC-025 attachment). This module is the engine that executes
-descriptors. See docs/forms.md for the descriptor schema and the
-authoring workflow, and each descriptor's ``agent_guide`` for
-form-specific usage.
+The fix is to treat each form as *data* and never as a form: a YAML
+descriptor in ``forms/registry/<form_id>.yaml`` records, for every
+logical field, where it lives on the page, how it can fail, and what
+to do about it (shrink, wrap, spill to a Judicial Council MC-025
+attachment). This module is the engine that executes descriptors. See
+docs/forms.md for the descriptor schema and the authoring workflow,
+and each descriptor's ``agent_guide`` for form-specific usage.
 
-Fill methods
-------------
-- ``acroform``: set the field value; regenerate nothing (viewers do,
-  via /NeedAppearances) but *measure* the text against the widget
-  rectangle and apply the field's ``fit`` strategy first.
-- ``overlay``: ignore the widget (or absence of one) and draw the text
-  directly on the page at ``rect`` with reportlab, merged in. This is
-  the escape hatch for fields whose widgets are broken or missing.
+The one technology (``technology: overlay``)
+--------------------------------------------
+Every field and checkbox is drawn directly on the page as ordinary
+content — a ``map:`` names a widget on the blank only to borrow its
+rectangle (and its multiline flag); a field with no widget carries a
+hand-authored ``rect:`` — and the output is then FLATTENED: widget
+appearances are baked into page content, every widget annotation and
+the AcroForm dictionary are removed, viewer chrome (Print/Save/Clear
+buttons, privacy banners) is stripped first so it is never baked in.
+What is written is plain ink that renders identically everywhere and
+survives packet assembly (ADR-0033, ADR-0037, ADR-0046). No field
+value is ever written into the PDF's form layer, and a descriptor
+declaring any other technology is refused at load.
 
-Technologies (``technology:``)
-------------------------------
-- ``acroform`` (default): fill widget values, set /NeedAppearances.
-- ``xfa``: same, then strip the /XFA packet so every viewer reads the
-  AcroForm layer that was actually filled.
-- ``overlay``: draw EVERY field and checkbox directly on the page as
-  ordinary content — each ``map:`` names its widget only to borrow the
-  widget's rectangle — then FLATTEN the output (no AcroForm, no widget
-  annotations). AcroForm rendering is viewer-dependent no matter how
-  carefully values are set (stale appearance streams, inherited /V,
-  /NeedAppearances support); a flattened overlay renders identically
-  everywhere. ``size_group:`` on fields keeps related boxes visually
-  consistent: every member renders at the smallest size any member
-  needed to fit (ADR-0033).
+``size_group:`` on fields keeps related boxes visually consistent:
+every member renders at the smallest size any member needed to fit.
 
 Fit strategies (``fit:``)
 -------------------------
 - ``none``  (default): warn if the text overflows the box.
 - ``shrink``: reduce font size (down to ``min_font_size``) until the
   text fits the box width (and height, for multiline).
-- ``wrap``: wrap to multiple lines within the box (multiline fields /
-  overlay rects); combine as ``shrink_wrap``.
+- ``wrap``: wrap to multiple lines within the box; combine as
+  ``shrink_wrap``. A field whose widget is multiline wraps under
+  ``shrink`` too.
 - ``overflow_attachment``: if the text cannot fit even after
   shrink/wrap, put "See Attachment <N>." in the field and return the
   full text as an MC-025 attachment to append — the legally standard
@@ -78,13 +71,7 @@ import yaml
 
 try:
     from pypdf import PdfReader, PdfWriter
-    from pypdf.generic import (
-        ArrayObject,
-        BooleanObject,
-        DictionaryObject,
-        NameObject,
-        TextStringObject,
-    )
+    from pypdf.generic import ArrayObject, NameObject
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("form_fill requires 'pypdf' (pip install pypdf)") from exc
 
@@ -139,11 +126,6 @@ DEFAULT_FONT = "Helvetica"
 DEFAULT_FONT_SIZE = 9.0
 DEFAULT_MIN_FONT_SIZE = 6.0
 LEADING_RATIO = 1.15
-# Multiline widgets: viewers lay out AcroForm text at roughly 1.2-1.3x
-# the font size and inset it ~2 pt top and bottom, so a block judged to
-# fit at 1.15x with no inset clips its last line in Preview and Acrobat.
-MULTILINE_LEADING_RATIO = 1.3
-MULTILINE_INSET = 2.0
 
 # E-sign field taxonomy: the least common multiple of DocuSeal,
 # DocuSign, and Dropbox Sign field types — every type here maps onto a
@@ -196,44 +178,27 @@ def load_descriptor(form_id: str) -> dict:
     return desc
 
 
-# Judicial Council forms this repository still fills through AcroForm,
-# each one predating ADR-0037 and each one a defect to be retired. The
-# list may only ever shrink: a form absent from it that is not `overlay`
-# is a hard error, so no new descriptor can be authored the old way.
-LEGACY_ACROFORM_FORMS = frozenset({
-    "civ110", "efs020", "mc025", "mc030", "mc050",
-    "subp001", "subp002", "subp010", "subp025",
-    "fl323", "fl327", "fl330", "fl335",
-})
-
-
 def _require_overlay(form_id: str, desc: dict, path: Path) -> None:
-    """Overlay is the only permitted fill technology (ADR-0037).
+    """Overlay is the only fill technology there is (ADR-0037, ADR-0046).
 
-    How an AcroForm fill renders is a property of the viewer, not of the
-    file, so what a court receives is not knowable from here. Overlay
-    draws every value as page content and flattens, which is why it also
-    survives the page-level merges used to assemble a packet.
+    How a form-layer fill renders is a property of the viewer, not of
+    the file, so what a court receives is not knowable from here.
+    Overlay draws every value as page content and flattens, which is
+    why it also survives the page-level merges used to assemble a
+    packet. A descriptor must say so explicitly: an absent key is
+    refused too, so that no descriptor's behaviour rests on a default.
     """
-    tech = str(desc.get("technology") or "acroform").strip().lower()
+    tech = str(desc.get("technology") or "").strip().lower()
     if tech == "overlay":
         return
-    known = {form_id.lower(), str(desc.get("form") or "").strip().lower()}
-    if known & LEGACY_ACROFORM_FORMS:
-        print(
-            f"WARNING: {form_id}: technology: {tech} --- AcroForm filling is "
-            "prohibited (ADR-0037) and this form has not been migrated to "
-            "overlay yet. What it renders depends on the viewer.",
-            file=sys.stderr,
-        )
-        return
+    stated = f"technology: {tech}" if tech else "no technology key"
     raise ValueError(
-        f"{path}: technology: {tech} is not permitted. Judicial Council "
+        f"{path}: {stated} is not permitted for {form_id}. Judicial Council "
         "forms are filled by drawing text onto the page and flattening "
-        "(technology: overlay, ADR-0037); AcroForm values are never "
-        "written, because how they render is a property of the viewer "
-        "rather than of the file. Author this descriptor as overlay and "
-        "check it with `sc form preview`."
+        "(technology: overlay, ADR-0037/ADR-0046); form-layer values are "
+        "never written, because how they render is a property of the "
+        "viewer rather than of the file. Write `technology: overlay` and "
+        "check the geometry with `sc form preview`."
     )
 
 
@@ -322,8 +287,8 @@ def skeleton_yaml(pdf_path: Path) -> str:
         'revision: ""',
         'source_url: ""',
         f"blank: {pdf_path.name}",
-        "technology: acroform   # or xfa",
-        "chrome_fields: []",
+        "technology: overlay",
+        "chrome_fields: []   # non-button chrome widgets to strip before the bake",
         "fields:",
     ]
     for r in rows:
@@ -376,6 +341,60 @@ def _wrap_to_width(text: str, font: str, size: float, width: float) -> list[str]
     return lines
 
 
+ALIGNMENTS = ("left", "center", "right")
+VALIGNMENTS = ("top", "middle", "bottom")
+TEXT_INSET = 2.0  # horizontal breathing room from a box edge, in points
+
+
+def text_origins(lines: list[str], rect: list[float], size: float, font: str,
+                 align: Optional[str] = None, valign: Optional[str] = None,
+                 ) -> list[tuple[float, float]]:
+    """Baseline origin (x, y) for each line of text drawn into ``rect``.
+
+    A single line is centered in its box, horizontally and vertically,
+    unless the descriptor says otherwise: a value on a signature or
+    caption line reads as belonging to the line when it sits mid-way
+    along it and on it, not flush left and floating above. A block of
+    several lines (an address block, a wrapped answer) anchors at the
+    top left, the way a typed block reads. ``align`` (left, center,
+    right) and ``valign`` (top, middle, bottom) pin exceptions per
+    field — a wide box that follows an inline label wants left.
+    """
+    x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
+    y0, y1 = min(rect[1], rect[3]), max(rect[1], rect[3])
+    multi = len(lines) > 1
+    align = (align or ("left" if multi else "center")).lower()
+    valign = (valign or ("top" if multi else "middle")).lower()
+    if align not in ALIGNMENTS:
+        raise ValueError(f"align must be one of {ALIGNMENTS}, not {align!r}")
+    if valign not in VALIGNMENTS:
+        raise ValueError(f"valign must be one of {VALIGNMENTS}, not {valign!r}")
+
+    # Baselines step down by one leading per line; ``first`` is the
+    # first line's baseline. Cap height is taken as 0.72 em, so a line
+    # is visually centered when its baseline sits 0.36 em below the
+    # midline — the same convention a viewer uses for a widget's text.
+    spread = (len(lines) - 1) * size * LEADING_RATIO
+    if valign == "top":
+        first = y1 - size
+    elif valign == "bottom":
+        first = y0 + TEXT_INSET + spread
+    else:
+        first = (y0 + y1) / 2.0 - size * 0.36 + spread / 2.0
+
+    origins = []
+    for j, line in enumerate(lines):
+        w = stringWidth(line, font, size)
+        if align == "left":
+            x = x0 + TEXT_INSET
+        elif align == "right":
+            x = x1 - TEXT_INSET - w
+        else:
+            x = (x0 + x1) / 2.0 - w / 2.0
+        origins.append((x, first - j * size * LEADING_RATIO))
+    return origins
+
+
 @dataclass
 class FitResult:
     text: str
@@ -406,13 +425,11 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     while True:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
         widest = max((stringWidth(l, font, size) for l in lines), default=0.0)
-        if len(lines) > 1 and spec.get("multiline"):
-            # A multiline AcroForm widget: the viewer lays the text out.
-            fits_h = len(lines) * size * MULTILINE_LEADING_RATIO + MULTILINE_INSET <= height
-        elif len(lines) > 1:
-            # Wrapped by us (overlay, or a single-line widget the
-            # descriptor wraps): we draw the lines, so our leading holds.
-            fits_h = len(lines) * size * LEADING_RATIO <= height
+        if len(lines) > 1:
+            # We draw the lines ourselves (first baseline one size below
+            # the top, then LEADING_RATIO per line), so the extent is
+            # exactly what the renderer will use; no viewer is involved.
+            fits_h = size * (1 + (len(lines) - 1) * LEADING_RATIO) <= height
         else:
             # Single line: viewers vertically center the text in the
             # widget, and JC forms routinely give one-line fields a rect
@@ -527,18 +544,7 @@ def _strip_named_widgets(writer: PdfWriter, names: set[str]) -> None:
 
 
 PUSHBUTTON_FLAG = 1 << 16  # PDF 32000-1 12.7.4.2.1: /Ff bit 17
-
-
-def _inherited(obj, key):
-    """Walk /Parent links for an inheritable field attribute."""
-    seen = 0
-    while obj is not None and seen < 32:
-        if key in obj:
-            return obj[key]
-        parent = obj.get("/Parent")
-        obj = parent.get_object() if parent is not None else None
-        seen += 1
-    return None
+MULTILINE_FLAG = 1 << 12   # PDF 32000-1 12.7.4.3: /Ff bit 13
 
 
 # Chrome pushbuttons by name: the Judicial Council names its
@@ -620,28 +626,6 @@ def _strip_pushbutton_widgets(writer: PdfWriter) -> None:
                 af[NameObject("/Fields")] = kept_fields
 
 
-def _strip_xfa(writer: PdfWriter) -> None:
-    """Drop the XFA layer so viewers honor the AcroForm values we set.
-
-    LiveCycle-era JC forms carry both an XFA template and AcroForm
-    widgets; XFA-aware viewers prefer the XFA layer and would show the
-    *unfilled* template. Removing /XFA makes every viewer read the
-    AcroForm, which is the layer we fill.
-    """
-    catalog = writer._root_object  # type: ignore[attr-defined]
-    if "/AcroForm" in catalog:
-        af = catalog["/AcroForm"].get_object()
-        if "/XFA" in af:
-            del af[NameObject("/XFA")]
-
-
-def _set_need_appearances(writer: PdfWriter) -> None:
-    catalog = writer._root_object  # type: ignore[attr-defined]
-    if "/AcroForm" in catalog:
-        af = catalog["/AcroForm"].get_object()
-        af[NameObject("/NeedAppearances")] = BooleanObject(True)
-
-
 def _bake_widgets(writer: PdfWriter) -> PdfWriter:
     """BAKE widget appearance streams into page content, then return a
     writer over the result. Must run before any widget is dropped.
@@ -688,32 +672,6 @@ def _strip_all_form_machinery(writer: PdfWriter) -> None:
         del catalog[NameObject("/AcroForm")]
 
 
-def _checkbox_field_node(wobj):
-    """The node that owns a checkbox widget's /V: the nearest node in the
-    parent chain carrying its own /T. Writing /V any higher poisons the
-    form: JC forms group unrelated fields under a shared parent (one
-    form's list node holds a free-text field beside the party
-    checkboxes), and PDF children INHERIT /V they lack -- so a /V='/1'
-    on the group node makes every untouched sibling text field render
-    as '1'. A widget with its own /T is itself the field; a bare widget
-    defers to the ancestor that names it."""
-    node = wobj
-    while node is not None and "/T" not in node:
-        parent = node.get("/Parent")
-        node = parent.get_object() if parent is not None else None
-    return node if node is not None else wobj
-
-
-def _apply_font_size(annot_obj, size: float, font: str = "Helv") -> None:
-    """Pin a widget's default appearance to a concrete font size.
-
-    JC fields are often set to auto-size (``0 Tf``), which some viewers
-    render microscopically or out of view; an explicit size is the
-    reliable path once we've measured that the text fits.
-    """
-    annot_obj[NameObject("/DA")] = TextStringObject(f"/{font} {size:g} Tf 0 g")
-
-
 def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
          data: Optional[dict] = None, strict: bool = False) -> FillResult:
     """Fill a form per its descriptor. See module docstring."""
@@ -733,94 +691,49 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     reader = PdfReader(str(blank))
     writer = PdfWriter(clone_from=reader)
 
-    # Index widgets by qualified name (and bare name as fallback),
-    # keeping each widget's rectangle: overlay-technology fills borrow
-    # the widget geometry and never touch the widget itself.
-    widgets: dict[str, tuple[int, Any]] = {}
-    widget_rects: dict[str, tuple[int, list[float]]] = {}
-    for page_idx, name, obj in iter_widgets(PdfReader(str(blank))):
-        widgets.setdefault(name, (page_idx, name))
-        widgets.setdefault(name.split(".")[-1], (page_idx, name))
+    # Index the blank's widgets by qualified name (and bare leaf name as
+    # a fallback), keeping only what a fill borrows from them: the
+    # rectangle and the multiline flag. The widgets themselves are never
+    # written to; they are baked and removed below.
+    widget_geom: dict[str, tuple[int, list[float], bool]] = {}
+    for page_idx, name, obj in iter_widgets(reader):
         rect = [float(v) for v in (obj.get("/Rect") or [0, 0, 0, 0])]
-        widget_rects.setdefault(name, (page_idx, rect))
-        widget_rects.setdefault(name.split(".")[-1], (page_idx, rect))
+        multiline = bool(int(_inherited(obj, "/Ff", 0) or 0) & MULTILINE_FLAG)
+        widget_geom.setdefault(name, (page_idx, rect, multiline))
+        widget_geom.setdefault(name.split(".")[-1], (page_idx, rect, multiline))
 
-    # Live widget objects in the writer, for /DA edits.
-    writer_widgets: dict[str, Any] = {}
-    for page in writer.pages:
-        for ref in page.get("/Annots") or []:
-            obj = ref.get_object()
-            if obj.get("/Subtype") == "/Widget":
-                writer_widgets[_qualified_name(obj)] = obj
-
-    acro_values_by_page: dict[int, dict[str, str]] = {}
     overlay_ops: dict[int, list[dict]] = {}
-    overlay_mode = str(desc.get("technology") or "") == "overlay"
     pending_overlay: list[dict] = []
 
     fields = desc.get("fields") or {}
     for name, spec in fields.items():
         value = texts.get(name, "")
-        method = spec.get("method", "overlay" if overlay_mode else "acroform")
-
-        if method == "overlay":
-            if not value:
-                continue
-            rect = spec.get("rect")
-            page_no = int(spec.get("page", 1)) - 1
-            if not rect and spec.get("map"):
-                hit = widget_rects.get(spec["map"])
-                if hit is not None:
-                    page_no, rect = hit
-            if not rect:
-                result.warnings.append(
-                    f"{name}: overlay field needs a rect, or a map naming a "
-                    f"widget in {blank.name} — form revision drift?")
-                continue
-            # Under technology: overlay, fitting is the point — a field
-            # with no explicit fit strategy shrinks rather than warns.
-            if overlay_mode and not spec.get("fit"):
-                spec = {**spec, "fit": "shrink"}
-            pending_overlay.append({
-                "name": name, "value": value, "rect": rect,
-                "page": page_no, "spec": spec,
-            })
+        if not value:
             continue
-
-        # acroform
-        mapped = spec.get("map")
-        if not mapped:
-            result.warnings.append(f"{name}: no map and method=acroform; skipped")
-            continue
-        hit = widgets.get(mapped)
-        if hit is None:
+        rect = spec.get("rect")
+        page_no = int(spec.get("page", 1)) - 1
+        if not rect and spec.get("map"):
+            hit = widget_geom.get(spec["map"])
+            if hit is not None:
+                page_no, rect, multiline = hit
+                if "multiline" not in spec:
+                    # A multiline widget is a box meant to hold lines;
+                    # fit_text wraps into it rather than shrinking a
+                    # long value to the minimum size on one line.
+                    spec = {**spec, "multiline": multiline}
+        if not rect:
             result.warnings.append(
-                f"{name}: field '{mapped}' not found in {blank.name} — form revision drift?"
-            )
+                f"{name}: overlay field needs a rect, or a map naming a "
+                f"widget in {blank.name} — form revision drift?")
             continue
-        page_idx, qualified = hit
-        wobj = writer_widgets.get(qualified)
-        rect = [float(v) for v in (wobj.get("/Rect") if wobj is not None else [0, 0, 200, 12])]
-        if wobj is not None and "multiline" not in spec:
-            # The widget knows whether a viewer will lay out multiple
-            # lines in it; fit_text needs that to judge height honestly.
-            spec = {**spec, "multiline": bool(int(wobj.get("/Ff", 0)) & (1 << 12))}
-        if value:
-            fitted = fit_text(value, rect, spec)
-            if not fitted.fits:
-                value, fitted = _handle_overflow(name, spec, value, rect, result)
-            if wobj is not None:
-                _apply_font_size(wobj, fitted.font_size)
-        if value:
-            # Never hand pypdf an empty string to set explicitly: its
-            # generated appearance stream for a zero-length value computes
-            # a vertical text position that lands a few ULPs off zero
-            # (e.g. "7.105427357601002e-15") and writes it in scientific
-            # notation, which is not a valid PDF real number token --
-            # strict readers choke on the resulting `Td` operator. A blank
-            # field left unset renders correctly anyway (NeedAppearances
-            # is set below), so there is nothing to gain by setting "".
-            acro_values_by_page.setdefault(page_idx, {})[qualified] = value
+        # Fitting is the point — a field with no explicit fit strategy
+        # shrinks rather than warns.
+        if not spec.get("fit"):
+            spec = {**spec, "fit": "shrink"}
+        pending_overlay.append({
+            "name": name, "value": value, "rect": rect,
+            "page": page_no, "spec": spec,
+        })
 
     # Fit the pending overlay text, then enforce size-group consistency:
     # every member of a ``size_group`` renders at the smallest size any
@@ -866,55 +779,32 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     for name, spec in (desc.get("checkboxes") or {}).items():
         if not checks.get(name):
             continue
-        mapped = spec.get("map")
-        if overlay_mode:
-            # Like overlay text fields, a checkbox may carry a
-            # hand-authored ``rect:`` — required when two widgets share
-            # one qualified name (e.g. a radio pair), since a name
-            # lookup can only ever reach the first.
-            rect = spec.get("rect")
-            page_idx = int(spec.get("page", 1)) - 1
-            if not rect and mapped:
-                hit_rect = widget_rects.get(mapped)
-                if hit_rect is not None:
-                    page_idx, rect = hit_rect
-            if not rect:
-                result.warnings.append(
-                    f"checkbox {name}: needs a rect, or a map naming a "
-                    f"widget in {blank.name} — form revision drift?")
-                continue
-            overlay_ops.setdefault(page_idx, []).append({"rect": rect, "mark": True})
+        # Like text fields, a checkbox may carry a hand-authored
+        # ``rect:`` — required when two widgets share one qualified name
+        # (e.g. a radio pair), since a name lookup can only ever reach
+        # the first.
+        rect = spec.get("rect")
+        page_idx = int(spec.get("page", 1)) - 1
+        if not rect and spec.get("map"):
+            hit = widget_geom.get(spec["map"])
+            if hit is not None:
+                page_idx, rect, _multiline = hit
+        if not rect:
+            result.warnings.append(
+                f"checkbox {name}: needs a rect, or a map naming a "
+                f"widget in {blank.name} — form revision drift?")
             continue
-        hit = widgets.get(mapped or "")
-        if hit is None:
-            result.warnings.append(f"checkbox {name}: '{mapped}' not found — revision drift?")
-            continue
-        page_idx, qualified = hit
-        on = spec.get("on_value") or "/1"
-        wobj = writer_widgets.get(qualified)
-        if wobj is not None:
-            wobj[NameObject("/AS")] = NameObject(on)
-            _checkbox_field_node(wobj)[NameObject("/V")] = NameObject(on)
+        overlay_ops.setdefault(page_idx, []).append({"rect": rect, "mark": True})
 
-    for page_idx, values in acro_values_by_page.items():
-        writer.update_page_form_field_values(writer.pages[page_idx], values)
-
-    if overlay_mode:
-        # Chrome widgets must go BEFORE the bake: LiveCycle-era buttons
-        # carry no /AP stream and bake to nothing, but AEM-era blanks
-        # (2020+) give Print/Save/Clear buttons and privacy banners real
-        # appearance streams, which the bake would ink permanently into
-        # the filing.
-        _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
-        _strip_pushbutton_widgets(writer)
-        writer = _bake_widgets(writer)
-        _strip_all_form_machinery(writer)
-    else:
-        if desc.get("technology") == "xfa":
-            _strip_xfa(writer)
-        _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
-        _strip_pushbutton_widgets(writer)
-        _set_need_appearances(writer)
+    # Chrome widgets must go BEFORE the bake: LiveCycle-era buttons
+    # carry no /AP stream and bake to nothing, but AEM-era blanks
+    # (2020+) give Print/Save/Clear buttons and privacy banners real
+    # appearance streams, which the bake would ink permanently into
+    # the filing.
+    _strip_named_widgets(writer, set(desc.get("chrome_fields") or []))
+    _strip_pushbutton_widgets(writer)
+    writer = _bake_widgets(writer)
+    _strip_all_form_machinery(writer)
 
     # Merge overlays. ``whiteouts:`` (descriptor-level) paints white
     # rectangles first — the tool for static page junk that survives
@@ -952,16 +842,11 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
                 c.setFont(font, fitted.font_size)
                 color = spec.get("color")
                 c.setFillColorRGB(*color) if color else c.setFillColorRGB(0, 0, 0)
-                x = min(rect[0], rect[2]) + 2
-                if len(fitted.lines) == 1:
-                    # Single line: vertically center in the box, the way
-                    # viewers render widget text, rather than top-anchor.
-                    cy = (min(rect[1], rect[3]) + max(rect[1], rect[3])) / 2.0
-                    c.drawString(x, cy - fitted.font_size * 0.36, fitted.lines[0])
-                    continue
-                y_top = max(rect[1], rect[3]) - fitted.font_size
-                for j, line in enumerate(fitted.lines):
-                    c.drawString(x, y_top - j * fitted.font_size * LEADING_RATIO, line)
+                for line, (x, y) in zip(
+                        fitted.lines,
+                        text_origins(fitted.lines, rect, fitted.font_size, font,
+                                     spec.get("align"), spec.get("valign"))):
+                    c.drawString(x, y, line)
             c.showPage()
         c.save()
         buf.seek(0)
@@ -1393,7 +1278,7 @@ def check_forms(form_ids: Optional[list[str]] = None,
         row = CheckRow(form_id=fid, layer=_layer_of(path), technology="?")
         try:
             desc = load_descriptor(fid)
-            row.technology = str(desc.get("technology") or "acroform")
+            row.technology = str(desc.get("technology") or "?")
             odd = [k for sect in ("fields", "checkboxes")
                    for k in (desc.get(sect) or {}) if not isinstance(k, str)]
             if odd:
