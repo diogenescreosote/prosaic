@@ -307,6 +307,114 @@ def _distinct_roles_in_order(field_lists: list[list[dict]]) -> list[str]:
     return seen
 
 
+def _split_span(text: str, start: int, end: int, x0: float, width: float) -> tuple[float, float]:
+    """x positions where text[start:end] begins and ends inside a span
+    of the given drawn width, by glyph widths proportionally scaled."""
+    try:
+        from reportlab.pdfbase.pdfmetrics import stringWidth
+        total = stringWidth(text, "Helvetica", 10) or 1.0
+        a = stringWidth(text[:start], "Helvetica", 10) / total
+        b = stringWidth(text[:end], "Helvetica", 10) / total
+    except Exception:  # pragma: no cover
+        n = max(len(text), 1)
+        a, b = start / n, end / n
+    return x0 + width * a, x0 + width * b
+
+
+Rule = tuple[float, float, float]
+Span = tuple[tuple[float, float, float, float], str]
+
+
+def _page_rules_and_text(page: object) -> tuple[list[Rule], list[Span]]:
+    """Horizontal rules (x0, x1, y) and printed text spans (bbox, text)
+    on a pymupdf page, top-left origin. Underscore runs count as rules
+    (a typed signature line), not as text."""
+    rules: list[tuple[float, float, float]] = []
+    spans: list[tuple[tuple[float, float, float, float], str]] = []
+    for d in page.get_drawings():
+        r = d["rect"]
+        if r.height < 1.5 and r.width > 30:
+            rules.append((r.x0, r.x1, r.y0))
+    for block in page.get_text("dict").get("blocks", []):
+        for line in block.get("lines", []):
+            for span in line.get("spans", []):
+                text = span.get("text", "")
+                bbox = tuple(span["bbox"])
+                if not text.strip():
+                    continue
+                m = re.search(r"_{3,}", text)
+                if m is None:
+                    spans.append((bbox, text))
+                    continue
+                # "Dated: ________" is one span: the label is text, the
+                # underscores are the rule. Split the box by measured
+                # glyph widths (Helvetica as the stand-in metric when the
+                # span's font is unknown), scaled to the span's real width.
+                width = bbox[2] - bbox[0]
+                split_x, end_x = _split_span(text, m.start(), m.end(), bbox[0], width)
+                if text[:m.start()].strip():
+                    spans.append(((bbox[0], bbox[1], split_x, bbox[3]), text[:m.start()]))
+                rules.append((split_x, end_x, bbox[3] - 1.0))
+                if text[m.end():].strip():
+                    spans.append(((end_x, bbox[1], bbox[2], bbox[3]), text[m.end():]))
+    return rules, spans
+
+
+def sidecar_geometry_problems(pdf: Path, sidecar: dict) -> list[str]:
+    """Why a sidecar's fields would land badly on this PDF: a box that
+    covers printed text, or a signature/date box that straddles the
+    rule it should rest on. Empty means the placements are sound.
+
+    This is the check a human makes by eye before sending; it exists
+    because a hand-written sidecar once put a date on top of its line
+    and a signature across the printed name beneath it."""
+    try:
+        import pymupdf
+    except ImportError:  # pragma: no cover
+        return []
+    try:
+        doc = pymupdf.open(str(pdf))
+        if doc.page_count < 1:
+            return []
+    except Exception:
+        # Not a readable PDF (a test double, a corrupt file): nothing to
+        # measure against; the API upload will say what it thinks of it.
+        return []
+    problems: list[str] = []
+    for f in sidecar.get("fields", []):
+        pno = int(f.get("page", 1))
+        if pno < 1 or pno > len(doc):
+            problems.append(f"{f.get('name')}: page {pno} is off the document")
+            continue
+        page = doc[pno - 1]
+        x0, y0 = float(f["x"]), float(f["y_top"])
+        x1, y1 = x0 + float(f["w"]), y0 + float(f["h"])
+        rules, spans = _page_rules_and_text(page)
+        for (sx0, sy0, sx1, sy1), text in spans:
+            # A span is "under the box" when its vertical centre falls
+            # inside it; a caption printed just beneath the rule ("Sign
+            # here", "(TYPE OR PRINT NAME)") has its centre below the box
+            # even though its ascenders touch the rule.
+            cy = (sy0 + sy1) / 2.0
+            ox = min(x1, sx1) - max(x0, sx0)
+            if ox > 1.0 and y0 <= cy <= y1:
+                problems.append(
+                    f"{f.get('name')} (page {pno}) covers printed text "
+                    f"{text.strip()[:40]!r}")
+                break
+        if f.get("type") in ("signature", "date", "text", "initials"):
+            below = [ry for (rx0, rx1, ry) in rules
+                     if min(x1, rx1) - max(x0, rx0) > 10 and ry >= y0 - 2]
+            if below:
+                rule_y = min(below)
+                if y1 > rule_y + 4.0:
+                    problems.append(
+                        f"{f.get('name')} (page {pno}) straddles its line: box bottom "
+                        f"{y1:.0f} pt is below the rule at {rule_y:.0f} pt; the box "
+                        f"should rest on the rule")
+    return problems
+
+
 def cmd_send(args: argparse.Namespace) -> int:
     pdfs = [Path(p) for p in args.pdf]
     for pdf in pdfs:
@@ -339,6 +447,27 @@ def cmd_send(args: argparse.Namespace) -> int:
     # Fields per document, in send order. Each PDF keeps its own page
     # numbers -- DocuSeal signs several documents in one submission, so
     # no PDF merging or page-offset math is needed.
+    # Field geometry comes from the build. A sidecar written by hand is
+    # a deliberate override (--allow-hand-fields), and every sidecar,
+    # whoever wrote it, must place its boxes where a pen would go.
+    for pdf in pdfs:
+        sidecar = field_sidecar(pdf)
+        if not sidecar:
+            continue
+        if sidecar.get("source") != "build" and not args.allow_hand_fields:
+            raise SystemExit(
+                f"{pdf.name}.fields.json was not written by the build (no "
+                f"\"source\": \"build\"). Rebuild the document so the renderer "
+                f"or the form descriptor places its fields, or pass "
+                f"--allow-hand-fields to send hand-placed geometry on purpose."
+            )
+        problems = sidecar_geometry_problems(pdf, sidecar)
+        if problems:
+            raise SystemExit(
+                f"refusing to send {pdf.name}: field placement is wrong:\n  "
+                + "\n  ".join(problems)
+            )
+
     per_doc_fields = [
         sidecar_api_fields(field_sidecar(pdf)) if field_sidecar(pdf) else []
         for pdf in pdfs
@@ -601,6 +730,11 @@ def main() -> None:
     )
     sp.add_argument(
         "--allow-draft", action="store_true", help="send even though the PDF carries a DRAFT banner"
+    )
+    sp.add_argument(
+        "--allow-hand-fields", action="store_true",
+        help="send a <pdf>.fields.json the build did not write "
+             "(hand placement is a deliberate override)"
     )
     sp.set_defaults(func=cmd_send)
 

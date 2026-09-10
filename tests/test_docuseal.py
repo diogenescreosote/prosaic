@@ -444,6 +444,7 @@ def test_send_attaches_fields_from_the_sidecar(mock_api: str, tmp_path: Path) ->
                 "page_height": 792.0,
                 "origin": "top-left",
                 "units": "pt",
+                "source": "build",
                 "fields": [
                     {
                         "name": "Signature 1",
@@ -504,6 +505,7 @@ def test_sidecar_role_count_gates_the_roster(mock_api: str, tmp_path: Path) -> N
                 "page_height": 792.0,
                 "origin": "top-left",
                 "units": "pt",
+                "source": "build",
                 "fields": [
                     {
                         "name": "Signature 1",
@@ -544,7 +546,7 @@ def test_sidecar_role_count_gates_the_roster(mock_api: str, tmp_path: Path) -> N
 def _sidecar(fields):
     return json.dumps({
         "page_width": 612.0, "page_height": 792.0,
-        "origin": "top-left", "units": "pt", "fields": fields,
+        "origin": "top-left", "units": "pt", "source": "build", "fields": fields,
     })
 
 

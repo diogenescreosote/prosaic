@@ -12,6 +12,8 @@ revision: "2006-01"           # form face: "MC-030 [Rev. January 1, 2006]"
 source_url: https://courts.ca.gov/documents/mc030.pdf
 blank: mc030.pdf
 technology: overlay           # draw at each widget's rect and flatten (ADR-0046)
+# E-sign roles (ADR-0033): the declarant signs page 1.
+esign_parties: [filer]
 
 # Interactive-use chrome stripped from filing copies: privacy banners
 # and Save/Print/Clear buttons.
@@ -119,6 +121,16 @@ fields:
     map: FillText20
     page: 1
     doc: "Date — LEAVE BLANK for hand-dating at signature"
+    esign: {type: date, party: filer}
+  signature:
+    page: 1
+    # Hand-authored rect (no widget): the declarant's signature rule on
+    # page 1 runs x 324–569 at 679 pt from the top (113 pt from the
+    # bottom); the box rests on it and rises 28 pt.
+    rect: [326, 113, 568, 141]
+    doc: "The declarant's signature line — never machine-filled."
+    default: ""
+    esign: {type: signature, party: filer}
     default: ""
   print_name:
     map: FillText18

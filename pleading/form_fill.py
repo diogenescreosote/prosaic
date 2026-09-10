@@ -59,6 +59,7 @@ CLI
 from __future__ import annotations
 
 import argparse
+import json
 import re
 import os
 import sys
@@ -1054,7 +1055,36 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     # Materialize overflow attachments (MC-025), appended in order.
     if result.overflows:
         _append_mc025_attachments(output_path, meta or {}, result)
+
+    # E-sign geometry sidecar (<pdf>.fields.json), the same shape the
+    # pleading build writes, so a standalone fill can go straight to
+    # `sc docuseal send` with its signature and date fields placed by
+    # the descriptor --- never by hand from text positions.
+    write_esign_sidecar(form_id, output_path, meta)
     return result
+
+
+def write_esign_sidecar(form_id: str, output_path: Path,
+                        meta: dict | None = None) -> Path | None:
+    """Write ``<pdf>.fields.json`` beside a filled form when its descriptor
+    declares ``esign:`` fields; remove a stale one when it declares none.
+    Returns the sidecar path when written."""
+    fields = esign_fields(form_id, meta)
+    path = output_path.with_name(output_path.name + ".fields.json")
+    if not fields:
+        if path.exists():
+            path.unlink()
+        return None
+    path.write_text(json.dumps({
+        "page_width": letter[0],
+        "page_height": letter[1],
+        "origin": "top-left",
+        "units": "pt",
+        "source": "build",
+        "form": form_id,
+        "fields": fields,
+    }, indent=2) + "\n")
+    return path
 
 
 def _handle_overflow(name: str, spec: dict, value: str, rect: list[float],

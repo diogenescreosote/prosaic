@@ -4,6 +4,8 @@ blank: fw001.pdf
 domain: ca/general
 revision: 2026-03
 technology: overlay          # ADR-0037: draw + flatten; never AcroForm values
+# E-sign roles (ADR-0033): the applicant signs page 1.
+esign_parties: [filer]
 
 agent_guide: >-
   FW-001 Request to Waive Court Fees (Gov. Code §§ 68632-68633, Cal.
@@ -125,6 +127,16 @@ fields:
     map: "FW-001[0].Page1[0].Sign[0].SigDate[0]"
     page: 1
     doc: "Date beside the signature. LEAVE BLANK for signing time."
+    esign: {type: date, party: filer}
+  signature:
+    page: 1
+    # Hand-authored rect (no widget): the applicant's signature rule on
+    # page 1 runs x 337–573 at 707 pt from the top (85 pt from the
+    # bottom); the box rests on it and rises 28 pt.
+    rect: [340, 85, 572, 113]
+    doc: "The applicant's signature line — never machine-filled."
+    default: ""
+    esign: {type: signature, party: filer}
     default: ""
   print_name:
     map: "FW-001[0].Page1[0].Sign[0].PetitionerName[0]"

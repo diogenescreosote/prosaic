@@ -50,6 +50,11 @@ technology: overlay
 # service copies.
 chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
 
+# E-sign roles (ADR-0033): the requesting party (or counsel) signs the
+# notice on page 1. The objection half and both page-2 proofs belong to
+# other people and carry no e-sign fields on purpose.
+esign_parties: [filer]
+
 fields:
   # ---- Page 1: attorney/party block ----------------------------------
   attorney_block:
@@ -195,6 +200,20 @@ fields:
       signed. The date signed is evidence of when the statutory service
       clocks started.
     default: ""
+    esign: {type: date, party: filer}
+  notice_signature:
+    page: 1
+    # Hand-authored rect (no widget): the signature rule on page 1 runs
+    # x 336–575 at 547 pt from the top (245 pt from the bottom), between
+    # the arrowhead and "(SIGNATURE OF ☐ REQUESTING PARTY ☐ ATTORNEY)".
+    # The box's bottom edge rests on the rule and it rises 28 pt, clear
+    # of the "Date:" line above. Verified against a rendered fill.
+    rect: [340, 245, 574, 273]
+    doc: >-
+      The notice signature line — reserved for the requesting party's
+      (or counsel's) signature; never machine-filled.
+    default: ""
+    esign: {type: signature, party: filer}
   notice_signer:
     map: "SUBP-025[0].Page1[0].Sign1[0].PrintName1[0]"
     page: 1

@@ -234,7 +234,17 @@ things from the build:
   the `<pdf>.fields.json` sidecar (or embedded tags in `esign: tags`
   mode); `sc docuseal send` places DocuSeal's own signature *and date*
   fields there, and DocuSeal fills both when the signer acts. The date
-  is a placed field the platform owns — never bake it.
+  is a placed field the platform owns — never bake it. The sidecar is
+  the build's to write, never a person's: `md_pleading` writes it for
+  every `\signblock`, and `sc form fill` writes it for any form whose
+  descriptor carries `esign:` fields (SUBP-025, FW-001, MC-030, MC-040,
+  EFS-050 do), each stamped `"source": "build"`. `sc docuseal send`
+  refuses a sidecar without that stamp unless `--allow-hand-fields` is
+  passed, and refuses any sidecar — stamped or not — whose box covers
+  printed text or straddles the rule it should rest on. A source that
+  types `Date: ____ / Signature: ____` as prose gets no geometry at all;
+  use `\signblock{dated}{NAME}{ROLE}` and the boxes land above the rules
+  with the name printed beneath them.
 
 - **Preview / wet ink (local).** Build `--final` with `sign_date:`
   (`today` or an ISO date) in the source. The macros then draw the

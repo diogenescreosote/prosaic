@@ -2699,7 +2699,7 @@ def _banner_layout(text: str, page_width: float) -> Tuple[List[str], float]:
     return (wrap_text(text, max_width, FONT_NAME_BOLD, size), size)
 
 
-def stamp_draft_banner(pdf_path: Path, text: Optional[str]) -> None:
+def stamp_draft_banner(pdf_path: Path, text: str | None) -> list[tuple[float, float]] | None:
     """Stamp the banner onto **every** page of an assembled document.
 
     Done here, over the finished PDF, rather than by each page-drawing
@@ -2784,6 +2784,32 @@ def stamp_draft_banner(pdf_path: Path, text: Optional[str]) -> None:
         page.merge_page(overlay.pages[i])
     with open(pdf_path, "wb") as f:
         writer.write(f)
+    # The per-page (scale, tx) the content moved by: anything recorded
+    # in page coordinates before the stamp (the e-sign sidecar) must
+    # move the same way, or a draft's fields land above their rules.
+    return geometry
+
+
+def transform_esign_fields(fields: list[dict], geometry: list[tuple[float, float]],
+                           page_height: float = PAGE_HEIGHT) -> list[dict]:
+    """Move sidecar fields (top-left points) by the banner stamp's
+    per-page scale-about-the-bottom-left plus horizontal shift."""
+    out: list[dict] = []
+    for f in fields:
+        idx = int(f.get("page", 1)) - 1
+        if idx < 0 or idx >= len(geometry):
+            out.append(f)
+            continue
+        scale, tx = geometry[idx]
+        x, y_top, w, h = float(f["x"]), float(f["y_top"]), float(f["w"]), float(f["h"])
+        y_bl = page_height - y_top - h
+        new_h = h * scale
+        out.append({**f,
+                    "x": round(x * scale + tx, 2),
+                    "y_top": round(page_height - y_bl * scale - new_h, 2),
+                    "w": round(w * scale, 2),
+                    "h": round(new_h, 2)})
+    return out
 
 
 def draw_pleading_footer(c: canvas.Canvas, page_num: int, footer_title: str) -> None:
@@ -4898,8 +4924,9 @@ def main() -> None:
     # tab sheets and exhibits alike. The notices are separately served
     # documents, so each gets its own stamp.
     banner = draft_banner_text(meta)
+    banner_geometry: list[tuple[float, float]] | None = None
     if banner:
-        stamp_draft_banner(output_path, banner)
+        banner_geometry = stamp_draft_banner(output_path, banner)
         for path in notices:
             stamp_draft_banner(Path(path), banner)
 
@@ -4931,12 +4958,15 @@ def main() -> None:
         except Exception:
             cover_fields = []
     esign_fields = cover_fields + body_fields
+    if esign_fields and banner_geometry:
+        esign_fields = transform_esign_fields(esign_fields, banner_geometry)
     if esign_fields:
         fields_path.write_text(json.dumps({
             "page_width": PAGE_WIDTH,
             "page_height": PAGE_HEIGHT,
             "origin": "top-left",
             "units": "pt",
+            "source": "build",
             "fields": esign_fields,
         }, indent=2) + "\n")
         print(f"Wrote {fields_path}")
