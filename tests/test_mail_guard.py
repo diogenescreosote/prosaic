@@ -176,6 +176,30 @@ def test_a_draft_in_a_thread_is_counted_but_never_a_message() -> None:
     assert out["draftCount"] == 1 and out["latestDraftAt"] == "2026-09-10T14:59:49.000Z"
 
 
+@needs_node
+def test_an_entry_without_a_draft_count_is_examined_once() -> None:
+    out = _json(
+        r"""
+        const { entryCurrent } = require('./pull.js');
+        const t = { id: 't', historyId: '7' };
+        console.log(JSON.stringify({
+          counted: entryCurrent({ historyId: '7', draftCount: 0 }, t),
+          uncounted: entryCurrent({ historyId: '7' }, t),
+          moved: entryCurrent({ historyId: '6', draftCount: 0 }, t),
+          forced: entryCurrent({ historyId: '7', draftCount: 0 }, t, true),
+          unknown: entryCurrent(undefined, t),
+        }));
+        """
+    )
+    assert out == {
+        "counted": True,
+        "uncounted": False,
+        "moved": False,
+        "forced": False,
+        "unknown": False,
+    }
+
+
 # --- the brief: the alarms ---------------------------------------------------
 
 

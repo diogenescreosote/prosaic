@@ -152,7 +152,10 @@ what is stored, and can be produced again.
     entry records how many `DRAFT`-labelled messages it holds and the
     newest one's date (`draftCount`, `latestDraftAt`), so the brief
     can say that a reply is still sitting in Drafts --- the record
-    would otherwise show a letter answered when nothing went out.
+    would otherwise show a letter answered when nothing went out. An
+    entry recorded before drafts were counted is examined once, on
+    the next run that lists it, so the report is true from the first
+    run rather than after the thread happens to change.
     *(tested: tests/test_mail_guard.py)*
 
 ## Non-obvious constraints

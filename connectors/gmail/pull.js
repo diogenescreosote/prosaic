@@ -399,6 +399,24 @@ function isNotDraft(message) {
 // --- change detection --------------------------------------------------
 
 /**
+ * Can a listed thread be skipped from its list stub alone? Only when the
+ * ledger's historyId matches AND the entry already carries a draft
+ * count: an entry recorded before drafts were counted is examined once
+ * (one metadata fetch) so the brief's draft report is true from the
+ * first run rather than after the thread happens to change.
+ */
+function entryCurrent(prev, t, force = false) {
+  return (
+    !force &&
+    !!prev &&
+    prev.historyId != null &&
+    t.historyId != null &&
+    String(prev.historyId) === String(t.historyId) &&
+    prev.draftCount !== undefined
+  );
+}
+
+/**
  * Has a known thread changed in a way that needs a re-export?
  *
  * Growth is the common case. But a thread can change without growing:
@@ -763,16 +781,7 @@ async function pullAccountListed(ctx, account) {
   const toExport = [];
   let skippedUnchanged = 0;
   let seeded = 0;
-  const unchanged = (t) => {
-    const prev = ledger.threads[t.id];
-    return (
-      !force &&
-      prev &&
-      prev.historyId != null &&
-      t.historyId != null &&
-      String(prev.historyId) === String(t.historyId)
-    );
-  };
+  const unchanged = (t) => entryCurrent(ledger.threads[t.id], t, force);
   // Metadata for every thread that might need work, fetched concurrently
   // up front; the decisions below stay sequential so ledger writes keep
   // their order.
@@ -1158,6 +1167,7 @@ module.exports = {
   ledgerFor,
   claimedFilenames,
   fetchThreadMeta,
+  entryCurrent,
   parseAddresses,
   canonicalAddress,
   addressCovered,
