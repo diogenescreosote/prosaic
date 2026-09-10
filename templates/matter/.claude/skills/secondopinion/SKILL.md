@@ -9,15 +9,24 @@ effort: high
 
 ## Target
 
-!`"@@PROSAIC@@/cli/sc" review paths ${ARGUMENTS%% -- *} 2>&1`
+!`ARGS=$(cat <<'PROSAIC_ARGS_EOF'
+$ARGUMENTS
+PROSAIC_ARGS_EOF
+); "@@PROSAIC@@/cli/sc" review paths --args "$ARGS" 2>&1`
 
 ## The other model's suggestions
 
-!`"@@PROSAIC@@/cli/sc" review second-opinion ${ARGUMENTS%% -- *} --brief "${ARGUMENTS#* -- }" 2>&1 | tail -1 | xargs -I{} sh -c 'echo "report: {}"; echo; cat "{}"' 2>/dev/null || echo "(second-opinion role is not configured; see docs/review.md)"`
+!`ARGS=$(cat <<'PROSAIC_ARGS_EOF'
+$ARGUMENTS
+PROSAIC_ARGS_EOF
+); OUT=$("@@PROSAIC@@/cli/sc" review second-opinion --args "$ARGS" 2>&1); RC=$?; if [ "$RC" -ne 0 ]; then echo "second-opinion FAILED (exit $RC):"; echo "$OUT"; else RP=$(echo "$OUT" | head -1); echo "report: $RP"; echo "$OUT" | tail -n +2; echo; cat "$RP"; fi`
 
 ## Integration report file (header already written)
 
-!`"@@PROSAIC@@/cli/sc" review report ${ARGUMENTS%% -- *} --check integration 2>&1`
+!`ARGS=$(cat <<'PROSAIC_ARGS_EOF'
+$ARGUMENTS
+PROSAIC_ARGS_EOF
+); "@@PROSAIC@@/cli/sc" review report --args "$ARGS" --check integration 2>&1`
 
 ## Instructions
 

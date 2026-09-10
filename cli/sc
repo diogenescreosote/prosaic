@@ -1108,8 +1108,32 @@ def external_spend_line(matter: Path) -> str | None:
     return s
 
 
+def split_review_args(raw: str) -> tuple[str, str]:
+    """Split a skill's raw argument string, `<target> -- <brief>`, into
+    the two. The split lives here, in Python, because a skill's shell
+    preamble cannot do it: the harness substitutes `$ARGUMENTS` and the
+    positional `$0`..`$9` textually before the shell runs, so any
+    `${ARGUMENTS%%...}` or awk `$0` in the template is rewritten into
+    nonsense (it happened twice). The preamble captures the text in a
+    quoted heredoc and hands it over whole."""
+    raw = raw.strip()
+    if " -- " in raw:
+        target, brief = raw.split(" -- ", 1)
+    elif raw.endswith(" --"):
+        target, brief = raw[:-3], ""
+    else:
+        target, brief = raw, ""
+    return target.strip(), brief.strip()
+
+
 def cmd_review(args: argparse.Namespace) -> int:
     matter = _matter_root(Path(args.matter_dir))
+    if args.args is not None:
+        target, brief = split_review_args(args.args)
+        if target:
+            args.target = target
+        if brief and not args.brief:
+            args.brief = brief
     if args.action == "status":
         rows = review_status(matter, args.target, tidy=args.tidy)
         if not rows:
@@ -2491,6 +2515,8 @@ def main() -> int:
     sp.add_argument("action", choices=("paths", "cites", "report", "status", "second-opinion"))
     sp.add_argument("target", nargs="?", help="envelope name or src/ path")
     sp.add_argument("--brief", help="second-opinion: one paragraph on what the draft must achieve")
+    sp.add_argument("--args", dest="args", default=None,
+                    help="the skill's raw argument string, '<target> -- <brief>'; split here, never in shell")
     sp.add_argument("--matter-dir", default=".", dest="matter_dir")
     sp.add_argument("--check", help="report: the check name (citecheck, clerkreview, judgereview, oppo, preflight)")
     sp.add_argument("--tidy", action="store_true", help="status: move stale reports into superseded/")
