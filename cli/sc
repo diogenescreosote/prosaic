@@ -1246,31 +1246,44 @@ def _gmail_ledger_threads(matter: Path) -> list[tuple[str, dict, dict]]:
     return out
 
 
-def _mbox_last_from(matter: Path, entry: dict) -> tuple[str, str]:
-    """(from, subject) of the newest message in a thread's mbox, cheaply:
-    the file is read once, headers only. Falls back to the ledger."""
+def _mbox_last_from(matter: Path, entry: dict) -> tuple[str, str, float]:
+    """(from, subject, date) of the newest message in a thread's mbox,
+    cheaply: the file is read once, headers only. Falls back to the ledger."""
     import mailbox
+    from email.utils import parsedate_to_datetime
     subject = entry.get("subject") or Path(entry.get("filename") or "").stem
     rel = entry.get("mbox")
     if not rel:
-        return "", subject
+        return "", subject, 0.0
     p = matter / "assets" / "gmail" / rel
     if not p.is_file():
-        return "", subject
+        return "", subject, 0.0
     try:
         msgs = list(mailbox.mbox(str(p)))
     except Exception:
-        return "", subject
+        return "", subject, 0.0
     if not msgs:
-        return "", subject
+        return "", subject, 0.0
     last = msgs[-1]
-    return str(last.get("From") or ""), str(msgs[0].get("Subject") or subject)
+    try:
+        when = parsedate_to_datetime(str(last.get("Date"))).timestamp()
+    except (TypeError, ValueError):
+        when = 0.0
+    return str(last.get("From") or ""), str(msgs[0].get("Subject") or subject), when
 
 
-def new_correspondence(matter: Path, since_ts: float) -> list[str]:
-    """Threads the gmail connector exported after `since_ts`, inbound
-    first, each as `date --- from --- subject --- filename`."""
+#: Senders that are machines, not correspondents; their threads sort last.
+_AUTOMATED_LOCAL = r"^(no-?reply|noreply|do-?not-?reply|donotreply|notifications?|mailer-daemon|postmaster|bounce|alerts?)([+.-]|$)"
+
+
+def new_correspondence(matter: Path, since_ts: float, limit: int = 25) -> list[str]:
+    """Threads the gmail connector exported after `since_ts`: people before
+    machines, inbound before outbound, newest message first --- so a
+    letter from counsel heads the list however many reminders a backfill
+    brought in beside it. Each row: `date --- from --- subject --- file`."""
     import datetime as dt
+    import re
+    automated_local = re.compile(_AUTOMATED_LOCAL, re.I)
     rows = []
     for _account, meta, entry in _gmail_ledger_threads(matter):
         exported = entry.get("exportedAt")
@@ -1282,15 +1295,21 @@ def new_correspondence(matter: Path, since_ts: float) -> list[str]:
             continue
         if when <= since_ts:
             continue
-        sender, subject = _mbox_last_from(matter, entry)
+        sender, subject, last_at = _mbox_last_from(matter, entry)
         identity = str(meta.get("identity") or "")
         own = identity.split("<")[-1].rstrip(">").strip().lower()
-        inbound = bool(sender) and own not in sender.lower()
-        domain = sender.split("@")[-1].rstrip("> ").strip() if "@" in sender else (sender or "?")
-        rows.append((0 if inbound else 1, -when,
-                     f"{_fmt_ts(exported)} --- {'from' if inbound else 'to/own'} {domain} --- {subject[:90]} --- {entry.get('filename', '')}"))
+        address = sender.split("<")[-1].rstrip("> ").strip().lower() if sender else ""
+        inbound = bool(address) and own not in address
+        automated = bool(address) and bool(automated_local.match(address.split("@")[0]))
+        domain = address.split("@")[-1] if "@" in address else (sender or "?")
+        shown = _fmt_ts(last_at) if last_at else _fmt_ts(exported)
+        rows.append((1 if automated else 0, 0 if inbound else 1, -(last_at or when),
+                     f"{shown} --- {'from' if inbound else 'to/own'} {domain} --- {subject[:90]} --- {entry.get('filename', '')}"))
     rows.sort()
-    return [r[2] for r in rows]
+    out = [r[3] for r in rows[:limit]]
+    if len(rows) > limit:
+        out.append(f"... and {len(rows) - limit} more (automated senders and older threads last)")
+    return out
 
 
 def unsent_drafts(matter: Path) -> list[str]:
@@ -1324,8 +1343,9 @@ def mail_watch_sections(matter: Path, since_ts: float) -> list[str]:
     lines: list[str] = []
     fresh = new_correspondence(matter, since_ts)
     if fresh:
-        lines += ["", f"## New correspondence since {_fmt_ts(since_ts)} ({len(fresh)})"]
-        lines += [f"- {r}" for r in fresh[:25]]
+        n = sum(1 for r in fresh if not r.startswith("... and "))
+        lines += ["", f"## New correspondence since {_fmt_ts(since_ts)} ({n}{'+' if n < len(fresh) or fresh[-1].startswith('... and ') else ''})"]
+        lines += [f"- {r}" for r in fresh]
     drafts = unsent_drafts(matter)
     if drafts:
         lines += ["", f"## Unsent drafts in captured threads ({len(drafts)})"]
