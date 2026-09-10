@@ -406,8 +406,13 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     while True:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
         widest = max((stringWidth(l, font, size) for l in lines), default=0.0)
-        if len(lines) > 1:
+        if len(lines) > 1 and spec.get("multiline"):
+            # A multiline AcroForm widget: the viewer lays the text out.
             fits_h = len(lines) * size * MULTILINE_LEADING_RATIO + MULTILINE_INSET <= height
+        elif len(lines) > 1:
+            # Wrapped by us (overlay, or a single-line widget the
+            # descriptor wraps): we draw the lines, so our leading holds.
+            fits_h = len(lines) * size * LEADING_RATIO <= height
         else:
             # Single line: viewers vertically center the text in the
             # widget, and JC forms routinely give one-line fields a rect
@@ -796,6 +801,10 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         page_idx, qualified = hit
         wobj = writer_widgets.get(qualified)
         rect = [float(v) for v in (wobj.get("/Rect") if wobj is not None else [0, 0, 200, 12])]
+        if wobj is not None and "multiline" not in spec:
+            # The widget knows whether a viewer will lay out multiple
+            # lines in it; fit_text needs that to judge height honestly.
+            spec = {**spec, "multiline": bool(int(wobj.get("/Ff", 0)) & (1 << 12))}
         if value:
             fitted = fit_text(value, rect, spec)
             if not fitted.fits:
