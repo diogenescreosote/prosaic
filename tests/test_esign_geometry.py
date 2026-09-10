@@ -172,3 +172,44 @@ def test_send_refuses_a_hand_written_sidecar_without_the_flag(tmp_path: Path) ->
     assert proc.returncode != 0
     assert "not written by the build" in proc.stderr
     assert "--allow-hand-fields" in proc.stderr
+
+
+DECL_SOURCE = (
+    "---\ndoctype: pleading\npaper_title: \"DECLARATION OF JANE ROE\"\n"
+    "filer_name: \"Jane Roe\"\n"
+    "filer_address_lines: [\"100 Main St, Suite 4\", \"Springfield, CA 90000\"]\n"
+    "filer_phone: \"(555) 555-0100\"\nfiler_email: \"jane.roe@example.com\"\n"
+    "filer_role: \"Respondent, In Pro Per\"\n"
+    "court_name: \"SUPERIOR COURT OF THE STATE OF CALIFORNIA\"\n"
+    "court_county: \"COUNTY OF EXAMPLE\"\n"
+    "petitioner: \"JOHN SMITH\"\nrespondent: \"JANE ROE\"\n"
+    "caption_first_party_label: \"Petitioner\"\ncaption_second_party_label: \"Respondent\"\n"
+    "case_number: \"24CV00000\"\n---\n\n"
+    "1. I am the respondent. I declare the foregoing is true and correct.\n\n"
+    "\\signblock{decl}{JANE ROE}{Springfield, California}{Respondent, In Pro Per}\n")
+
+
+@pytest.mark.parametrize("final", [True, False], ids=["final", "draft-banner"])
+def test_decl_signblock_inline_blanks_pass_and_a_shifted_copy_fails(
+        tmp_path: Path, final: bool) -> None:
+    """The decl style puts its Day and Month fields on blanks INSIDE the
+    sentence "Executed this ___ day of _______, 2026, at ..." --- one text
+    span with the rules in the middle. The renderer's own geometry must
+    pass; the same fields moved down 12 pt must not."""
+    src = tmp_path / "decl.md"
+    src.write_text(DECL_SOURCE)
+    argv = [sys.executable, str(MD_PLEADING), str(src), str(tmp_path / "decl.pdf")]
+    if final:
+        argv.append("--final")
+    proc = subprocess.run(argv, capture_output=True, text=True, cwd=tmp_path, timeout=300)
+    assert proc.returncode == 0, proc.stderr
+    sidecar = json.loads((tmp_path / "decl.pdf.fields.json").read_text())
+    names = {f["name"].split(" ")[0] for f in sidecar["fields"]}
+    assert names == {"Day", "Month", "Signature"}
+    mod = client_module()
+    assert mod.sidecar_geometry_problems(tmp_path / "decl.pdf", sidecar) == []
+    shifted = json.loads(json.dumps(sidecar))
+    for f in shifted["fields"]:
+        f["y_top"] += 12
+    problems = mod.sidecar_geometry_problems(tmp_path / "decl.pdf", shifted)
+    assert {p.split(" ")[0] for p in problems} == {"Day", "Month", "Signature"}, problems

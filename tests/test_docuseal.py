@@ -605,3 +605,43 @@ def test_fetch_prints_signed_paths(mock_api: str, tmp_path: Path) -> None:
     assert proc.returncode == 0, proc.stderr
     assert "SIGNED: signed/signed.pdf" in proc.stdout
     assert "AUDIT:  signed/submission-123-audit-log.pdf" in proc.stdout
+
+
+def test_send_accepts_the_renderers_decl_signblock_geometry(mock_api: str, tmp_path: Path) -> None:
+    """A real build whose Day/Month fields sit on blanks inside a sentence
+    must pass the geometry gate; the same sidecar shifted must be refused
+    before any request reaches the API."""
+    pytest.importorskip("pymupdf")
+    md = tmp_path / "decl.md"
+    md.write_text(
+        "---\ndoctype: pleading\npaper_title: \"DECLARATION OF JANE ROE\"\n"
+        "filer_name: \"Jane Roe\"\n"
+        "filer_address_lines: [\"100 Main St\", \"Springfield, CA 90000\"]\n"
+        "filer_phone: \"(555) 555-0100\"\nfiler_email: \"jane.roe@example.com\"\n"
+        "filer_role: \"Respondent, In Pro Per\"\n"
+        "court_name: \"SUPERIOR COURT OF THE STATE OF CALIFORNIA\"\n"
+        "court_county: \"COUNTY OF EXAMPLE\"\n"
+        "petitioner: \"JOHN SMITH\"\nrespondent: \"JANE ROE\"\ncase_number: \"24CV00000\"\n---\n\n"
+        "1. I declare the foregoing is true and correct.\n\n"
+        "\\signblock{decl}{JANE ROE}{Springfield, California}{Respondent, In Pro Per}\n")
+    build = subprocess.run(
+        [sys.executable, str(REPO_ROOT / "pleading" / "md_pleading.py"), str(md),
+         str(tmp_path / "decl.pdf"), "--final"], capture_output=True, text=True, cwd=tmp_path)
+    assert build.returncode == 0, build.stderr
+    MockDocuSeal.requests.clear()
+    proc = run_docuseal("send", "decl.pdf", "--to", "Jane Roe <jane@example.com>",
+                        url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    assert any(r["path"] == "/submissions/pdf" for r in MockDocuSeal.requests)
+
+    sidecar_path = tmp_path / "decl.pdf.fields.json"
+    sidecar = json.loads(sidecar_path.read_text())
+    for f in sidecar["fields"]:
+        f["y_top"] += 12
+    sidecar_path.write_text(json.dumps(sidecar))
+    MockDocuSeal.requests.clear()
+    proc = run_docuseal("send", "decl.pdf", "--to", "Jane Roe <jane@example.com>",
+                        url=mock_api, cwd=tmp_path)
+    assert proc.returncode != 0
+    assert "field placement is wrong" in proc.stderr
+    assert not any(r["path"] == "/submissions/pdf" for r in MockDocuSeal.requests)

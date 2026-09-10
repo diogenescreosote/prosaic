@@ -307,20 +307,6 @@ def _distinct_roles_in_order(field_lists: list[list[dict]]) -> list[str]:
     return seen
 
 
-def _split_span(text: str, start: int, end: int, x0: float, width: float) -> tuple[float, float]:
-    """x positions where text[start:end] begins and ends inside a span
-    of the given drawn width, by glyph widths proportionally scaled."""
-    try:
-        from reportlab.pdfbase.pdfmetrics import stringWidth
-        total = stringWidth(text, "Helvetica", 10) or 1.0
-        a = stringWidth(text[:start], "Helvetica", 10) / total
-        b = stringWidth(text[:end], "Helvetica", 10) / total
-    except Exception:  # pragma: no cover
-        n = max(len(text), 1)
-        a, b = start / n, end / n
-    return x0 + width * a, x0 + width * b
-
-
 Rule = tuple[float, float, float]
 Span = tuple[tuple[float, float, float, float], str]
 
@@ -335,28 +321,39 @@ def _page_rules_and_text(page: object) -> tuple[list[Rule], list[Span]]:
         r = d["rect"]
         if r.height < 1.5 and r.width > 30:
             rules.append((r.x0, r.x1, r.y0))
-    for block in page.get_text("dict").get("blocks", []):
+    # "Dated: ____" and "Executed this ___ day of _____, 2026, at
+    # Springfield" are single spans with the blanks inside them. Walk
+    # the span's characters (rawdict gives each its own box): every run
+    # of 3+ underscores is a rule, every other run is text, each placed
+    # at its real glyph extent.
+    for block in page.get_text("rawdict").get("blocks", []):
         for line in block.get("lines", []):
             for span in line.get("spans", []):
-                text = span.get("text", "")
-                bbox = tuple(span["bbox"])
-                if not text.strip():
+                chars = span.get("chars") or []
+                if not chars:
                     continue
-                m = re.search(r"_{3,}", text)
-                if m is None:
-                    spans.append((bbox, text))
-                    continue
-                # "Dated: ________" is one span: the label is text, the
-                # underscores are the rule. Split the box by measured
-                # glyph widths (Helvetica as the stand-in metric when the
-                # span's font is unknown), scaled to the span's real width.
-                width = bbox[2] - bbox[0]
-                split_x, end_x = _split_span(text, m.start(), m.end(), bbox[0], width)
-                if text[:m.start()].strip():
-                    spans.append(((bbox[0], bbox[1], split_x, bbox[3]), text[:m.start()]))
-                rules.append((split_x, end_x, bbox[3] - 1.0))
-                if text[m.end():].strip():
-                    spans.append(((end_x, bbox[1], bbox[2], bbox[3]), text[m.end():]))
+                runs: list[tuple[bool, list[dict]]] = []
+                for ch in chars:
+                    is_rule = ch["c"] == "_"
+                    if runs and runs[-1][0] == is_rule:
+                        runs[-1][1].append(ch)
+                    else:
+                        runs.append((is_rule, [ch]))
+                for is_rule, group in runs:
+                    text = "".join(c["c"] for c in group)
+                    x0 = min(c["bbox"][0] for c in group)
+                    x1 = max(c["bbox"][2] for c in group)
+                    y0 = min(c["bbox"][1] for c in group)
+                    y1 = max(c["bbox"][3] for c in group)
+                    if is_rule and len(group) >= 3:
+                        rules.append((x0, x1, y1 - 1.0))
+                    elif text.strip():
+                        # Extent of the visible glyphs only: a leading
+                        # space after a blank is not text a box can cover.
+                        inked = [c for c in group if not c["c"].isspace()]
+                        x0 = min(c["bbox"][0] for c in inked)
+                        x1 = max(c["bbox"][2] for c in inked)
+                        spans.append(((x0, y0, x1, y1), text.strip()))
     return rules, spans
 
 
@@ -397,7 +394,11 @@ def sidecar_geometry_problems(pdf: Path, sidecar: dict) -> list[str]:
             # even though its ascenders touch the rule.
             cy = (sy0 + sy1) / 2.0
             ox = min(x1, sx1) - max(x0, sx0)
-            if ox > 1.0 and y0 <= cy <= y1:
+            # The renderer sizes a blank's field from its own font
+            # metrics, which can run a couple of points past the drawn
+            # underscores into the next glyph; a box that truly covers
+            # a word overlaps it by far more than 3 pt.
+            if ox > 3.0 and y0 <= cy <= y1:
                 problems.append(
                     f"{f.get('name')} (page {pno}) covers printed text "
                     f"{text.strip()[:40]!r}")
