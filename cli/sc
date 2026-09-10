@@ -1269,7 +1269,7 @@ def _mbox_last_from(matter: Path, entry: dict) -> tuple[str, str, float]:
         when = parsedate_to_datetime(str(last.get("Date"))).timestamp()
     except (TypeError, ValueError):
         when = 0.0
-    return str(last.get("From") or ""), str(msgs[0].get("Subject") or subject), when
+    return (str(last.get("From") or ""), " ".join(str(msgs[0].get("Subject") or subject).split()), when)
 
 
 #: Senders that are machines, not correspondents; their threads sort last.
