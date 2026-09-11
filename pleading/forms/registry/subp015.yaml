@@ -1,0 +1,496 @@
+# SUBP-015 — Deposition Subpoena for Personal Appearance
+#
+# The appearance-only member of the deposition trio: it commands a
+# witness to APPEAR AND TESTIFY at a deposition, and nothing else. It
+# demands no records, so CCP § 1985.3 (consumer notice, the consumer's
+# written objection) has no purchase on it, and it needs no good-cause
+# declaration. Documents at a deposition are SUBP-020 (appearance +
+# production); records to a deposition officer without a witness are
+# SUBP-010; trial/hearing process is SUBP-001/002.
+#
+# Every mapping below was verified empirically on the shipped blank
+# (fill each field with its own logical name, rasterize, look). Two
+# things worth knowing about this 2009 revision:
+#
+# 1. THE CAPTION HAS A REAL E-MAIL LINE (Email[0]) and the ATTORNEY FOR
+#    line is Attorneyname[0] — unlike SUBP-001 (2007), where "Email"
+#    is the attorney-for line. Do not copy captions between the two.
+# 2. ITEM 1's TIME BOX IS NAMED TextField1[0] under List1.Info — the
+#    same leaf name as the attorney block under P1Caption. Only the
+#    parent distinguishes them; the descriptor keys below do.
+
+form: subp015
+title: Deposition Subpoena for Personal Appearance
+domain: ca/civil              # any CA civil action
+revision: "2009-01"           # form face: "SUBP-015 [Rev. January 1, 2009]"
+source_url: https://courts.ca.gov/documents/subp015.pdf
+blank: subp015.pdf
+
+# Overlay: every value is drawn at its widget's rectangle and the
+# output is flattened, so the blank's LiveCycle/XFA layer never reaches
+# a service copy (ADR-0046).
+technology: overlay
+
+# UI chrome under SUBP-015[0].#pageSet[0].LastPage[0].PXFooter[0].
+# FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,
+# drawn on page 2. Stripped from service copies.
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+fields:
+  # ---- Page 1: attorney/party block ----------------------------------
+  attorney_block:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].AttyPartyInfo[0].TextField1[0]"
+    page: 1
+    doc: >-
+      ATTORNEY OR PARTY WITHOUT ATTORNEY (Name, State Bar number, and
+      address) — one multiline box; filled from filer_name (+ SBN) and
+      filer_address_lines.
+    auto: attorney_block
+    fit: shrink_wrap
+  phone:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+    fit: shrink
+  fax:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO. (Optional)"
+    auto: fax
+    fit: shrink
+  email:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "E-MAIL ADDRESS (Optional) — a real e-mail line on this revision"
+    auto: email
+    fit: shrink
+  attorney_for:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Attorneyname[0]"
+    page: 1
+    doc: >-
+      ATTORNEY FOR (Name) — the form prints the label, so the value is
+      the client only; self-represented filers put their own role here.
+    auto: attorney_for
+    fit: shrink
+
+  # ---- Page 1: court block --------------------------------------------
+  court_county:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: "County name only — the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+    fit: shrink
+  court_street_address:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "STREET ADDRESS of the court"
+    auto: court_street_address
+    fit: shrink
+  court_mailing_address:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "MAILING ADDRESS of the court"
+    auto: court_mailing_address
+    fit: shrink
+  court_city_zip:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "CITY AND ZIP CODE of the court"
+    auto: court_city_zip
+    fit: shrink
+  court_branch:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME of the court"
+    auto: court_branch
+    fit: shrink
+
+  # ---- Page 1: caption party names + case number -----------------------
+  plaintiff:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name (bound to the petitioner meta key)"
+    auto: petitioner
+    fit: shrink
+  defendant:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name (bound to the respondent meta key)"
+    auto: respondent
+    fit: shrink
+  case_number:
+    map: "SUBP-015[0].Page1[0].P1Caption[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 1: the deponent -------------------------------------------
+  deponent:
+    map: "SUBP-015[0].Page1[0].People[0].FillText1[0]"
+    page: 1
+    doc: >-
+      "THE PEOPLE OF THE STATE OF CALIFORNIA, TO (name, address, and
+      telephone number of deponent, if known)" — the person commanded
+      to appear, e.g. "Mavis Example, 500 Market Street, Example City,
+      CA 90000, (555) 555-0199". Multiline box.
+    default: ""
+    fit: shrink_wrap
+
+  # ---- Page 1, Item 1: the deposition ----------------------------------
+  deposition_date:
+    map: "SUBP-015[0].Page1[0].List1[0].Info[0].DateField1[0]"
+    page: 1
+    doc: 'Item 1 "Date:" — the deposition date'
+    default: ""
+    fit: shrink
+  deposition_time:
+    map: "SUBP-015[0].Page1[0].List1[0].Info[0].TextField1[0]"
+    page: 1
+    doc: >-
+      Item 1 "Time:" (e.g. "9:00 a.m."). Widget leaf name TextField1
+      collides with the attorney block's; the parent (List1.Info)
+      distinguishes them. A narrow box: keep it to a time.
+    default: ""
+    fit: shrink
+    min_font_size: 4
+  deposition_address:
+    map: "SUBP-015[0].Page1[0].List1[0].Info[0].TextField2[0]"
+    page: 1
+    doc: >-
+      Item 1 "Address:" — where the deposition is taken. For a remote
+      deposition (CCP § 2025.310), the officer's address with a
+      remote-appearance notation, matching the deposition notice.
+      Multiline box.
+    default: ""
+    fit: shrink_wrap
+
+  # ---- Page 1, Item 2: entity designee matters (entities only) --------
+  examination_matters:
+    map: "SUBP-015[0].Page1[0].List2[0].item2[0].TextField7[0]"
+    page: 1
+    doc: >-
+      Item 2 — "the matters upon which the witness is to be examined"
+      when the deponent is a business or other entity that must
+      designate a witness (CCP § 2025.230). LEAVE BLANK for a natural
+      person; pair with entity_designee and entity_matters_checkbox
+      when used. Multiline box.
+    default: ""
+    fit: shrink_wrap
+
+  # ---- Page 1: issuing-person block -----------------------------------
+  date_issued:
+    map: "SUBP-015[0].Page1[0].Sign[0].SigDate[0]"
+    page: 1
+    doc: >-
+      "Date issued:" — LEAVE BLANK. The issuer dates it by hand when
+      signing.
+    default: ""
+  issuer_print_name:
+    map: "SUBP-015[0].Page1[0].Sign[0].SigName[0]"
+    page: 1
+    doc: >-
+      "(TYPE OR PRINT NAME)" under the issuing signature. An attorney of
+      record issues a deposition subpoena without any court order (CCP
+      § 2020.210(b)); a self-represented party has the clerk issue it on
+      a blank and fills the rest. Pre-filled from filer_name (SBN
+      suffix stripped) so only the signature and date remain for the
+      human. The signature line itself has no widget.
+    auto: filer_name_bare
+    fit: shrink
+  issuer_title:
+    map: "SUBP-015[0].Page1[0].Sign[0].TextField9[0]"
+    page: 1
+    doc: >-
+      "(TITLE)" under the signature line — the issuer's capacity, bound
+      to filer_role verbatim. (Widget leaf name TextField9 repeats the
+      page-2 address-where-served box under a different parent.)
+    auto: filer_role
+    fit: shrink
+
+  # ---- Page 2: proof-of-service caption echo ---------------------------
+  plaintiff_p2:
+    map: "SUBP-015[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "PLAINTIFF/PETITIONER caption name (page 2 copy)"
+    auto: petitioner
+    fit: shrink
+  defendant_p2:
+    map: "SUBP-015[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "DEFENDANT/RESPONDENT caption name (page 2 copy)"
+    auto: respondent
+    fit: shrink
+  case_number_p2:
+    map: "SUBP-015[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "CASE NUMBER (page 2 copy)"
+    auto: case_number
+    fit: shrink
+
+  # ---- Page 2: PROOF OF SERVICE ----------------------------------------
+  # Mapped so a post-service workflow can fill them from known facts,
+  # but never auto-filled: the server attests to these under penalty of
+  # perjury after service, and the copy served travels with page 2
+  # blank.
+  pos_person_served:
+    map: "SUBP-015[0].Page2[0].List1[0].Lia[0].TextField8[0]"
+    page: 2
+    doc: 'POS item 1a "Person served (name)" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_address_served:
+    map: "SUBP-015[0].Page2[0].List1[0].Lib[0].TextField9[0]"
+    page: 2
+    doc: 'POS item 1b "Address where served" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink_wrap
+  pos_delivery_date:
+    map: "SUBP-015[0].Page2[0].List1[0].Lic[0].DateField3[0]"
+    page: 2
+    doc: 'POS item 1c "Date of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_delivery_time:
+    map: "SUBP-015[0].Page2[0].List1[0].Lid[0].TextField10[0]"
+    page: 2
+    doc: 'POS item 1d "Time of delivery" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+    fit: shrink
+  pos_witness_fees_amount:
+    map: "SUBP-015[0].Page2[0].List1[0].Lie[0].SubLie[0].Li1[0].DecimalField3[0]"
+    page: 2
+    doc: >-
+      POS item 1e(1) witness-fee amount (dollars) — LEAVE BLANK at
+      issuance; pair with pos_witness_fees_paid when fees were demanded
+      and paid.
+    default: ""
+  pos_public_entity_fees_amount:
+    map: "SUBP-015[0].Page2[0].List1[0].Lie[0].SubLie[0].Li3[0].DecimalField2[0]"
+    page: 2
+    doc: >-
+      POS item 1e(3) amount tendered to a public-entity employer under
+      Gov. Code § 68097.2 — LEAVE BLANK at issuance; pair with
+      pos_witness_fees_public_entity. A narrow dollar box.
+    default: ""
+    fit: shrink
+    min_font_size: 4
+  pos_service_fee:
+    map: "SUBP-015[0].Page2[0].List1[0].Lif[0].DecimalField1[0]"
+    page: 2
+    doc: 'POS item 1f "Fee for service" — LEAVE BLANK at issuance (server fills)'
+    default: ""
+  pos_received_date:
+    map: "SUBP-015[0].Page2[0].List2[0].item2[0].on_date1[0]"
+    page: 2
+    doc: >-
+      POS item 2 "I received this subpoena for service on (date)" —
+      LEAVE BLANK at issuance (server fills).
+    default: ""
+    fit: shrink
+  pos_server_info:
+    map: "SUBP-015[0].Page2[0].List3[0].Lih[0].TextField25[0]"
+    page: 2
+    doc: >-
+      POS item 3h — server's name, address, telephone number, and (if a
+      registered process server) county of registration and number.
+      LEAVE BLANK at issuance; multiline box, filled by the server.
+    default: ""
+    fit: shrink_wrap
+  pos_sig_date:
+    map: "SUBP-015[0].Page2[0].Sign1[0].Date3[0]"
+    page: 2
+    doc: >-
+      Date next to the server's perjury signature — LEAVE BLANK for the
+      server to hand-date when signing.
+    default: ""
+  pos_sheriff_sig_date:
+    map: "SUBP-015[0].Page2[0].Sign2[0].Date3[0]"
+    page: 2
+    doc: >-
+      Date in the "(For California sheriff or marshal use only)"
+      certification block — LEAVE BLANK; the sheriff/marshal dates it.
+    default: ""
+
+checkboxes:
+  # ---- Page 1, Item 1: how the deposition is taken ----------------------
+  entity_designee:
+    map: "SUBP-015[0].Page1[0].List1[0].Lia[0].Ch1[0]"
+    on_value: "/1"
+    doc: >-
+      Item 1a — "As a deponent who is not a natural person, you are
+      ordered to designate one or more persons to testify on your
+      behalf as to the matters described in item 2" (CCP § 2025.230).
+      Entities only; pair with entity_matters_checkbox and
+      examination_matters. Off for a natural person.
+  stenographic:
+    map: "SUBP-015[0].Page1[0].List1[0].Lib[0].Ch2[0]"
+    on_value: "/1"
+    doc: 'Item 1b — "This deposition will be recorded stenographically" (the usual case)'
+  instant_visual_display:
+    map: "SUBP-015[0].Page1[0].List1[0].Lib[0].Ch3[0]"
+    on_value: "/1"
+    doc: 'Item 1b — "through the instant visual display of testimony" (realtime feed)'
+  audiotape:
+    map: "SUBP-015[0].Page1[0].List1[0].Lib[0].Ch4[0]"
+    on_value: "/1"
+    doc: 'Item 1b — "and by audiotape"'
+  videotape:
+    map: "SUBP-015[0].Page1[0].List1[0].Lib[0].Ch4[1]"
+    on_value: "/1"
+    doc: >-
+      Item 1b — "and by videotape". Same widget family (Ch4) as
+      audiotape, distinguished by index [1]; verified visually.
+  videotape_for_trial:
+    map: "SUBP-015[0].Page1[0].List1[0].Lic[0].Ch5[0]"
+    on_value: "/1"
+    doc: >-
+      Item 1c — "This videotape deposition is intended for possible use
+      at trial under Code of Civil Procedure section 2025.620(d)" —
+      pair with videotape.
+  entity_matters_checkbox:
+    map: "SUBP-015[0].Page1[0].List2[0].item2[0].Ch7[0]"
+    on_value: "/1"
+    doc: >-
+      Item 2 selector — "If the witness is a representative of a
+      business or other entity, the matters upon which the witness is
+      to be examined are as follows" — pair with examination_matters
+      and entity_designee. Off for a natural person.
+
+  # ---- Page 2: PROOF OF SERVICE (server's attestations) ---------------
+  # All off by default. The server chooses; the machine never guesses.
+  pos_witness_fees_paid:
+    map: "SUBP-015[0].Page2[0].List1[0].Lie[0].SubLie[0].Li1[0].ch1[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 1e(1) "Witness fees and mileage both ways ... were paid.
+      Amount" — server only; pair with pos_witness_fees_amount.
+  pos_witness_fees_not_paid:
+    map: "SUBP-015[0].Page2[0].List1[0].Lie[0].SubLie[0].Li2[0].ch1[0]"
+    on_value: "/2"
+    doc: 'POS item 1e(2) "were not paid." — server only. On-state "/2".'
+  pos_witness_fees_public_entity:
+    map: "SUBP-015[0].Page2[0].List1[0].Lie[0].SubLie[0].Li3[0].ch1[0]"
+    on_value: "/3"
+    doc: >-
+      POS item 1e(3) "were tendered to the witness's public entity
+      employer as required by Government Code section 68097.2" —
+      server only; pair with pos_public_entity_fees_amount. On-state
+      "/3". (The three 1e boxes share the leaf name ch1 and differ by
+      parent and on-state.)
+  pos_not_registered:
+    map: "SUBP-015[0].Page2[0].List3[0].Lia[0].Ch20[0]"
+    on_value: "/1"
+    doc: "POS item 3a — server is NOT a registered California process server"
+  pos_sheriff_or_marshal:
+    map: "SUBP-015[0].Page2[0].List3[0].Lib[0].Ch21[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3b — server is a California sheriff or marshal. Such a
+      server signs the "(For California sheriff or marshal use only)"
+      certification instead of the perjury declaration.
+  pos_registered_process_server:
+    map: "SUBP-015[0].Page2[0].List3[0].Lic[0].Ch22[0]"
+    on_value: "/1"
+    doc: "POS item 3c — server IS a registered California process server"
+  pos_process_server_employee:
+    map: "SUBP-015[0].Page2[0].List3[0].Lid[0].Ch23[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3d — server is an employee or independent contractor of
+      a registered California process server
+  pos_exempt_22350b:
+    map: "SUBP-015[0].Page2[0].List3[0].Lie[0].Ch24[0]"
+    on_value: "/1"
+    doc: "POS item 3e — exempt from registration under Bus. & Prof. Code § 22350(b)"
+  pos_registered_photocopier:
+    map: "SUBP-015[0].Page2[0].List3[0].Lif[0].Ch25[0]"
+    on_value: "/1"
+    doc: >-
+      POS item 3f — server is a registered professional photocopier.
+      On-state "/1" on this revision (unlike the "/3" quirk on
+      SUBP-001/002/010).
+  pos_exempt_22451:
+    map: "SUBP-015[0].Page2[0].List3[0].Lig[0].Ch26[0]"
+    on_value: "/1"
+    doc: "POS item 3g — exempt from registration under Bus. & Prof. Code § 22451"
+
+# Static gray under-rectangle at the bottom-left of page 2, where the
+# stripped privacy-banner widget used to sit. The Warning widget's own
+# rect is [36.0, 10.2, 247.3, 33.4]; this is that with a 1-pt margin.
+# Do not reuse SUBP-001's taller rect: on this form the footer title's
+# second line sits at about 40--47 pt and a rect reaching 42 clips it
+# (found by rendering).
+whiteouts:
+  - page: 2
+    rect: [35, 9, 249, 34.5]
+
+agent_guide: |
+  SUBP-015 is the Judicial Council form for a DEPOSITION SUBPOENA FOR
+  PERSONAL APPEARANCE — it commands a nonparty witness to show up and
+  testify at a deposition, nothing more. There is no records demand
+  anywhere on it, and therefore no consumer notice (CCP § 1985.3), no
+  consumer objection window, and no good-cause declaration.
+
+  PICK THE RIGHT FORM FIRST:
+    - SUBP-015 — deposition appearance only (this form)
+    - SUBP-020 — deposition appearance AND production of documents,
+      ESI or things (consumer notice applies if personal records)
+    - SUBP-010 — records only, to a deposition officer, no witness
+    - SUBP-001/002 — appearance (and production) at trial or hearing
+  If any documents are wanted at the deposition, use SUBP-020; do not
+  serve this form with an informal request to "bring the file."
+
+  WHO ISSUES AND SERVES IT. An attorney of record issues (signs) it
+  (CCP § 2020.210(b)); a self-represented party has the clerk issue a
+  signed blank and completes it. Service is personal on the deponent
+  (CCP § 2020.220(b)), with witness fees and mileage both ways (Gov.
+  Code § 68093) paid either with service or at the deposition, at the
+  subpoenaing party's option — item 3 says so on the face. The
+  subpoena goes to the WITNESS; every PARTY must separately receive a
+  deposition notice (CCP § 2025.220) stating the same date, time,
+  place, recording method and, for a remote deposition, that it is
+  taken by remote electronic means (CCP § 2025.310; CRC 3.1010). The
+  notice is a captioned pleading, not part of this form.
+
+  USUAL INVOCATION — standalone fill:
+
+      sc form fill subp015 out.pdf --meta case.yaml --data - <<'YAML'
+      deponent: >-
+        Mavis Example, 500 Market Street, Example City, CA 90000,
+        (555) 555-0199
+      deposition_date: "October 15, 2026"
+      deposition_time: "9:00 a.m."
+      deposition_address: >-
+        Example Reporting, 200 Commerce Way, Suite 300, Example City,
+        CA 90000 (by remote videoconference; see notice of deposition)
+      stenographic: true
+      YAML
+
+  The caption fills from the standard front matter (this 2009 revision
+  has a real e-mail line).
+
+  ITEM 1b: check stenographic in the usual case; add
+  instant_visual_display for a realtime feed; audiotape/videotape only
+  if ordered, and videotape_for_trial only when the videotaped
+  deposition may be used at trial under CCP § 2025.620(d).
+
+  ITEM 1a AND ITEM 2 ARE FOR ENTITY DEPONENTS ONLY (CCP § 2025.230):
+  set entity_designee and entity_matters_checkbox and fill
+  examination_matters with the matters for examination. For a natural
+  person leave all three alone — describing subject matter for an
+  individual is surplusage and invites a scope fight.
+
+  LOCATION: unless the deponent agrees or the court orders otherwise,
+  an individual's deposition is within 75 miles of the deponent's
+  residence, or 150 miles if within the county where the action is
+  pending (CCP § 2025.250); the form's item 3 recites this.
+
+  ALWAYS LEFT BLANK — do not fill:
+    - date_issued and the issuing signature (issuer_print_name and
+      issuer_title ARE pre-filled; the pen strokes and the date remain
+      for the human);
+    - every page-2 proof-of-service field and checkbox (pos_*) — the
+      server completes them after service, and the copy served on the
+      deponent carries page 2 blank.

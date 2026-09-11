@@ -303,6 +303,7 @@ Current registry: `mc030` (declaration), `mc025` (attachment),
 `mc050` (substitution of attorney—civil, without court order),
 `civ110` (request for dismissal), `efs020` (e-filing cover),
 `subp010` (deposition subpoena for production of business records),
+`subp015` (deposition subpoena for personal appearance),
 `subp025` (notice to consumer or employee and objection),
 `mc040` (notice of change of address — the `technology: overlay`
 pilot).
