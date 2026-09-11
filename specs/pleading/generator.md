@@ -175,6 +175,15 @@ sent to a court.
   caught — it is a distinct document and is captioned normally. See
   [ADR 0018](../../design/adr/0018-form-attachments-are-not-pleadings.md).
   *(tested: pleading/tests/test_form_attachment_caption.py)*
+- **A Bates cite is a link to the stamped page.** `\bates{TOKEN}`
+  renders the token verbatim, blue and underlined, and the merged PDF
+  carries a /GoTo annotation to the page of an attached exhibit whose
+  stamp it is; the exhibit declares `bates_first:`, and page *n* of
+  the file carries the number advanced by *n*−1 whatever `pages:`
+  selects. A range (`TOKEN--NNNNN`) displays with an en dash and links
+  to its first page. A cite to a page not in the packet fails the
+  build; a cite into an exhibit withheld in this variant renders
+  without a link. *(tested: pleading/tests/test_bates_links.py)*
 - **A case name in running text is italicized, and the build fails
   otherwise.** Every renderer (PDF, DOCX, TXT) refuses a source whose
   body sets a case name roman: a `Doe v. Roe`, `In re Doe`,

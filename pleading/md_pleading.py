@@ -295,6 +295,11 @@ FIXEDWIDTH_FONT_BOLD = "Courier-Bold"
 # \filelink text: gentle, low-saturation blue with a thin underline, the
 # conventional affordance that a span is clickable, print-safe in gray.
 FILELINK_COLOR_RGB = (110 / 255, 140 / 255, 175 / 255)
+# \bates{...} text: the old-school hyperlink blue with an underline, so a
+# Bates cite reads as what it is, a link to the stamped page in the
+# attached exhibit. Deliberately louder than \filelink: the target is in
+# the same PDF and the click always works.
+BATES_LINK_COLOR_RGB = (0 / 255, 0 / 255, 238 / 255)
 FIXEDWIDTH_MAX_SIZE = 12
 FIXEDWIDTH_MIN_SIZE = 6
 FIXEDWIDTH_ADVANCE_EM = 0.6
@@ -443,6 +448,9 @@ class TextSpan:
     mono: bool = False
     # \filelink{path}{text?}: relative file target for a link annotation.
     file_link: Optional[str] = None
+    # \bates{TOKEN} or \bates{TOKEN--NNNNN}: the raw Bates reference; the
+    # link resolves to the exhibit page carrying the first token.
+    bates_ref: Optional[str] = None
     # When set, this span is a footnote *reference* marker (text is ignored;
     # the superscript number is assigned later from document order).
     footnote_id: Optional[str] = None
@@ -533,6 +541,24 @@ class Exhibit:
     letter: str
     sealed: bool = False
     pages: Optional[str] = None
+    # First Bates token stamped on page 1 of the file ("CAPINAS00001"):
+    # page n carries the same prefix and width with the number advanced
+    # by n-1, so \bates{} references resolve to attached pages.
+    bates_first: Optional[str] = None
+
+
+_BATES_TOKEN_RE = re.compile(r"^(?P<prefix>.*?)(?P<num>\d+)$")
+
+
+def bates_page_tokens(bates_first: str, page_numbers: List[int]) -> Dict[str, int]:
+    """Map Bates token -> 1-based source page number for the given pages."""
+    m = _BATES_TOKEN_RE.match(bates_first.strip())
+    if not m or not m.group("num"):
+        raise ValueError(
+            f"bates_first {bates_first!r} must end in the page-1 number, e.g. ACME00001")
+    prefix, num = m.group("prefix"), m.group("num")
+    start, width = int(num), len(num)
+    return {f"{prefix}{str(start + p - 1).zfill(width)}": p for p in page_numbers}
 
 # ---------------------------------------------------------------------------
 # Helpers
@@ -655,6 +681,7 @@ _VERBATIM_SPAN_RE = re.compile(
     r"(\\fixedwidth\{[^{}\n]*\}"
     r"|`[^`\n]+`"
     r"|\\filelink\{[^{}\n]*\}(?:\{[^{}\n]*\})?"
+    r"|\\bates\{[^{}\n]*\}"
     r"|^\\fixedwidth\{$.*?^\}$)",
     re.M | re.S,
 )
@@ -851,6 +878,7 @@ _INLINE_RE = re.compile(
     r"|`([^`\n]+)`"              # 8: `...` backtick synonym for \fixedwidth
     r"|\\filelink\{([^{}\n]*)\}(?:\{([^{}\n]*)\})?"  # 9/10: \filelink{path}{text?}
     r"|\[\^([^\]]+?)\]"       # 11: [^footnote-id]  (reference marker)
+    r"|\\bates\{([^{}\n]*)\}"     # 12: \bates{TOKEN} / \bates{TOKEN--NNNNN}
     r")"
 )
 
@@ -900,6 +928,12 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
                                   mono=True, file_link=m.group(9)))
         elif m.group(11) is not None:
             spans.append(TextSpan("", footnote_id=m.group(11).strip()))
+        elif m.group(12) is not None:
+            raw_ref = m.group(12).strip()
+            spans.append(TextSpan(raw_ref.replace("--", "\u2013"), bold=bold,
+                                  italic=italic, underline=True,
+                                  highlight=highlight, mono=True,
+                                  bates_ref=raw_ref))
         last = m.end()
     if last < len(text):
         spans.append(TextSpan(text[last:], bold=bold, italic=italic,
@@ -912,6 +946,20 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
 
 _OPENING_PUNCT = set("(\u201c\u2018[")
 _CLOSING_PUNCT_CHARS = set(")\u201d\u2019.,;:!?]")
+
+
+def bates_first_token(ref: str) -> str:
+    """The page a \\bates reference links to: the first token of a range
+    ("CAPINAS00001--00002" -> "CAPINAS00001"), or the token itself."""
+    return re.split(r"--|\u2013", ref.strip(), maxsplit=1)[0].strip()
+
+
+def _span_link_target(span: TextSpan) -> Optional[str]:
+    if span.file_link:
+        return f"file:{span.file_link}"
+    if span.bates_ref:
+        return f"bates:{bates_first_token(span.bates_ref)}"
+    return None
 
 
 def spans_to_styled_words(spans: List[TextSpan],
@@ -941,8 +989,7 @@ def spans_to_styled_words(spans: List[TextSpan],
                                     underline=span.underline,
                                     highlight=span.highlight,
                                     mono=span.mono,
-                                    link_target=(f"file:{span.file_link}"
-                                                 if span.file_link else None),
+                                    link_target=_span_link_target(span),
                                     no_space_before=glue))
     return words
 
@@ -1004,6 +1051,18 @@ def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: Opti
     return lines
 
 
+def _link_color(link_target: Optional[str]) -> Optional[Tuple[float, float, float]]:
+    """Ink for a linked word: file links are the gentle blue, Bates links
+    the hyperlink blue; every other link (Exhibit A) is black."""
+    if not link_target:
+        return None
+    if link_target.startswith("file:"):
+        return FILELINK_COLOR_RGB
+    if link_target.startswith("bates:"):
+        return BATES_LINK_COLOR_RGB
+    return None
+
+
 def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWord],
                       font_size: Optional[int] = None) -> List[Tuple[float, float, float, str]]:
     if font_size is None:
@@ -1053,7 +1112,7 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
     active_link: Optional[str] = None
     link_start_x = 0.0
     ul_active = False
-    ul_is_filelink = False
+    ul_color: Optional[Tuple[float, float, float]] = None
     ul_start_x = 0.0
     ul_y = y - UNDERLINE_OFFSET_PT
     prev_end_x = x
@@ -1062,8 +1121,8 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
         nonlocal ul_active
         if ul_active:
             c.setLineWidth(UNDERLINE_WIDTH_PT)
-            if ul_is_filelink:
-                c.setStrokeColorRGB(*FILELINK_COLOR_RGB)
+            if ul_color:
+                c.setStrokeColorRGB(*ul_color)
             c.line(ul_start_x, ul_y, end_x, ul_y)
             c.setStrokeColorRGB(0, 0, 0)
             ul_active = False
@@ -1090,8 +1149,7 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
 
         if word.underline and not ul_active:
             ul_active = True
-            ul_is_filelink = bool(word.link_target
-                                  and word.link_target.startswith("file:"))
+            ul_color = _link_color(word.link_target)
             ul_start_x = word_start_x
         elif not word.underline and ul_active:
             flush_underline(prev_end_x)
@@ -1099,10 +1157,7 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
         size = word.effective_size(font_size)
         wy = y + font_size * SUPERSCRIPT_RISE_FRAC if word.superscript else y
         c.setFont(word.font_name(), size)
-        if word.link_target and word.link_target.startswith("file:"):
-            c.setFillColorRGB(*FILELINK_COLOR_RGB)
-        else:
-            c.setFillColorRGB(0, 0, 0)
+        c.setFillColorRGB(*(_link_color(word.link_target) or (0, 0, 0)))
         c.drawString(word_start_x, wy, word.text)
         cx = word_start_x + word.width(font_size)
         prev_end_x = cx
@@ -1548,9 +1603,14 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
         pages_spec = item_resolved.get("pages")
         if pages_spec is not None:
             pages_spec = str(pages_spec).strip()
+        bates_first = item_resolved.get("bates_first")
+        if bates_first is not None:
+            bates_first = str(bates_first).strip()
+            bates_page_tokens(bates_first, [1])  # validate the shape now
         if is_sealed:
             exhibits.append(Exhibit(shortname=shortname, title=title,
-                                    path=None, letter=alpha(idx), sealed=True))
+                                    path=None, letter=alpha(idx), sealed=True,
+                                    bates_first=bates_first))
         else:
             if "path" not in item_resolved or not isinstance(item_resolved["path"], str) or not item_resolved["path"].strip():
                 raise ValueError(f"exhibits[{idx}] missing required string field: path")
@@ -1575,7 +1635,8 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
                 if not path.exists():
                     raise ValueError(f"Exhibit file not found for {shortname}: {path}")
             exhibits.append(Exhibit(shortname=shortname, title=title,
-                                    path=path, letter=alpha(idx), pages=pages_spec))
+                                    path=path, letter=alpha(idx), pages=pages_spec,
+                                    bates_first=bates_first))
     return exhibits
 
 
@@ -4785,6 +4846,8 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
         append_pdf_direct(writer, exhibit_list_pdf)
 
     tab_page_map: Dict[str, int] = {}
+    bates_page_map: Dict[str, int] = {}   # token -> output page index
+    sealed_bates_prefixes: List[str] = []
 
     with tempfile.TemporaryDirectory(prefix="md_pleading_exhibits_") as td:
         temp_dir = Path(td)
@@ -4794,6 +4857,9 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
             # exhibit is skipped entirely there (no tab sheet); the PUBLIC
             # packet must show the gap, so it gets a placeholder tab (with
             # the seal note) and no attachment pages.
+            if exhibit.sealed and exhibit.bates_first:
+                sealed_bates_prefixes.append(
+                    _BATES_TOKEN_RE.match(exhibit.bates_first).group("prefix"))
             if exhibit.sealed and variant != "public":
                 continue
             tab_pdf = temp_dir / f"tab_{exhibit.letter}.pdf"
@@ -4807,8 +4873,18 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
             append_pdf_scaled(writer, tab_pdf)
             if exhibit.sealed:
                 continue
+            first_idx = len(writer.pages)
             append_exhibit_attachment(writer, exhibit, temp_dir)
+            if exhibit.bates_first and exhibit.path.suffix.lower() == ".pdf":
+                total = len(PdfReader(str(exhibit.path)).pages)
+                if exhibit.pages:
+                    numbers = [i + 1 for i in parse_page_ranges(exhibit.pages, total)]
+                else:
+                    numbers = list(range(1, total + 1))
+                for token, page_no in bates_page_tokens(exhibit.bates_first, numbers).items():
+                    bates_page_map[token] = first_idx + numbers.index(page_no)
 
+        unresolved: List[str] = []
         if link_rects:
             for lr in link_rects:
                 rect = (lr.x, lr.y, lr.x + lr.width, lr.y + lr.height)
@@ -4816,12 +4892,32 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
                     _add_file_link_annotation(writer, lr.page_index, rect,
                                               lr.dest[len("file:"):])
                     continue
+                if lr.dest.startswith("bates:"):
+                    token = lr.dest[len("bates:"):]
+                    target_idx = bates_page_map.get(token)
+                    if target_idx is None:
+                        if any(token.startswith(px) for px in sealed_bates_prefixes):
+                            continue  # the exhibit is withheld in this variant
+                        unresolved.append(token)
+                        continue
+                    _add_link_annotation(writer, lr.page_index, rect, target_idx)
+                    continue
                 target_idx = tab_page_map.get(lr.dest)
                 if target_idx is not None:
                     _add_link_annotation(
                         writer, lr.page_index, rect,
                         target_idx,
                     )
+
+        if unresolved:
+            raise SystemExit(
+                f"{output_pdf.name}: {len(unresolved)} \\bates reference(s) do not "
+                f"land on an attached page: {', '.join(sorted(set(unresolved)))}.\n\n"
+                f"A \\bates{{TOKEN}} links to the page of an attached exhibit that "
+                f"carries that stamp. Give the exhibit `bates_first:` (the token on "
+                f"its page 1) and make sure its `pages:` selection includes the "
+                f"cited page; a cite to a page that is not in the packet is a "
+                f"broken link, so the build refuses it.")
 
         with open(output_pdf, "wb") as f:
             writer.write(f)

@@ -849,6 +849,7 @@ Each exhibit entry in `exhibits` must be a YAML mapping with these fields:
 - `title` — required string; used on the exhibit list and on the exhibit tab sheet
 - `path` — required string (unless `sealed: true`); relative or absolute pathname to the attachment file. This may also be a variant-aware mapping with `sealed` / `public` branches. Bare filenames default to the sibling `exhibits/` directory next to `src/`.
 - `pages` — optional string; page range selector for PDF attachments (see below)
+- `bates_first` — optional string; the Bates token stamped on page 1 of the file (`CAPINAS00001`). Page *n* of the file carries the same prefix and digit width with the number advanced by *n*−1, whatever `pages:` selects, so a `\bates{TOKEN}` in the body resolves to the attached page carrying that stamp. Ends in the page-1 number or the build refuses it.
 - `sealed` — optional boolean (default `false`); if `true`, the exhibit is listed on the exhibit list page with a "[Lodged Conditionally Under Seal]" annotation but is **not attached** to the PDF. The `\exhibit{}` reference still resolves to the correct letter. No `path` is required for sealed exhibits. This is the direct attachment switch used by the active build variant. Tab sheets are asymmetric by design: in a **public** build the sealed exhibit gets a placeholder tab sheet labeled `LODGED CONDITIONALLY UNDER SEAL` (the public packet must show the gap); in a sealed-variant build the exhibit is skipped entirely — no tab sheet — because the packet is accompanied by the separately-lodged originals.
 - `public_disclosure` — optional string controlling what happens in the **public**
   build. Allowed values:
@@ -1068,6 +1069,17 @@ The generator supports standard Markdown inline emphasis:
 - `***text***` renders in bold italic
 
 Use `*...*` for case citations, Latin phrases, and other conventionally italicized legal text.
+
+**Bates cites are links.** `\bates{CAPINAS00017}` renders the token
+verbatim in the fixed-width face, hyperlink blue and underlined, and
+the merged PDF carries an internal link to the attached exhibit page
+stamped with it; `\bates{CAPINAS00001--00002}` displays the range with
+an en dash and links to its first page. The exhibit supplies the map
+with `bates_first:` (schema below). A cite to a page that is not in the
+packet fails the build; a cite into an exhibit withheld in the current
+variant renders without a link. Like `\fixedwidth`, the contents are
+verbatim and exempt from every substitution and check. DOCX carries
+the token blue and underlined (no page link); TXT carries the token.
 
 **Case names must be italicized, and the build enforces it.** A case
 name in running text that is not inside an italic (or `<u>underlined</u>`)

@@ -265,6 +265,8 @@ def _add_spans(p, text: str, base_bold: bool = False,
             run.underline = True
         if span.highlight:
             run.font.highlight_color = WD_COLOR_INDEX.YELLOW
+        if span.bates_ref:
+            run.font.color.rgb = RGBColor(0x00, 0x00, 0xEE)
 
 
 def _add_styled_para(doc: Document, text: str, bold: bool = False,
@@ -307,6 +309,8 @@ def _spans_to_run_xml(text: str) -> str:
             props.append('<w:u w:val="single"/>')
         if span.highlight:
             props.append('<w:highlight w:val="yellow"/>')
+        if span.bates_ref:
+            props.append('<w:color w:val="0000EE"/>')
         rpr = "<w:rPr>%s</w:rPr>" % "".join(props) if props else ""
         runs.append('<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>'
                     % (rpr, escape(span.text)))

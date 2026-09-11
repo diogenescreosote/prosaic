@@ -52,7 +52,10 @@ File paths, hashes, Bates tokens, code, email addresses →
 Courier, exempt from dash/quote substitutions). Multi-line:
 `\fixedwidth{` on its own line, verbatim lines, `}` on its own line.
 `\filelink{path}{text}` adds a clickable relative-file link (works in
-desktop viewers when the target travels beside the PDF). Full markup
+desktop viewers when the target travels beside the PDF). A Bates
+cite whose page is attached as an exhibit is `\bates{ACME00017}` (or
+`\bates{ACME00001--00002}`): blue, underlined, and an internal link
+to the stamped page; the exhibit carries `bates_first:`. Full markup
 inventory: `<prosaic>/pleading/pleading_markdown_spec.md`.
 
 ## STOP. A form attachment is not a standalone pleading
