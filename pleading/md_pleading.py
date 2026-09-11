@@ -721,7 +721,8 @@ def warn_spaced_dashes(raw: str, source: Path) -> None:
 # often than a case name, and no citation style writes a case that way.
 _CASE_NAME_RE = re.compile(
     r"(?<![\w*])(?:"
-    r"[A-Z][\w.'&\-]*(?: [\w.'&,\-]+)*? v\. [A-Z][\w.'&\-]*(?: [A-Z][\w.'&\-]*)*"
+    r"[A-Z][\w.'&\-]*(?: (?:[A-Z][\w.'&\-]*|of|the|&|ex rel\.))* v\. "
+    r"[A-Z][\w.'&\-]*(?: (?:[A-Z][\w.'&\-]*|of|the|&))*(?: \([A-Z][^()]*\))?"
     r"|In re [A-Z][\w.'&\-]*"
     r"|ex rel\. [A-Z][\w.'&\-]*"
     r"|(?:Marriage|Estate|Guardianship|Conservatorship|Adoption) of [A-Z][\w.'&\-]*"
