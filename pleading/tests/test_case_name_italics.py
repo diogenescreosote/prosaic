@@ -85,6 +85,8 @@ def test_roman_case_names_are_found(body):
     "the docket `Smith v. Roe` is the source",
     "<!-- Story v. Superior Court unverified -->",
     "Health & Safety Code § 123110, subd. (a); 45 C.F.R. § 164.524.",
+    "The rule was reworded because of *J.M. v. Illuminate\nEducation* (2026), which held",
+    "- first item citing *Doe v. Roe*\n- second item citing *In re\n  Lifschutz*",
 ])
 def test_italic_and_non_case_text_pass(body):
     assert not hits(body), body
@@ -123,6 +125,8 @@ def test_reports_every_hit_with_line_numbers():
     found = mp.find_unitalicized_case_names(FRONT + body)
     front_lines = FRONT.count("\n")
     assert [h[0] for h in found] == [front_lines + 1, front_lines + 3]
+    wrapped = "A wrapped paragraph that cites\nPettus v. Cole across the\nbreak."
+    assert [h[0] for h in mp.find_unitalicized_case_names(FRONT + wrapped)] == [front_lines + 1]
     with pytest.raises(SystemExit) as exc:
         mp.require_case_names_italic(FRONT + body, "decl.md")
     msg = str(exc.value)

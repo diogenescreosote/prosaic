@@ -774,8 +774,9 @@ def _body_lines_with_numbers(raw: str):
 
 
 def find_unitalicized_case_names(raw: str) -> List[Tuple[int, str, str]]:
-    """Return (lineno, case-name signal, line excerpt) for every case name
-    in running text that is not inside an italic or underlined span.
+    """Return (lineno, case-name signal, excerpt) for every case name in
+    running text that is not inside an italic or underlined span; lineno
+    is the first line of the paragraph carrying it.
 
     Works on the parsed inline spans of each line, so the rule is exactly
     the renderer's: a name is italicized when the span carrying it has
@@ -785,9 +786,23 @@ def find_unitalicized_case_names(raw: str) -> List[Tuple[int, str, str]]:
     " v. " is roman, and the whole name must be set the same way.
     """
     hits: List[Tuple[int, str, str]] = []
+    # Sources wrap paragraphs at a fixed column, so an italic span can
+    # straddle a physical line break (``*Doe v.\nRoe*``). The renderer
+    # joins a paragraph's lines before parsing emphasis; so does this.
+    paragraphs: List[Tuple[int, str]] = []
+    start, buf = 0, []
     for lineno, line in _body_lines_with_numbers(raw):
-        stripped = line.strip()
-        if not stripped or not _CASE_SIGNAL_RE.search(stripped):
+        if line.strip():
+            if not buf:
+                start = lineno
+            buf.append(line.strip())
+        elif buf:
+            paragraphs.append((start, " ".join(buf)))
+            buf = []
+    if buf:
+        paragraphs.append((start, " ".join(buf)))
+    for lineno, stripped in paragraphs:
+        if not _CASE_SIGNAL_RE.search(stripped):
             continue
         if _CASE_TITLE_LINE_RE.match(stripped):
             continue
