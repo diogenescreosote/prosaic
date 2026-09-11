@@ -175,6 +175,19 @@ sent to a court.
   caught — it is a distinct document and is captioned normally. See
   [ADR 0018](../../design/adr/0018-form-attachments-are-not-pleadings.md).
   *(tested: pleading/tests/test_form_attachment_caption.py)*
+- **A case name in running text is italicized, and the build fails
+  otherwise.** Every renderer (PDF, DOCX, TXT) refuses a source whose
+  body sets a case name roman: a `Doe v. Roe`, `In re Doe`,
+  `ex rel.`, or `Marriage of` / `Estate of` / `Guardianship of` /
+  `Conservatorship of` / `Adoption of` name outside an italic (or
+  underlined) span, including a name whose parties were italicized
+  separately (`*Doe* v. *Roe*`). The error lists every offending line
+  and the fix. Exempt: front matter and YAML comments, HTML comments,
+  verbatim spans and blocks, and a line that is only a case title with
+  an optional case number (`Smith v. Roe, 24CV00000`, the opener of a
+  form attachment). `vs.` is not a signal; it is prose. See
+  [ADR 0047](../../design/adr/0047-case-names-are-italicized-or-the-build-fails.md).
+  *(tested: pleading/tests/test_case_name_italics.py)*
 - **Front-matter keys nothing reads produce a warning, never an
   error.** Recognized keys are enumerated in
   `pleading/front_matter_keys.yaml`; anything else warns at build

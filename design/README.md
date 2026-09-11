@@ -67,6 +67,7 @@ project accretes decisions instead of middleware.
 - [0044](adr/0044-standby-supervisor.md) A standby supervisor per matter: inbox watcher, honest sync summaries, agent roles, nightly refine that proposes, the daily standup
 - [0045](adr/0045-preflight-review-is-optional.md) Preflight review is four optional persona checks with hash-tied reports and computed staleness; never a gate
 - [0046](adr/0046-overlay-is-the-only-form-technology.md) Form-layer filling removed outright; overlay is the only technology, required explicitly; text centers in its box
+- [0047](adr/0047-case-names-are-italicized-or-the-build-fails.md) A roman case name in running text fails the build in every renderer; title lines and verbatim text are exempt
 
 Also:
 

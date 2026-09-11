@@ -1069,6 +1069,18 @@ The generator supports standard Markdown inline emphasis:
 
 Use `*...*` for case citations, Latin phrases, and other conventionally italicized legal text.
 
+**Case names must be italicized, and the build enforces it.** A case
+name in running text that is not inside an italic (or `<u>underlined</u>`)
+span fails every renderer with an error listing each offending line:
+`Doe v. Roe`, `In re Doe`, `People ex rel. Doe`, `Marriage of Doe`,
+`Estate of Doe`, and a name whose parties were italicized separately
+(`*Doe* v. *Roe*`) are all refused. Italicize the whole name and only
+the name: `*Doe v. Roe* (2024) 100 Cal.App.5th 123`. Not checked:
+front matter and its comments, HTML comments, verbatim spans and
+blocks, and a line that is only a case title with an optional case
+number (`Smith v. Roe, 24CV00000`, the opener of a form attachment).
+See ADR-0047.
+
 ### Typographic substitutions
 
 The generator automatically converts ASCII approximations to proper Unicode glyphs:

@@ -352,6 +352,7 @@ def main() -> None:
         sys.exit(1)
 
     raw = input_path.read_text(encoding="utf-8")
+    mp.require_case_names_italic(raw, input_path.name)
     meta, body = mp.parse_front_matter(raw)
     mp.warn_unknown_front_matter_keys(meta, Path(args.input).name)
     meta = mp.apply_variant_to_meta(meta, args.variant)

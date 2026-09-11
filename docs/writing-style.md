@@ -187,6 +187,14 @@ the year, or the pin cite:
 *Doe v. Roe* (2024) 100 Cal.App.5th 123, 130.
 ```
 
+This is enforced, not suggested: a roman case name in running text
+(`Doe v. Roe`, `In re Doe`, `Marriage of Doe`, or `*Doe* v. *Roe*`
+with the connective left roman) **fails the build** in every
+renderer, listing each offending line. Underline is accepted as the
+typewriter equivalent. The one line set roman is a title line that is
+nothing but the case name and number — the opener of a form
+attachment, `Smith v. Roe, 24CV00000` (ADR-0047).
+
 **Statutes are not italicized at all:**
 
 ```md
@@ -339,6 +347,9 @@ Run before building or handing off any pleading source:
 ```bash
 # 1. No spaced em dashes in the source
 rg -n ' --- ' src/*.md
+
+# 1a. Roman case names are caught by the build itself (ADR-0047); to
+#     preview: rg -n ' v\. ' src/*.md | grep -v '\*[^*]* v\. [^*]*\*'
 
 # 2. No doubled exhibit/attachment labels in the rendered PDF
 pdftotext -layout out/<envelope>/<file>.pdf - \

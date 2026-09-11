@@ -702,6 +702,125 @@ def warn_spaced_dashes(raw: str, source: Path) -> None:
                 file=sys.stderr,
             )
 
+
+# Case names are italicized. California style (and every other American
+# citation style) sets the name of a cited case in italics or underline
+# and nothing else about the cite; a roman "Pettus v. Cole" in a brief
+# reads as a drafting error to the bench and to opposing counsel. This
+# is a hard error, not a warning, for the same reason as the attachment
+# caption rule (ADR-0018): it was pointed out repeatedly and came back
+# on the next draft, because the only thing standing against it was
+# that somebody would notice. See ADR-0047.
+#
+# What counts as a case name: the running-text signals a citation style
+# recognizes. " v. " between two words is the universal one; "In re",
+# "ex rel." and the California family-law/probate forms "Marriage of",
+# "Estate of", "Guardianship of", "Conservatorship of", "Adoption of"
+# followed by a capitalized word are the others. "vs." is deliberately
+# NOT a signal: it is ordinary prose ("item 2 vs. item 3") far more
+# often than a case name, and no citation style writes a case that way.
+_CASE_NAME_RE = re.compile(
+    r"(?<![\w*])(?:"
+    r"[A-Z][\w.'&\-]*(?: [\w.'&,\-]+)*? v\. [A-Z][\w.'&\-]*(?: [A-Z][\w.'&\-]*)*"
+    r"|In re [A-Z][\w.'&\-]*"
+    r"|ex rel\. [A-Z][\w.'&\-]*"
+    r"|(?:Marriage|Estate|Guardianship|Conservatorship|Adoption) of [A-Z][\w.'&\-]*"
+    r")"
+)
+
+# The " v. " of a name whose parties were italicized separately
+# (``*Doe* v. *Roe*``): the connective lands in a roman span of its own.
+_BARE_V_RE = re.compile(r"^\s*v\.\s*$")
+
+# A line that is nothing but a case title, optionally followed by a case
+# number, is a title line, not running text: the two-line opener of a
+# Judicial Council form attachment ("Smith v. Roe, 24CV00000"), or a
+# caption fragment. Title lines are set roman.
+# A title is capitalized words (with the connectives a case title uses:
+# "of", "the", "&", "ex rel."), never a sentence: "In Pettus v. Cole the
+# court held." has lowercase running text after the name and is checked.
+_TITLE_WORD = r"(?:[A-Z][\w.'&\-]*|of|the|&|ex rel\.)"
+_CASE_TITLE_LINE_RE = re.compile(
+    r"^(?:#+ )?(?:In re )?[A-Z][\w.'&\-]*(?: " + _TITLE_WORD + r")*"
+    r"(?: v\. [A-Z][\w.'&\-]*(?: " + _TITLE_WORD + r")*)?"
+    r"(?:, (?:No\. |Case No\. )?[\w\-]+)?\.?$"
+)
+
+# Cheap per-line gate before the span parse.
+_CASE_SIGNAL_RE = re.compile(
+    r"\bv\. |\bIn re [A-Z]|\bex rel\. |\b(?:Marriage|Estate|Guardianship|"
+    r"Conservatorship|Adoption) of [A-Z]")
+
+_HTML_COMMENT_RE = re.compile(r"<!--.*?-->", re.S)
+
+
+def _body_lines_with_numbers(raw: str):
+    """Yield (lineno, line) for the source body: front matter, HTML
+    comments and verbatim spans/blocks blanked out, line count preserved."""
+    text = raw
+    # Front matter: everything through the closing delimiter.
+    if text.startswith("---"):
+        end = text.find("\n---", 3)
+        if end != -1:
+            end = text.find("\n", end + 4)
+            end = len(text) if end == -1 else end
+            text = re.sub(r"[^\n]", " ", text[:end]) + text[end:]
+    blank = lambda m: re.sub(r"[^\n]", " ", m.group(0))
+    text = _HTML_COMMENT_RE.sub(blank, text)
+    text = _VERBATIM_SPAN_RE.sub(blank, text)
+    for lineno, line in enumerate(text.split("\n"), start=1):
+        yield lineno, line
+
+
+def find_unitalicized_case_names(raw: str) -> List[Tuple[int, str, str]]:
+    """Return (lineno, case-name signal, line excerpt) for every case name
+    in running text that is not inside an italic or underlined span.
+
+    Works on the parsed inline spans of each line, so the rule is exactly
+    the renderer's: a name is italicized when the span carrying it has
+    the italic (or underline) flag, however that was written
+    (``*Doe v. Roe*``, ``***Doe v. Roe***``, ``<u>Doe v. Roe</u>``). A
+    name split across spans (``*Doe* v. *Roe*``) is not italicized: the
+    " v. " is roman, and the whole name must be set the same way.
+    """
+    hits: List[Tuple[int, str, str]] = []
+    for lineno, line in _body_lines_with_numbers(raw):
+        stripped = line.strip()
+        if not stripped or not _CASE_SIGNAL_RE.search(stripped):
+            continue
+        if _CASE_TITLE_LINE_RE.match(stripped):
+            continue
+        prev_styled = False
+        for span in parse_inline_styles(stripped):
+            styled = bool(span.italic or span.underline or getattr(span, "mono", False))
+            if not styled:
+                if prev_styled and _BARE_V_RE.match(span.text):
+                    hits.append((lineno, "v.", stripped[:70]))
+                for m in _CASE_NAME_RE.finditer(span.text):
+                    hits.append((lineno, m.group(0), stripped[:70]))
+            prev_styled = styled
+    return hits
+
+
+def require_case_names_italic(raw: str, source_name: str) -> None:
+    """Fail the build if any case name in running text is set roman."""
+    hits = find_unitalicized_case_names(raw)
+    if not hits:
+        return
+    lines = "\n".join(
+        f"  line {lineno}: {signal!r} in {excerpt!r}" for lineno, signal, excerpt in hits)
+    raise SystemExit(
+        f"{source_name}: case name not italicized ({len(hits)} place(s)).\n"
+        f"{lines}\n\n"
+        f"Case names are set in italics, and nothing else about the cite is: "
+        f"write *Doe v. Roe* (2024) 100 Cal.App.5th 123, not Doe v. Roe. "
+        f"Underline (<u>...</u>) is accepted as the typewriter equivalent. "
+        f"A line that is only a case title (\"Smith v. Roe, 24CV00000\", the "
+        f"opener of a form attachment) is exempt; so is verbatim text in "
+        f"\\fixedwidth{{...}}."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Inline style parsing (*italic*, **bold**, <u>underline</u>, [^footnote])
 # ---------------------------------------------------------------------------
@@ -4735,6 +4854,7 @@ def main() -> None:
         raw = f.read()
 
     warn_spaced_dashes(raw, input_path)
+    require_case_names_italic(raw, input_path.name)
 
     meta, body = parse_front_matter(raw)
     # Deployment- and matter-level front-matter defaults (ADR-0035):

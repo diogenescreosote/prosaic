@@ -35,6 +35,16 @@ Verify before finishing any `src/` edit:
 rg -n ' --- ' path/to/file.md
 ```
 
+## STOP. Case names are italicized: `*Doe v. Roe*`
+
+In any `.md` under any `src/`, every case name in running text is set
+in italics: `*Doe v. Roe* (2024) 100 Cal.App.5th 123`, `*In re Doe*`,
+`*Marriage of Doe*`. Only the name, never the reporter, year or pin
+cite; statutes are never italicized. **The build fails** on a roman
+case name in every renderer (ADR-0047), listing each line. The one
+exception is a title line that is nothing but the case name and
+number, such as the attachment opener below.
+
 ## Fixed-width and file links
 
 File paths, hashes, Bates tokens, code, email addresses →
