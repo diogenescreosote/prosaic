@@ -31,6 +31,7 @@ un-upgraded proof.
 
 from __future__ import annotations
 
+import contextlib
 import datetime as _dt
 import importlib.util
 import json
@@ -91,14 +92,8 @@ def _slug(name: str) -> str:
     return re.sub(r"[^a-z0-9]+", "_", name.lower()).strip("_")
 
 
-def event_dir(audit_root: Path, backend: str, pdf: Path, reference: str,
-              when: _dt.date) -> Path:
-    return (
-        audit_root
-        / "signatures"
-        / backend
-        / f"{when.isoformat()}_{_slug(pdf.stem)}_{reference}"
-    )
+def event_dir(audit_root: Path, backend: str, pdf: Path, reference: str, when: _dt.date) -> Path:
+    return audit_root / "signatures" / backend / f"{when.isoformat()}_{_slug(pdf.stem)}_{reference}"
 
 
 def render_statement(a: Attestation) -> str:
@@ -148,21 +143,26 @@ def _clearsign(statement: Path, gpg_key: str | None) -> Path | None:
     for the same reason: without it, terminal pinentry cannot open.
     """
     out = statement.with_name(statement.name + ".asc")
-    cmd = ["gpg", "--yes", "--armor", "--clearsign",
-           "--digest-algo", "SHA512", "--output", str(out)]
+    cmd = [
+        "gpg",
+        "--yes",
+        "--armor",
+        "--clearsign",
+        "--digest-algo",
+        "SHA512",
+        "--output",
+        str(out),
+    ]
     if gpg_key:
         cmd += ["--local-user", gpg_key]
 
     env = dict(os.environ)
     if "GPG_TTY" not in env and sys.stdin.isatty():
-        try:
+        with contextlib.suppress(OSError):
             env["GPG_TTY"] = os.ttyname(sys.stdin.fileno())
-        except OSError:
-            pass
 
     try:
-        proc = subprocess.run([*cmd, str(statement)], text=True,
-                              capture_output=True, env=env)
+        proc = subprocess.run([*cmd, str(statement)], text=True, capture_output=True, env=env)
     except FileNotFoundError:
         raise SignerError(
             "gpg is not installed, so the statement of assent cannot be "
@@ -286,23 +286,22 @@ def verify(directory: Path, pubkey: Path | None = None) -> list[str]:
             base = _attest()._isolated_gpg(Path(pubkey), home)
             proc = subprocess.run(
                 [*base, "--verify", str(directory / sig)],
-                capture_output=True, text=True,
+                capture_output=True,
+                text=True,
             )
         if proc.returncode != 0:
-            problems.append(
-                f"statement signature does not verify against {pubkey}"
-            )
+            problems.append(f"statement signature does not verify against {pubkey}")
     elif sig:
         problems.append(
-            "signature present but not checked: pass --pubkey to verify it "
-            "against a pinned key"
+            "signature present but not checked: pass --pubkey to verify it against a pinned key"
         )
 
     ots = meta.get("timestamp_file")
     if ots and (directory / ots).is_file():
         proc = subprocess.run(
             ["ots", "info", str(directory / ots)],
-            capture_output=True, text=True,
+            capture_output=True,
+            text=True,
         )
         if proc.returncode == 0 and "pending" in proc.stdout.lower():
             problems.append(

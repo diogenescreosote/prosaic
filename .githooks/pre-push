@@ -1,12 +1,18 @@
 #!/bin/sh
 #
-# Refuse to push machine-specific paths, credential material, or
-# content from the author's prior matter.
+# Two jobs, both cheap, both at the moment they matter most:
 #
-# The suite already enforces all three (tests/test_repo_hygiene.py,
-# tests/test_leak_guard.py); the hook exists because push is the
-# moment a leak stops being local. Belt and suspenders, and it costs
-# about a second.
+# 1. Refuse to push machine-specific paths, credential material, or
+#    content from the author's prior matter. The suite already
+#    enforces all three (tests/test_repo_hygiene.py,
+#    tests/test_leak_guard.py); push is the moment a leak stops
+#    being local.
+#
+# 2. Run CI's static gates (ruff check, ruff format --check,
+#    mypy tests) so a push cannot land already red. These are the
+#    gates 60 consecutive CI runs failed on before September 2026;
+#    they take seconds here and a round-trip to notice on GitHub.
+#    The pytest gate stays in CI --- too slow for a hook.
 #
 # Enable once per clone:
 #     git config core.hooksPath .githooks
@@ -25,6 +31,9 @@ CHECKS="tests/test_repo_hygiene.py tests/test_leak_guard.py"
 # uv owns the environment for this repo; fall back to a python that
 # already has pytest, for clones driven some other way.
 if command -v uv >/dev/null 2>&1; then
+  uv run --no-sync ruff check . || exit 1
+  uv run --no-sync ruff format --check . || exit 1
+  uv run --no-sync mypy tests || exit 1
   exec uv run --no-sync pytest $CHECKS -q --no-header
 fi
 

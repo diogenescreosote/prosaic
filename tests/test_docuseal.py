@@ -543,28 +543,54 @@ def test_sidecar_role_count_gates_the_roster(mock_api: str, tmp_path: Path) -> N
     assert "signer mismatch" in proc.stderr
 
 
-def _sidecar(fields):
-    return json.dumps({
-        "page_width": 612.0, "page_height": 792.0,
-        "origin": "top-left", "units": "pt", "source": "build", "fields": fields,
-    })
+def _sidecar(fields: list[dict[str, object]]) -> str:
+    return json.dumps(
+        {
+            "page_width": 612.0,
+            "page_height": 792.0,
+            "origin": "top-left",
+            "units": "pt",
+            "source": "build",
+            "fields": fields,
+        }
+    )
 
 
 def test_multiple_pdfs_become_one_submission_with_several_documents(
-        mock_api: str, tmp_path: Path) -> None:
+    mock_api: str, tmp_path: Path
+) -> None:
     """`sc docuseal send a.pdf b.pdf c.pdf` sends ONE submission whose
     `documents` list holds all three, each with its own fields --- the
     clerk-wants-separate-files case, signed in a single ceremony and
     fetched back as discrete PDFs (no merging)."""
     for stem in ("a", "b", "c"):
         (tmp_path / f"{stem}.pdf").write_bytes(PDF_BYTES)
-        (tmp_path / f"{stem}.pdf.fields.json").write_text(_sidecar([
-            {"name": "Signature 1", "role": "Signer 1", "type": "signature",
-             "page": 1, "x": 76.0, "y_top": 700.0, "w": 212.0, "h": 28.0},
-        ]))
-    proc = run_docuseal("send", "a.pdf", "b.pdf", "c.pdf",
-                        "--to", "Jane Roe <jane@example.com>",
-                        url=mock_api, cwd=tmp_path)
+        (tmp_path / f"{stem}.pdf.fields.json").write_text(
+            _sidecar(
+                [
+                    {
+                        "name": "Signature 1",
+                        "role": "Signer 1",
+                        "type": "signature",
+                        "page": 1,
+                        "x": 76.0,
+                        "y_top": 700.0,
+                        "w": 212.0,
+                        "h": 28.0,
+                    },
+                ]
+            )
+        )
+    proc = run_docuseal(
+        "send",
+        "a.pdf",
+        "b.pdf",
+        "c.pdf",
+        "--to",
+        "Jane Roe <jane@example.com>",
+        url=mock_api,
+        cwd=tmp_path,
+    )
     assert proc.returncode == 0, proc.stderr
     req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
     docs = req["payload"]["documents"]
@@ -574,22 +600,47 @@ def test_multiple_pdfs_become_one_submission_with_several_documents(
         assert d["fields"][0]["role"] == "Signer"
 
 
-def test_two_signer_roles_across_docs_map_to_two_submitters(
-        mock_api: str, tmp_path: Path) -> None:
+def test_two_signer_roles_across_docs_map_to_two_submitters(mock_api: str, tmp_path: Path) -> None:
     """Distinct field roles, in first-appearance order across the
     documents, map onto the roster in order --- so a build's 'Signer 1'
     /'Signer 2' or a form's party roles reach the right people."""
     (tmp_path / "a.pdf").write_bytes(PDF_BYTES)
-    (tmp_path / "a.pdf.fields.json").write_text(_sidecar([
-        {"name": "S1", "role": "respondent", "type": "signature",
-         "page": 1, "x": 76.0, "y_top": 700.0, "w": 212.0, "h": 28.0},
-        {"name": "S2", "role": "petitioner_attorney", "type": "signature",
-         "page": 1, "x": 76.0, "y_top": 600.0, "w": 212.0, "h": 28.0},
-    ]))
-    proc = run_docuseal("send", "a.pdf",
-                        "--to", "AC <ac@example.com>",
-                        "--to", "JK <jk@example.com>",
-                        url=mock_api, cwd=tmp_path)
+    (tmp_path / "a.pdf.fields.json").write_text(
+        _sidecar(
+            [
+                {
+                    "name": "S1",
+                    "role": "respondent",
+                    "type": "signature",
+                    "page": 1,
+                    "x": 76.0,
+                    "y_top": 700.0,
+                    "w": 212.0,
+                    "h": 28.0,
+                },
+                {
+                    "name": "S2",
+                    "role": "petitioner_attorney",
+                    "type": "signature",
+                    "page": 1,
+                    "x": 76.0,
+                    "y_top": 600.0,
+                    "w": 212.0,
+                    "h": 28.0,
+                },
+            ]
+        )
+    )
+    proc = run_docuseal(
+        "send",
+        "a.pdf",
+        "--to",
+        "AC <ac@example.com>",
+        "--to",
+        "JK <jk@example.com>",
+        url=mock_api,
+        cwd=tmp_path,
+    )
     assert proc.returncode == 0, proc.stderr
     req = next(r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf")
     fields = req["payload"]["documents"][0]["fields"]
@@ -614,23 +665,34 @@ def test_send_accepts_the_renderers_decl_signblock_geometry(mock_api: str, tmp_p
     pytest.importorskip("pymupdf")
     md = tmp_path / "decl.md"
     md.write_text(
-        "---\ndoctype: pleading\npaper_title: \"DECLARATION OF JANE ROE\"\n"
-        "filer_name: \"Jane Roe\"\n"
-        "filer_address_lines: [\"100 Main St\", \"Springfield, CA 90000\"]\n"
-        "filer_phone: \"(555) 555-0100\"\nfiler_email: \"jane.roe@example.com\"\n"
-        "filer_role: \"Respondent, In Pro Per\"\n"
-        "court_name: \"SUPERIOR COURT OF THE STATE OF CALIFORNIA\"\n"
-        "court_county: \"COUNTY OF EXAMPLE\"\n"
-        "petitioner: \"JOHN SMITH\"\nrespondent: \"JANE ROE\"\ncase_number: \"24CV00000\"\n---\n\n"
+        '---\ndoctype: pleading\npaper_title: "DECLARATION OF JANE ROE"\n'
+        'filer_name: "Jane Roe"\n'
+        'filer_address_lines: ["100 Main St", "Springfield, CA 90000"]\n'
+        'filer_phone: "(555) 555-0100"\nfiler_email: "jane.roe@example.com"\n'
+        'filer_role: "Respondent, In Pro Per"\n'
+        'court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"\n'
+        'court_county: "COUNTY OF EXAMPLE"\n'
+        'petitioner: "JOHN SMITH"\nrespondent: "JANE ROE"\ncase_number: "24CV00000"\n---\n\n'
         "1. I declare the foregoing is true and correct.\n\n"
-        "\\signblock{decl}{JANE ROE}{Springfield, California}{Respondent, In Pro Per}\n")
+        "\\signblock{decl}{JANE ROE}{Springfield, California}{Respondent, In Pro Per}\n"
+    )
     build = subprocess.run(
-        [sys.executable, str(REPO_ROOT / "pleading" / "md_pleading.py"), str(md),
-         str(tmp_path / "decl.pdf"), "--final"], capture_output=True, text=True, cwd=tmp_path)
+        [
+            sys.executable,
+            str(REPO_ROOT / "pleading" / "md_pleading.py"),
+            str(md),
+            str(tmp_path / "decl.pdf"),
+            "--final",
+        ],
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+    )
     assert build.returncode == 0, build.stderr
     MockDocuSeal.requests.clear()
-    proc = run_docuseal("send", "decl.pdf", "--to", "Jane Roe <jane@example.com>",
-                        url=mock_api, cwd=tmp_path)
+    proc = run_docuseal(
+        "send", "decl.pdf", "--to", "Jane Roe <jane@example.com>", url=mock_api, cwd=tmp_path
+    )
     assert proc.returncode == 0, proc.stderr
     assert any(r["path"] == "/submissions/pdf" for r in MockDocuSeal.requests)
 
@@ -640,8 +702,9 @@ def test_send_accepts_the_renderers_decl_signblock_geometry(mock_api: str, tmp_p
         f["y_top"] += 12
     sidecar_path.write_text(json.dumps(sidecar))
     MockDocuSeal.requests.clear()
-    proc = run_docuseal("send", "decl.pdf", "--to", "Jane Roe <jane@example.com>",
-                        url=mock_api, cwd=tmp_path)
+    proc = run_docuseal(
+        "send", "decl.pdf", "--to", "Jane Roe <jane@example.com>", url=mock_api, cwd=tmp_path
+    )
     assert proc.returncode != 0
     assert "field placement is wrong" in proc.stderr
     assert not any(r["path"] == "/submissions/pdf" for r in MockDocuSeal.requests)

@@ -60,22 +60,24 @@ Guarantees:
     path, size and mtime, so an audit over a thousand documents is fast
     and a changed file is always re-surveyed.
 """
+
 from __future__ import annotations
 
 import argparse
 import datetime as dt
 import json
-import os
 import shutil
 import subprocess
 import sys
+from collections.abc import Iterable
 from concurrent.futures import ThreadPoolExecutor
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+from typing import Any, cast
 
 HERE = Path(__file__).resolve().parent
 sys.path.insert(0, str(HERE))
-import read_coverage as rc  # noqa: E402
+import read_coverage as rc  # type: ignore[import-not-found]  # noqa: E402
 
 try:
     import pymupdf as fitz
@@ -98,8 +100,9 @@ HEADER_MARK = "[[[ prosaic text sidecar ]]]"
 BANNER = "MACHINE TEXT --- VERIFY AGAINST THE DOCUMENT BEFORE CITING IN ANY FILING"
 CACHE_NAME = "text_coverage.json"
 
-EXCLUDE_DIRS = frozenset({"out", ".state", ".git", ".flow", "node_modules", ".claude", ".venv",
-                          "derived"})
+EXCLUDE_DIRS = frozenset(
+    {"out", ".state", ".git", ".flow", "node_modules", ".claude", ".venv", "derived"}
+)
 DERIVED = "derived"
 PDF_EXT = {".pdf"}
 IMAGE_EXT = {".png", ".jpg", ".jpeg", ".tif", ".tiff", ".bmp", ".gif", ".webp"}
@@ -108,20 +111,20 @@ DOCX_EXT = {".docx"}
 AUDIO_EXT = {".m4a", ".mp3", ".wav", ".aac", ".ogg", ".flac"}
 
 #: Pages whose extractable text cannot be trusted to speak for the page.
-OCR_KINDS = frozenset(rc.UNCOVERED)          # image-bodied, sparse, image-only, garbled
+OCR_KINDS = frozenset(rc.UNCOVERED)  # image-bodied, sparse, image-only, garbled
 #: Of those, the pages that already carry text (so --skip-text would leave them).
 FORCE_KINDS = frozenset({"image-bodied", "garbled", "sparse"})
 
 
 @dataclass
 class Doc:
-    path: str                      # relative to matter
-    kind: str                      # pdf | image | docx | audio
+    path: str  # relative to matter
+    kind: str  # pdf | image | docx | audio
     state: str
     pages: int = 0
     uncovered: list[int] = field(default_factory=list)
-    sidecar: str = ""              # relative path of the .txt that is/would be searched
-    source: str = ""               # relative path of the file the sidecar is/would be dumped from
+    sidecar: str = ""  # relative path of the .txt that is/would be searched
+    source: str = ""  # relative path of the file the sidecar is/would be dumped from
     note: str = ""
 
     @property
@@ -132,6 +135,7 @@ class Doc:
 # ---------------------------------------------------------------------------
 # discovery
 # ---------------------------------------------------------------------------
+
 
 def _excluded(rel: Path, include_inbox: bool) -> bool:
     parts = set(rel.parts[:-1])
@@ -165,8 +169,8 @@ def _rel(matter: Path, doc: Path) -> Path:
     `assets/x.pdf` that links to `processed_files/x.pdf` is its own
     document with its own derived files, and the matter itself may sit
     behind a symlinked mount."""
-    m = Path(os.path.abspath(matter))
-    d = Path(os.path.abspath(doc))
+    m = Path(matter).absolute()
+    d = Path(doc).absolute()
     return d.relative_to(m)
 
 
@@ -256,8 +260,13 @@ def classify_pdf(matter: Path, pdf: Path) -> Doc:
     best = ocr or pdf
     side = text_file_for(matter, pdf)
     target = derived_text_path(matter, pdf)
-    d = Doc(path=rel, kind="pdf", state="",
-            sidecar=str(_rel(matter, side or target)), source=str(_rel(matter, best)))
+    d = Doc(
+        path=rel,
+        kind="pdf",
+        state="",
+        sidecar=str(_rel(matter, side or target)),
+        source=str(_rel(matter, best)),
+    )
     try:
         pages, unc, _ = _survey(best, ocr_output=ocr is not None)
     except Exception as exc:  # encrypted, corrupt
@@ -268,9 +277,11 @@ def classify_pdf(matter: Path, pdf: Path) -> Doc:
     if unc:
         d.state = "needs-ocr"
         if ocr is not None:
-            d.note = (f"OCR ran and found no text on {len(unc)} of {pages} page(s): "
-                      "likely a photo, graphic or blank scan; describe it in a "
-                      "human text file if its content matters")
+            d.note = (
+                f"OCR ran and found no text on {len(unc)} of {pages} page(s): "
+                "likely a photo, graphic or blank scan; describe it in a "
+                "human text file if its content matters"
+            )
         else:
             d.note = f"{len(unc)} of {pages} page(s) lack a usable text layer"
         return d
@@ -285,8 +296,11 @@ def classify_pdf(matter: Path, pdf: Path) -> Doc:
     newest = max(pdf.stat().st_mtime, ocr.stat().st_mtime if ocr else 0)
     if side.stat().st_mtime < newest or hp != pages:
         d.state = "stale-sidecar"
-        d.note = ("document newer than its text file" if hp == pages
-                  else f"text file says {hp} pages, document has {pages}")
+        d.note = (
+            "document newer than its text file"
+            if hp == pages
+            else f"text file says {hp} pages, document has {pages}"
+        )
         return d
     d.state = "searchable"
     if side != target:
@@ -301,12 +315,22 @@ def classify_other(matter: Path, p: Path) -> Doc:
     side = text_file_for(matter, p)
     if ext in AUDIO_EXT:
         has = side is not None
-        return Doc(path=rel, kind="audio", state="searchable" if has else "transcript-needed",
-                   sidecar=str(_rel(matter, side or target)),
-                   note="" if has else "run the local STT pipeline (docs/stt.md); never a cloud service")
+        return Doc(
+            path=rel,
+            kind="audio",
+            state="searchable" if has else "transcript-needed",
+            sidecar=str(_rel(matter, side or target)),
+            note="" if has else "run the local STT pipeline (docs/stt.md); never a cloud service",
+        )
     kind = "image" if ext in IMAGE_EXT | IMAGE_UNSUPPORTED_EXT else "docx"
-    d = Doc(path=rel, kind=kind, state="", sidecar=str(_rel(matter, side or target)),
-            source=rel, pages=1)
+    d = Doc(
+        path=rel,
+        kind=kind,
+        state="",
+        sidecar=str(_rel(matter, side or target)),
+        source=rel,
+        pages=1,
+    )
     if side is None:
         if ext in IMAGE_UNSUPPORTED_EXT:
             d.state, d.note = "unsupported", "convert to PNG/JPEG first"
@@ -338,8 +362,13 @@ CACHE_VERSION = "4"
 
 def _stamp(matter: Path, doc: Path) -> str:
     bits = [f"v{CACHE_VERSION}", f"{doc.stat().st_size}:{doc.stat().st_mtime_ns}"]
-    for extra in (derived_ocr_path(matter, doc), derived_text_path(matter, doc),
-                  legacy_ocr_sibling(doc), legacy_text_sibling(doc), doc.with_suffix(".txt")):
+    for extra in (
+        derived_ocr_path(matter, doc),
+        derived_text_path(matter, doc),
+        legacy_ocr_sibling(doc),
+        legacy_text_sibling(doc),
+        doc.with_suffix(".txt"),
+    ):
         if extra.exists() and extra != doc:
             st = extra.stat()
             bits.append(f"{extra.name}:{st.st_size}:{st.st_mtime_ns}")
@@ -347,16 +376,16 @@ def _stamp(matter: Path, doc: Path) -> str:
 
 
 def audit(matter: Path, include_inbox: bool = False, use_cache: bool = True) -> list[Doc]:
-    matter = Path(os.path.abspath(matter))
+    matter = Path(matter).absolute()
     cache_file = _cache_path(matter)
-    cache: dict = {}
+    cache: dict[str, Any] = {}
     if use_cache and cache_file.is_file():
         try:
             cache = json.loads(cache_file.read_text())
         except json.JSONDecodeError:
             cache = {}
     results: list[Doc] = []
-    fresh: dict = {}
+    fresh: dict[str, Any] = {}
     for p in iter_documents(matter):
         rel = str(p.relative_to(matter))
         stamp = _stamp(matter, p)
@@ -364,9 +393,19 @@ def audit(matter: Path, include_inbox: bool = False, use_cache: bool = True) -> 
         if hit and hit.get("stamp") == stamp:
             d = Doc(**hit["doc"])
         else:
-            d = classify_pdf(matter, p) if p.suffix.lower() in PDF_EXT else classify_other(matter, p)
-        if not include_inbox and rel.split(os.sep)[0] == "inbox":
-            d = Doc(**{**asdict(d), "state": "untriaged", "note": "under inbox/; triage first (or --include-inbox)"})
+            d = (
+                classify_pdf(matter, p)
+                if p.suffix.lower() in PDF_EXT
+                else classify_other(matter, p)
+            )
+        if not include_inbox and Path(rel).parts[0] == "inbox":
+            d = Doc(
+                **{
+                    **asdict(d),
+                    "state": "untriaged",
+                    "note": "under inbox/; triage first (or --include-inbox)",
+                }
+            )
         fresh[rel] = {"stamp": stamp, "doc": asdict(d)}
         results.append(d)
     if use_cache:
@@ -379,12 +418,14 @@ def audit(matter: Path, include_inbox: bool = False, use_cache: bool = True) -> 
 # repair
 # ---------------------------------------------------------------------------
 
+
 def _tool(name: str) -> str | None:
     return shutil.which(name)
 
 
-def write_pdf_sidecar(matter: Path, original: Path, source: Path, sidecar: Path,
-                      ocr_note: str = "none") -> Doc:
+def write_pdf_sidecar(
+    matter: Path, original: Path, source: Path, sidecar: Path, ocr_note: str = "none"
+) -> Doc:
     """Dump every page of `source` into `sidecar`, page-marked, with a
     provenance header. Never overwrites a sidecar this tool did not write."""
     if sidecar.exists() and _header_pages(sidecar) is None:
@@ -392,18 +433,22 @@ def write_pdf_sidecar(matter: Path, original: Path, source: Path, sidecar: Path,
     doc = fitz.open(str(source))
     try:
         total = doc.page_count
-        lines = [HEADER_MARK,
-                 f"original: {original.name}",
-                 f"source: {source.name}",
-                 f"pages: {total}",
-                 "tool: pymupdf "
-                 f"{getattr(fitz, 'VersionBind', getattr(fitz, '__version__', '?'))}; "
-                 f"ocr: {ocr_note}",
-                 f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
-                 BANNER, ""]
+        lines = [
+            HEADER_MARK,
+            f"original: {original.name}",
+            f"source: {source.name}",
+            f"pages: {total}",
+            "tool: pymupdf "
+            f"{getattr(fitz, 'VersionBind', getattr(fitz, '__version__', '?'))}; "
+            f"ocr: {ocr_note}",
+            f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
+            BANNER,
+            "",
+        ]
         unc: list[int] = []
         from_ocr = source != original
-        for i, page in enumerate(doc, 1):
+        pages = cast("Iterable[Any]", doc)
+        for i, page in enumerate(pages, 1):
             kind, _ = rc.classify(page, rc.DEFAULT_MIN_CHARS)
             if from_ocr and kind in ("image-bodied", "sparse"):
                 kind = "text"
@@ -427,12 +472,13 @@ def write_pdf_sidecar(matter: Path, original: Path, source: Path, sidecar: Path,
     sidecar.parent.mkdir(parents=True, exist_ok=True)
     tmp = sidecar.with_suffix(sidecar.suffix + ".tmp")
     tmp.write_text("\n".join(lines) + "\n", encoding="utf-8")
-    os.replace(tmp, sidecar)
+    Path(tmp).replace(sidecar)
     return classify_pdf(matter, original)
 
 
-def ocr_pdf(original: Path, pages_to_force: list[int], redo: bool = False,
-            target: Path | None = None) -> tuple[Path, str]:
+def ocr_pdf(
+    original: Path, pages_to_force: list[int], redo: bool = False, target: Path | None = None
+) -> tuple[Path, str]:
     """Produce/refresh the OCR'd copy under derived/ocr/. Returns (copy, note)."""
     exe = _tool("ocrmypdf")
     if not exe:
@@ -451,18 +497,29 @@ def ocr_pdf(original: Path, pages_to_force: list[int], redo: bool = False,
         cmd += ["--skip-text"]
         note = "ocrmypdf --skip-text"
     tmp = sib.with_suffix(".tmp.pdf")
-    subprocess.run([*cmd, str(original), str(tmp)], check=True,
-                   stdout=subprocess.DEVNULL, stderr=subprocess.PIPE, text=True)
-    os.replace(tmp, sib)
+    subprocess.run(
+        [*cmd, str(original), str(tmp)],
+        check=True,
+        stdout=subprocess.DEVNULL,
+        stderr=subprocess.PIPE,
+        text=True,
+    )
+    Path(tmp).replace(sib)
     return sib, note
 
 
 def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) -> Doc:
     """Bring one document to `searchable` if a tool can; return its new state."""
-    matter = Path(os.path.abspath(matter))
+    matter = Path(matter).absolute()
     p = matter / d.path
-    if d.state in ("searchable", "unverified-sidecar", "untriaged", "unreadable",
-                   "transcript-needed", "unsupported"):
+    if d.state in (
+        "searchable",
+        "unverified-sidecar",
+        "untriaged",
+        "unreadable",
+        "transcript-needed",
+        "unsupported",
+    ):
         return d
     if dry_run:
         return Doc(**{**asdict(d), "note": f"would repair ({d.state})"})
@@ -472,10 +529,14 @@ def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) 
             existing = ocr_copy_for(matter, p)
             target_ocr = derived_ocr_path(matter, p)
             if d.state == "needs-ocr":
-                pages, unc, kinds = _survey(existing or p, ocr_output=existing is not None)
+                _pages, unc, kinds = _survey(existing or p, ocr_output=existing is not None)
                 force = [i for i in unc if kinds[i - 1] in FORCE_KINDS]
-                copy, ocr_note = ocr_pdf(p, force if (force or existing) else [],
-                                         redo=redo_ocr or existing is None, target=target_ocr)
+                copy, ocr_note = ocr_pdf(
+                    p,
+                    force if (force or existing) else [],
+                    redo=redo_ocr or existing is None,
+                    target=target_ocr,
+                )
                 existing = copy
             source = existing or p
             return write_pdf_sidecar(matter, p, source, derived_text_path(matter, p), ocr_note)
@@ -486,13 +547,30 @@ def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) 
             side = derived_text_path(matter, p)
             side.parent.mkdir(parents=True, exist_ok=True)
             out_base = side.with_suffix("")  # tesseract appends .txt
-            subprocess.run([exe, str(p), str(out_base), "-l", "eng"], check=True,
-                           stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
+            subprocess.run(
+                [exe, str(p), str(out_base), "-l", "eng"],
+                check=True,
+                stdout=subprocess.DEVNULL,
+                stderr=subprocess.DEVNULL,
+            )
             text = side.read_text(encoding="utf-8", errors="replace")
-            side.write_text("\n".join([HEADER_MARK, f"original: {p.name}", f"source: {p.name}",
-                                       "pages: 1", "tool: tesseract; ocr: tesseract",
-                                       f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
-                                       BANNER, "", "[[[ page 1 of 1 ]]]", text]), encoding="utf-8")
+            side.write_text(
+                "\n".join(
+                    [
+                        HEADER_MARK,
+                        f"original: {p.name}",
+                        f"source: {p.name}",
+                        "pages: 1",
+                        "tool: tesseract; ocr: tesseract",
+                        f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
+                        BANNER,
+                        "",
+                        "[[[ page 1 of 1 ]]]",
+                        text,
+                    ]
+                ),
+                encoding="utf-8",
+            )
             return classify_other(matter, p)
         if d.kind == "docx":
             exe = _tool("pandoc")
@@ -500,39 +578,71 @@ def repair(matter: Path, d: Doc, dry_run: bool = False, redo_ocr: bool = False) 
                 return Doc(**{**asdict(d), "note": "pandoc is not installed"})
             side = derived_text_path(matter, p)
             side.parent.mkdir(parents=True, exist_ok=True)
-            proc = subprocess.run([exe, str(p), "-t", "plain", "--wrap=none"],
-                                  check=True, capture_output=True, text=True)
-            side.write_text("\n".join([HEADER_MARK, f"original: {p.name}", f"source: {p.name}",
-                                       "pages: 1", "tool: pandoc; ocr: none",
-                                       f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
-                                       BANNER, "", "[[[ page 1 of 1 ]]]", proc.stdout]), encoding="utf-8")
+            proc = subprocess.run(
+                [exe, str(p), "-t", "plain", "--wrap=none"],
+                check=True,
+                capture_output=True,
+                text=True,
+            )
+            side.write_text(
+                "\n".join(
+                    [
+                        HEADER_MARK,
+                        f"original: {p.name}",
+                        f"source: {p.name}",
+                        "pages: 1",
+                        "tool: pandoc; ocr: none",
+                        f"generated: {dt.datetime.now().isoformat(timespec='seconds')}",
+                        BANNER,
+                        "",
+                        "[[[ page 1 of 1 ]]]",
+                        proc.stdout,
+                    ]
+                ),
+                encoding="utf-8",
+            )
             return classify_other(matter, p)
     except FileExistsError as exc:
         return Doc(**{**asdict(d), "note": str(exc)[:200]})
     except Exception as exc:  # a failed repair is a reported row, never an abort
-        return Doc(**{**asdict(d), "state": "unreadable" if d.kind == "pdf" else d.state,
-                      "note": f"repair failed: {type(exc).__name__}: {exc}"[:200]})
+        return Doc(
+            **{
+                **asdict(d),
+                "state": "unreadable" if d.kind == "pdf" else d.state,
+                "note": f"repair failed: {type(exc).__name__}: {exc}"[:200],
+            }
+        )
     return d
 
 
 FAILURES_NAME = "text_ensure_failures.json"
 
 
-def ensure(matter: Path, include_inbox: bool = False, dry_run: bool = False,
-           redo_ocr: bool = False, jobs: int = 2) -> list[Doc]:
+def ensure(
+    matter: Path,
+    include_inbox: bool = False,
+    dry_run: bool = False,
+    redo_ocr: bool = False,
+    jobs: int = 2,
+) -> list[Doc]:
     docs = audit(matter, include_inbox=include_inbox)
     todo = [d for d in docs if d.state in ("needs-ocr", "needs-sidecar", "stale-sidecar")]
     if not todo:
         return docs
     with ThreadPoolExecutor(max_workers=max(1, jobs)) as ex:
-        results = list(ex.map(lambda d: repair(matter, d, dry_run=dry_run, redo_ocr=redo_ocr), todo))
+        results = list(
+            ex.map(lambda d: repair(matter, d, dry_run=dry_run, redo_ocr=redo_ocr), todo)
+        )
     if dry_run:
         return docs
     # Why a repair did not take is otherwise lost when the tree is
     # re-audited; keep it beside the cache and surface it on the row.
-    failures = {r.path: r.note for r in results if r.note.startswith("repair failed")
-                or "not installed" in r.note or "leaving it" in r.note}
-    fpath = Path(os.path.abspath(matter)) / ".state" / FAILURES_NAME
+    failures = {
+        r.path: r.note
+        for r in results
+        if r.note.startswith("repair failed") or "not installed" in r.note or "leaving it" in r.note
+    }
+    fpath = Path(matter).absolute() / ".state" / FAILURES_NAME
     fpath.parent.mkdir(parents=True, exist_ok=True)
     fpath.write_text(json.dumps(failures, indent=1, sort_keys=True))
     final = audit(matter, include_inbox=include_inbox)
@@ -546,11 +656,16 @@ def ensure(matter: Path, include_inbox: bool = False, dry_run: bool = False,
 # migrate: move what this tool wrote beside originals into derived/
 # ---------------------------------------------------------------------------
 
+
 def _tracked(matter: Path, path: Path) -> bool:
     if not (matter / ".git").exists():
         return False
-    proc = subprocess.run(["git", "ls-files", "--error-unmatch", str(_rel(matter, path))],
-                          cwd=matter, capture_output=True, text=True)
+    proc = subprocess.run(
+        ["git", "ls-files", "--error-unmatch", str(_rel(matter, path))],
+        cwd=matter,
+        capture_output=True,
+        text=True,
+    )
     return proc.returncode == 0
 
 
@@ -559,12 +674,16 @@ def _move(matter: Path, src: Path, dst: Path, dry_run: bool) -> str:
     how = "git mv" if _tracked(matter, src) else "mv"
     if not dry_run:
         if how == "git mv":
-            subprocess.run(["git", "mv", "-k", str(_rel(matter, src)), str(_rel(matter, dst))],
-                           cwd=matter, check=True, capture_output=True)
+            subprocess.run(
+                ["git", "mv", "-k", str(_rel(matter, src)), str(_rel(matter, dst))],
+                cwd=matter,
+                check=True,
+                capture_output=True,
+            )
             if src.exists():  # -k skipped it (e.g. dst tracked); fall back
-                os.replace(src, dst)
+                Path(src).replace(dst)
         else:
-            os.replace(src, dst)
+            Path(src).replace(dst)
     return f"{how} {_rel(matter, src)} -> {_rel(matter, dst)}"
 
 
@@ -572,7 +691,7 @@ def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = Fals
     """Move tool-written text files (header present) and the OCR copies the
     tool made into derived/. Human text files stay where they are. Legacy
     `_ocr.pdf` siblings the tool did not make move only on request."""
-    matter = Path(os.path.abspath(matter))
+    matter = Path(matter).absolute()
     moves: list[str] = []
     for doc in iter_documents(matter):
         legacy_txt = legacy_text_sibling(doc)
@@ -590,11 +709,18 @@ def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = Fals
                 how = "git rm" if _tracked(matter, legacy_txt) else "rm"
                 if not dry_run:
                     if how == "git rm":
-                        subprocess.run(["git", "rm", "-q", "--force", str(_rel(matter, legacy_txt))],
-                                       cwd=matter, check=True, capture_output=True)
+                        subprocess.run(
+                            ["git", "rm", "-q", "--force", str(_rel(matter, legacy_txt))],
+                            cwd=matter,
+                            check=True,
+                            capture_output=True,
+                        )
                     else:
                         legacy_txt.unlink()
-                moves.append(f"{how} {_rel(matter, legacy_txt)} (redundant; {_rel(matter, target_txt)} exists)")
+                moves.append(
+                    f"{how} {_rel(matter, legacy_txt)} "
+                    f"(redundant; {_rel(matter, target_txt)} exists)"
+                )
             else:
                 moves.append(_move(matter, legacy_txt, target_txt, dry_run))
         if doc.suffix.lower() in PDF_EXT:
@@ -610,9 +736,13 @@ def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = Fals
         line = "derived/ocr/"
         text = gi.read_text() if gi.exists() else ""
         if line not in text.splitlines():
-            gi.write_text(text.rstrip("\n") + ("\n" if text else "")
-                          + "\n# OCR'd copies: regenerable by `sc text ensure`, large\n"
-                          + line + "\n")
+            gi.write_text(
+                text.rstrip("\n")
+                + ("\n" if text else "")
+                + "\n# OCR'd copies: regenerable by `sc text ensure`, large\n"
+                + line
+                + "\n"
+            )
             moves.append(f"append {line} to .gitignore")
         cache = _cache_path(matter)
         if cache.exists():
@@ -623,6 +753,7 @@ def migrate(matter: Path, dry_run: bool = False, include_legacy_ocr: bool = Fals
 # ---------------------------------------------------------------------------
 # reporting
 # ---------------------------------------------------------------------------
+
 
 def summarize(docs: list[Doc]) -> dict[str, int]:
     out: dict[str, int] = {}
@@ -651,8 +782,17 @@ def coverage_line(docs: list[Doc]) -> str:
 def format_audit(docs: list[Doc], show: int = 60) -> str:
     lines = [coverage_line(docs), ""]
     summ = summarize(docs)
-    for state in ("needs-ocr", "needs-sidecar", "stale-sidecar", "unreadable", "transcript-needed",
-                  "unsupported", "untriaged", "unverified-sidecar", "searchable"):
+    for state in (
+        "needs-ocr",
+        "needs-sidecar",
+        "stale-sidecar",
+        "unreadable",
+        "transcript-needed",
+        "unsupported",
+        "untriaged",
+        "unverified-sidecar",
+        "searchable",
+    ):
         if state in summ:
             lines.append(f"{state:<20} {summ[state]}")
     gaps = [d for d in docs if not d.searched]
@@ -673,8 +813,11 @@ def main() -> int:
     sp = sub.add_parser("migrate", help="move tool-written text and OCR copies under derived/")
     sp.add_argument("matter", nargs="?", default=".")
     sp.add_argument("--dry-run", action="store_true")
-    sp.add_argument("--include-legacy-ocr", action="store_true",
-                    help="also move _ocr.pdf siblings this tool did not make")
+    sp.add_argument(
+        "--include-legacy-ocr",
+        action="store_true",
+        help="also move _ocr.pdf siblings this tool did not make",
+    )
     for name in ("audit", "ensure"):
         sp = sub.add_parser(name)
         sp.add_argument("matter", nargs="?", default=".")
@@ -683,8 +826,11 @@ def main() -> int:
         sp.add_argument("--no-cache", action="store_true")
         if name == "ensure":
             sp.add_argument("--dry-run", action="store_true")
-            sp.add_argument("--redo-ocr", action="store_true",
-                            help="regenerate an existing _ocr sibling that still has uncovered pages")
+            sp.add_argument(
+                "--redo-ocr",
+                action="store_true",
+                help="regenerate an existing _ocr sibling that still has uncovered pages",
+            )
             sp.add_argument("--jobs", type=int, default=2)
     a = ap.parse_args()
     matter = Path(a.matter).resolve()
@@ -695,8 +841,13 @@ def main() -> int:
     if a.cmd == "audit":
         docs = audit(matter, include_inbox=a.include_inbox, use_cache=not a.no_cache)
     else:
-        docs = ensure(matter, include_inbox=a.include_inbox, dry_run=a.dry_run,
-                      redo_ocr=a.redo_ocr, jobs=a.jobs)
+        docs = ensure(
+            matter,
+            include_inbox=a.include_inbox,
+            dry_run=a.dry_run,
+            redo_ocr=a.redo_ocr,
+            jobs=a.jobs,
+        )
     if a.json:
         print(json.dumps([asdict(d) for d in docs], indent=1))
     else:

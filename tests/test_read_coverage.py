@@ -19,11 +19,14 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 TOOL = REPO_ROOT / "triage" / "read_coverage.py"
 
-PROSE = "|".join([
-    "The parties met on the fourth of March and agreed to the schedule",
-    "set out in the attached order. Nothing in this paragraph is",
-    "remarkable, and that is the point of it.",
-] * 3)
+PROSE = "|".join(
+    [
+        "The parties met on the fourth of March and agreed to the schedule",
+        "set out in the attached order. Nothing in this paragraph is",
+        "remarkable, and that is the point of it.",
+    ]
+    * 3
+)
 
 # Long enough to clear the garbled threshold, and free of every function
 # word the heuristic looks for: what a nonstandard font encoding yields.
@@ -33,10 +36,10 @@ GARBLED = "|".join(["_;\\5&^;HZ55aT2Z[^ 9QX7 KJHG%%$ ZZQ ] 8YT4 ;;LKJ 0POI"] * 8
 def _pdf(path: Path, pages: list[str]) -> Path:
     """One page per entry: ``"text:<lines joined by |>"``, ``"image"``,
     ``"header-over-image"``, or ``"blank"``."""
-    from reportlab.lib.pagesizes import letter
-    from reportlab.pdfgen import canvas
-    from reportlab.lib.utils import ImageReader
     from PIL import Image
+    from reportlab.lib.pagesizes import letter
+    from reportlab.lib.utils import ImageReader
+    from reportlab.pdfgen import canvas
 
     c = canvas.Canvas(str(path), pagesize=letter)
     for spec in pages:
@@ -51,8 +54,12 @@ def _pdf(path: Path, pages: list[str]) -> Path:
             c.drawImage(ImageReader(img), 36, 36, width=540, height=720)
         elif spec == "header-over-image":
             c.setFont("Helvetica", 11)
-            c.drawString(72, 750, "From: Jane Roe  To: John Smith  Subject: the "
-                                  "screenshot of the thread is below for you")
+            c.drawString(
+                72,
+                750,
+                "From: Jane Roe  To: John Smith  Subject: the "
+                "screenshot of the thread is below for you",
+            )
             img = Image.new("RGB", (600, 700), (120, 120, 120))
             c.drawImage(ImageReader(img), 36, 36, width=540, height=650)
         elif spec == "blank":
@@ -64,25 +71,30 @@ def _pdf(path: Path, pages: list[str]) -> Path:
     return path
 
 
-def run(*args: str) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(TOOL), *args],
-                          capture_output=True, text=True)
+def run(*args: str) -> subprocess.CompletedProcess[str]:
+    return subprocess.run([sys.executable, str(TOOL), *args], capture_output=True, text=True)
 
 
 @pytest.fixture
 def mixed(tmp_path: Path) -> Path:
-    return _pdf(tmp_path / "mixed.pdf", [
-        f"text:{PROSE}", "image", "blank", "text:Exhibit A",
-        "header-over-image", f"text:{GARBLED}",
-    ])
+    return _pdf(
+        tmp_path / "mixed.pdf",
+        [
+            f"text:{PROSE}",
+            "image",
+            "blank",
+            "text:Exhibit A",
+            "header-over-image",
+            f"text:{GARBLED}",
+        ],
+    )
 
 
 def test_every_page_is_classified(mixed: Path) -> None:
     proc = run("--json", str(mixed))
     (survey,) = json.loads(proc.stdout)
     kinds = [d["kind"] for d in survey["detail"]]
-    assert kinds == ["text", "image-only", "blank", "sparse",
-                     "image-bodied", "garbled"], kinds
+    assert kinds == ["text", "image-only", "blank", "sparse", "image-bodied", "garbled"], kinds
     assert survey["pages"] == 6
 
 
@@ -96,7 +108,7 @@ def test_exit_status_flags_uncovered_pages(mixed: Path, tmp_path: Path) -> None:
 
 def test_table_names_the_pages_that_need_eyes(mixed: Path) -> None:
     proc = run(str(mixed))
-    line = next(l for l in proc.stdout.splitlines() if "needs OCR or eyes" in l)
+    line = next(ln for ln in proc.stdout.splitlines() if "needs OCR or eyes" in ln)
     for token in ("2(image-only)", "4(sparse)", "5(image-bodied)", "6(garbled)"):
         assert token in line, line
     assert "3(" not in line, "a blank page needs no OCR"

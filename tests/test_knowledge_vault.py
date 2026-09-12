@@ -12,7 +12,7 @@ import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "triage"))
-import knowledge_vault as kv  # noqa: E402
+from triage import knowledge_vault as kv  # noqa: E402
 
 SC = REPO_ROOT / "cli" / "sc"
 
@@ -49,11 +49,13 @@ def matter(tmp_path: Path) -> Path:
     return m
 
 
-def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(SC), *argv], cwd=cwd, capture_output=True, text=True, timeout=300)
+def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SC), *argv], cwd=cwd, capture_output=True, text=True, timeout=300
+    )
 
 
-def test_init_scaffolds_an_obsidian_compatible_vault(matter: Path):
+def test_init_scaffolds_an_obsidian_compatible_vault(matter: Path) -> None:
     out = kv.init(matter)
     for d in kv.TYPE_DIRS.values():
         assert (matter / "knowledge" / d).is_dir()
@@ -64,14 +66,14 @@ def test_init_scaffolds_an_obsidian_compatible_vault(matter: Path):
     assert any("entities.json" in o for o in out)
 
 
-def test_init_refuses_to_overwrite_a_monolith(matter: Path):
+def test_init_refuses_to_overwrite_a_monolith(matter: Path) -> None:
     (matter / "KNOWLEDGE.md").write_text(LEGACY)
     with pytest.raises(SystemExit):
         kv.init(matter)
     assert (matter / "KNOWLEDGE.md").read_text() == LEGACY
 
 
-def test_new_note_and_index_and_entity_index(matter: Path):
+def test_new_note_and_index_and_entity_index(matter: Path) -> None:
     kv.init(matter)
     p = kv.new_note(matter, "person", "Jane Roe", aliases=["J. Roe", "Roe"])
     assert p == matter / "knowledge" / "people" / "jane-roe.md"
@@ -79,12 +81,13 @@ def test_new_note_and_index_and_entity_index(matter: Path):
     idx = (matter / "KNOWLEDGE.md").read_text()
     assert "[[jane-roe]]" in idx and "## People (1)" in idx
     import json
+
     ent = json.loads((matter / "derived" / "knowledge" / "entities.json").read_text())
     assert ent["aliases"]["j. roe"] == ["jane-roe"]
     assert ent["notes"]["jane-roe"]["type"] == "person"
 
 
-def test_check_catches_the_failure_modes(matter: Path):
+def test_check_catches_the_failure_modes(matter: Path) -> None:
     kv.init(matter)
     kv.new_note(matter, "person", "Jane Roe", aliases=["Roe"])
     bad = matter / "knowledge" / "topics" / "bad.md"
@@ -118,7 +121,7 @@ We met yesterday. See [[jane-roe]].
     assert not good.problems
 
 
-def test_check_flags_a_note_missing_from_the_index(matter: Path):
+def test_check_flags_a_note_missing_from_the_index(matter: Path) -> None:
     kv.init(matter)
     kv.new_note(matter, "topic", "Fresh")
     notes = kv.check(matter)  # index not regenerated since the note was made
@@ -127,7 +130,7 @@ def test_check_flags_a_note_missing_from_the_index(matter: Path):
     assert proc.returncode == 0, proc.stdout
 
 
-def test_migrate_splits_the_monolith_into_staging_and_preserves_it(matter: Path):
+def test_migrate_splits_the_monolith_into_staging_and_preserves_it(matter: Path) -> None:
     (matter / "KNOWLEDGE.md").write_text(LEGACY)
     out = kv.init(matter, migrate=True)
     stage = matter / "knowledge" / "_migration"
@@ -135,8 +138,12 @@ def test_migrate_splits_the_monolith_into_staging_and_preserves_it(matter: Path)
     names = sorted(p.name for p in stage.glob("*.md") if p.name != "KNOWLEDGE.legacy.md")
     assert names[0].startswith("01-") and any("key-people" in n for n in names)
     diary = next(p for p in stage.glob("*.md") if "september" in p.name)
-    meta, body, err = kv.split_front_matter(diary.read_text())
-    assert err is None and meta["updated"] == "2026-09-04" and meta["migrated_from"].startswith("KNOWLEDGE.md ##")
+    meta, _body, err = kv.split_front_matter(diary.read_text())
+    assert (
+        err is None
+        and meta["updated"] == "2026-09-04"
+        and meta["migrated_from"].startswith("KNOWLEDGE.md ##")
+    )
     idx = (matter / "KNOWLEDGE.md").read_text()
     assert "Migration in progress" in idx and "Migration staging" in idx
     notes = kv.check(matter)
@@ -146,11 +153,11 @@ def test_migrate_splits_the_monolith_into_staging_and_preserves_it(matter: Path)
     assert any("split into" in o for o in out)
 
 
-def test_brief_and_find_use_the_vault(matter: Path):
+def test_brief_and_find_use_the_vault(matter: Path) -> None:
     kv.init(matter)
     ev = kv.new_note(matter, "event", "Motion hearing")
     ev.write_text(ev.read_text().replace("date: \n", "date: 2099-10-02\n"))
-    iss = kv.new_note(matter, "issue", "Privilege log dispute")
+    kv.new_note(matter, "issue", "Privilege log dispute")
     kv.new_note(matter, "person", "Jane Roe", aliases=["J. Roe"])
     kv.write_index(matter, kv.load_notes(matter))
     brief = sc("brief", str(matter), cwd=matter).stdout
@@ -160,19 +167,25 @@ def test_brief_and_find_use_the_vault(matter: Path):
     assert "## Knowledge notes (alias index)" in find and "[[jane-roe]]" in find
 
 
-def test_upgrade_dry_run_reports_every_step(matter: Path):
+def test_upgrade_dry_run_reports_every_step(matter: Path) -> None:
     (matter / "KNOWLEDGE.md").write_text(LEGACY)
     proc = sc("upgrade", str(matter), "--dry-run", cwd=matter)
     assert proc.returncode == 0, proc.stderr
     out = proc.stdout
-    for step in ("harness bundle", "derived text tree", "knowledge vault", ".gitignore", "scheduled sync"):
+    for step in (
+        "harness bundle",
+        "derived text tree",
+        "knowledge vault",
+        ".gitignore",
+        "scheduled sync",
+    ):
         assert step in out
     assert "would split" in out and "Needs a human or an agent" in out
     assert (matter / "KNOWLEDGE.md").read_text() == LEGACY, "dry run changes nothing"
     assert not (matter / ".claude").exists()
 
 
-def test_upgrade_is_idempotent(matter: Path, monkeypatch):
+def test_upgrade_is_idempotent(matter: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     (matter / "KNOWLEDGE.md").write_text(LEGACY)
     first = sc("upgrade", str(matter), cwd=matter)
     assert first.returncode == 0, first.stderr

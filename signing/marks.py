@@ -61,7 +61,7 @@ def _alpha_from_luminance(img: Image.Image) -> Image.Image:
             return 255
         if v >= _PAPER_ABOVE:
             return 0
-        return int(round(255 * (_PAPER_ABOVE - v) / span))
+        return round(255 * (_PAPER_ABOVE - v) / span)
 
     return grey.point([ramp(v) for v in range(256)])
 
@@ -157,7 +157,7 @@ def _has_real_alpha(img: Image.Image) -> bool:
     would paste a white rectangle onto the page.
     """
     a = img.convert("RGBA").getchannel("A")
-    lo, hi = a.getextrema()
+    lo, _hi = a.getextrema()
     return lo < 250
 
 
@@ -179,7 +179,7 @@ def place_rect(
     Height drives the scale; width follows from the aspect ratio and is
     never adjusted independently.
     """
-    x0, y0, x1, y1 = rule
+    x0, _y0, x1, y1 = rule
     rule_width = x1 - x0
 
     height = target_height

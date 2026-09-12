@@ -119,9 +119,7 @@ def resolve(key: str) -> Path:
     makes that urgent.
     """
     if "/" in key or "\\" in key or key.startswith("."):
-        raise SignerError(
-            f"signature key {key!r} must be a bare name, not a path"
-        )
+        raise SignerError(f"signature key {key!r} must be a bare name, not a path")
     d = store_dir()
     for suffix in _SUFFIXES:
         candidate = d / f"{key}{suffix}"
@@ -137,7 +135,5 @@ def resolve(key: str) -> Path:
             return candidate
 
     have = available()
-    hint = f" Available: {', '.join(have)}." if have else (
-        f" The store {d} is empty or absent."
-    )
+    hint = f" Available: {', '.join(have)}." if have else (f" The store {d} is empty or absent.")
     raise SignerError(f"no signature image for {key!r} in {d}.{hint}")

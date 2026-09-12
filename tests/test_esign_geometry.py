@@ -67,25 +67,42 @@ def client_module() -> ModuleType:
 
 def fill(form_id: str, tmp_path: Path) -> Path:
     import yaml
+
     (tmp_path / "meta.yaml").write_text(yaml.safe_dump(META))
     (tmp_path / "data.yaml").write_text(yaml.safe_dump(DATA))
     out = tmp_path / f"{form_id}.pdf"
     proc = subprocess.run(
-        [sys.executable, str(FORM_FILL), "fill", form_id,
-         "--meta", str(tmp_path / "meta.yaml"), "--data", str(tmp_path / "data.yaml"),
-         "-o", str(out)],
-        capture_output=True, text=True, timeout=300)
+        [
+            sys.executable,
+            str(FORM_FILL),
+            "fill",
+            form_id,
+            "--meta",
+            str(tmp_path / "meta.yaml"),
+            "--data",
+            str(tmp_path / "data.yaml"),
+            "-o",
+            str(out),
+        ],
+        capture_output=True,
+        text=True,
+        timeout=300,
+    )
     assert proc.returncode == 0, proc.stderr
     return out
 
 
-@pytest.mark.parametrize("form_id, expected", [
-    ("subp025", {"notice_date": "date", "notice_signature": "signature"}),
-    ("fw001", {"sig_date": "date", "signature": "signature"}),
-    ("mc030", {"date": "date", "signature": "signature"}),
-])
+@pytest.mark.parametrize(
+    "form_id, expected",
+    [
+        ("subp025", {"notice_date": "date", "notice_signature": "signature"}),
+        ("fw001", {"sig_date": "date", "signature": "signature"}),
+        ("mc030", {"date": "date", "signature": "signature"}),
+    ],
+)
 def test_form_fill_writes_a_build_sidecar_on_the_rules(
-        form_id: str, expected: dict[str, str], tmp_path: Path) -> None:
+    form_id: str, expected: dict[str, str], tmp_path: Path
+) -> None:
     out = fill(form_id, tmp_path)
     sidecar_path = out.with_name(out.name + ".fields.json")
     assert sidecar_path.exists(), "a fill of a form with esign: fields must write the sidecar"
@@ -106,9 +123,10 @@ def test_dated_signblock_with_a_long_name_clears_its_boxes(tmp_path: Path, final
     page content down) must record boxes where the ink actually is."""
     src = tmp_path / "doc.md"
     src.write_text(
-        "---\ndoctype: document\nheading_numbers: false\npaper_title: \"Authorization\"\n---\n\n"
+        '---\ndoctype: document\nheading_numbers: false\npaper_title: "Authorization"\n---\n\n'
         "1. I authorize the disclosure described above, and nothing else.\n\n"
-        "\\signblock{dated}{Jane Roe}{for herself and as parent of Pat Roe}\n")
+        "\\signblock{dated}{Jane Roe}{for herself and as parent of Pat Roe}\n"
+    )
     argv = [sys.executable, str(MD_PLEADING), str(src), str(tmp_path / "doc.pdf")]
     if final:
         argv.append("--final")
@@ -133,6 +151,7 @@ def _pdf_with_a_signature_line(path: Path) -> tuple[float, float]:
     Returns (rule_y_top, name_y_top) in top-left points."""
     from reportlab.lib.pagesizes import letter
     from reportlab.pdfgen import canvas
+
     c = canvas.Canvas(str(path), pagesize=letter)
     c.setFont("Helvetica", 12)
     c.drawString(72, 500, "I agree to the terms above.")
@@ -144,9 +163,21 @@ def _pdf_with_a_signature_line(path: Path) -> tuple[float, float]:
 
 
 def _signature_sidecar(y_top: float, h: float = 26) -> dict[str, object]:
-    return {**SIDECAR_HEAD, "fields": [
-        {"name": "Signature", "role": "Signer", "type": "signature", "page": 1,
-         "x": 140, "y_top": y_top, "w": 200, "h": h}]}
+    return {
+        **SIDECAR_HEAD,
+        "fields": [
+            {
+                "name": "Signature",
+                "role": "Signer",
+                "type": "signature",
+                "page": 1,
+                "x": 140,
+                "y_top": y_top,
+                "w": 200,
+                "h": h,
+            }
+        ],
+    }
 
 
 def test_geometry_check_rejects_a_straddling_or_covering_box(tmp_path: Path) -> None:
@@ -164,34 +195,44 @@ def test_send_refuses_a_hand_written_sidecar_without_the_flag(tmp_path: Path) ->
     pdf = tmp_path / "a.pdf"
     rule_y, _ = _pdf_with_a_signature_line(pdf)
     (tmp_path / "a.pdf.fields.json").write_text(json.dumps(_signature_sidecar(rule_y - 26)))
-    env = {"PATH": "/usr/bin:/bin", "DOCUSEAL_URL": "http://127.0.0.1:1",
-           "DOCUSEAL_API_KEY": "test-key"}
+    env = {
+        "PATH": "/usr/bin:/bin",
+        "DOCUSEAL_URL": "http://127.0.0.1:1",
+        "DOCUSEAL_API_KEY": "test-key",
+    }
     proc = subprocess.run(
         [sys.executable, str(CLIENT), "send", "a.pdf", "--to", "Jane Roe <jane@example.com>"],
-        capture_output=True, text=True, cwd=tmp_path, env=env, timeout=60)
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
+        env=env,
+        timeout=60,
+    )
     assert proc.returncode != 0
     assert "not written by the build" in proc.stderr
     assert "--allow-hand-fields" in proc.stderr
 
 
 DECL_SOURCE = (
-    "---\ndoctype: pleading\npaper_title: \"DECLARATION OF JANE ROE\"\n"
-    "filer_name: \"Jane Roe\"\n"
-    "filer_address_lines: [\"100 Main St, Suite 4\", \"Springfield, CA 90000\"]\n"
-    "filer_phone: \"(555) 555-0100\"\nfiler_email: \"jane.roe@example.com\"\n"
-    "filer_role: \"Respondent, In Pro Per\"\n"
-    "court_name: \"SUPERIOR COURT OF THE STATE OF CALIFORNIA\"\n"
-    "court_county: \"COUNTY OF EXAMPLE\"\n"
-    "petitioner: \"JOHN SMITH\"\nrespondent: \"JANE ROE\"\n"
-    "caption_first_party_label: \"Petitioner\"\ncaption_second_party_label: \"Respondent\"\n"
-    "case_number: \"24CV00000\"\n---\n\n"
+    '---\ndoctype: pleading\npaper_title: "DECLARATION OF JANE ROE"\n'
+    'filer_name: "Jane Roe"\n'
+    'filer_address_lines: ["100 Main St, Suite 4", "Springfield, CA 90000"]\n'
+    'filer_phone: "(555) 555-0100"\nfiler_email: "jane.roe@example.com"\n'
+    'filer_role: "Respondent, In Pro Per"\n'
+    'court_name: "SUPERIOR COURT OF THE STATE OF CALIFORNIA"\n'
+    'court_county: "COUNTY OF EXAMPLE"\n'
+    'petitioner: "JOHN SMITH"\nrespondent: "JANE ROE"\n'
+    'caption_first_party_label: "Petitioner"\ncaption_second_party_label: "Respondent"\n'
+    'case_number: "24CV00000"\n---\n\n'
     "1. I am the respondent. I declare the foregoing is true and correct.\n\n"
-    "\\signblock{decl}{JANE ROE}{Springfield, California}{Respondent, In Pro Per}\n")
+    "\\signblock{decl}{JANE ROE}{Springfield, California}{Respondent, In Pro Per}\n"
+)
 
 
 @pytest.mark.parametrize("final", [True, False], ids=["final", "draft-banner"])
 def test_decl_signblock_inline_blanks_pass_and_a_shifted_copy_fails(
-        tmp_path: Path, final: bool) -> None:
+    tmp_path: Path, final: bool
+) -> None:
     """The decl style puts its Day and Month fields on blanks INSIDE the
     sentence "Executed this ___ day of _______, 2026, at ..." --- one text
     span with the rules in the middle. The renderer's own geometry must

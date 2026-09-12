@@ -15,18 +15,19 @@ import sys
 import time
 from pathlib import Path
 
-import pytest
 import pymupdf as fitz
+import pytest
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 sys.path.insert(0, str(REPO_ROOT / "triage"))
-import text_coverage as tc  # noqa: E402
+from triage import text_coverage as tc  # noqa: E402
 
 SC = REPO_ROOT / "cli" / "sc"
 
 
-def make_text_pdf(path: Path, pages: int = 2,
-                  text: str = "The quick brown fox and the lazy dog") -> None:
+def make_text_pdf(
+    path: Path, pages: int = 2, text: str = "The quick brown fox and the lazy dog"
+) -> None:
     doc = fitz.open()
     for i in range(pages):
         page = doc.new_page()
@@ -66,16 +67,16 @@ def matter(tmp_path: Path) -> Path:
     make_text_pdf(m / "assets" / "letter.pdf")
     make_image_only_pdf(m / "assets" / "scan.pdf")
     make_png(m / "assets" / "photo.png")
-    make_text_pdf(m / "out" / "built.pdf")            # excluded
-    make_text_pdf(m / "inbox" / "new.pdf")            # untriaged
+    make_text_pdf(m / "out" / "built.pdf")  # excluded
+    make_text_pdf(m / "inbox" / "new.pdf")  # untriaged
     return m
 
 
-def states(docs):
+def states(docs: list[tc.Doc]) -> dict[str, str]:
     return {d.path: d.state for d in docs}
 
 
-def test_audit_classifies_every_document(matter: Path):
+def test_audit_classifies_every_document(matter: Path) -> None:
     st = states(tc.audit(matter))
     assert st["assets/letter.pdf"] == "needs-sidecar"
     assert st["assets/scan.pdf"] == "needs-ocr"
@@ -84,22 +85,26 @@ def test_audit_classifies_every_document(matter: Path):
     assert "out/built.pdf" not in st
 
 
-def test_ocr_sibling_alone_does_not_make_a_pdf_searchable(matter: Path):
+def test_ocr_sibling_alone_does_not_make_a_pdf_searchable(matter: Path) -> None:
     """The hole this module closes: rg cannot read a PDF, so an OCR'd copy
     without a text file is still unsearched. Legacy siblings are read."""
-    make_text_pdf(matter / "assets" / "scan_ocr.pdf")   # a legacy sibling
+    make_text_pdf(matter / "assets" / "scan_ocr.pdf")  # a legacy sibling
     st = states(tc.audit(matter, use_cache=False))
     assert st["assets/scan.pdf"] == "needs-sidecar"
     assert "assets/scan_ocr.pdf" not in st, "siblings are audited through their original"
 
 
-def test_legacy_tool_sidecar_is_recognized_and_migrated(matter: Path, monkeypatch):
+def test_legacy_tool_sidecar_is_recognized_and_migrated(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     legacy = matter / "assets" / "letter.txt"
-    tc.write_pdf_sidecar(matter, matter / "assets" / "letter.pdf", matter / "assets" / "letter.pdf", legacy)
+    tc.write_pdf_sidecar(
+        matter, matter / "assets" / "letter.pdf", matter / "assets" / "letter.pdf", legacy
+    )
     d = {x.path: x for x in tc.audit(matter, use_cache=False)}["assets/letter.pdf"]
     assert d.state == "searchable" and "legacy location" in d.note
-    (matter / "assets" / "photo.txt").write_text("a human wrote this")   # stays put
+    (matter / "assets" / "photo.txt").write_text("a human wrote this")  # stays put
     moves = tc.migrate(matter)
     assert any("assets/letter.txt -> derived/text/assets/letter.pdf.txt" in m for m in moves)
     assert (matter / "derived" / "text" / "assets" / "letter.pdf.txt").exists()
@@ -110,8 +115,10 @@ def test_legacy_tool_sidecar_is_recognized_and_migrated(matter: Path, monkeypatc
     assert d.state == "searchable" and d.note == ""
 
 
-def test_ensure_writes_page_marked_sidecars_without_ocr_tools(matter: Path, monkeypatch):
-    monkeypatch.setattr(tc, "_tool", lambda name: None)   # no ocrmypdf/tesseract/pandoc
+def test_ensure_writes_page_marked_sidecars_without_ocr_tools(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
+    monkeypatch.setattr(tc, "_tool", lambda name: None)  # no ocrmypdf/tesseract/pandoc
     docs = tc.ensure(matter, jobs=1)
     st = states(docs)
     assert st["assets/letter.pdf"] == "searchable"
@@ -125,7 +132,9 @@ def test_ensure_writes_page_marked_sidecars_without_ocr_tools(matter: Path, monk
     assert st["assets/photo.png"] == "needs-ocr"
 
 
-def test_foreign_sidecar_is_never_overwritten(matter: Path, monkeypatch):
+def test_foreign_sidecar_is_never_overwritten(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     human = matter / "assets" / "letter.txt"
     human.write_text("A human wrote this transcription.")
@@ -134,7 +143,9 @@ def test_foreign_sidecar_is_never_overwritten(matter: Path, monkeypatch):
     assert human.read_text() == "A human wrote this transcription."
 
 
-def test_stale_sidecar_is_detected_and_refreshed(matter: Path, monkeypatch):
+def test_stale_sidecar_is_detected_and_refreshed(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     tc.ensure(matter, jobs=1)
     side = matter / "derived" / "text" / "assets" / "letter.pdf.txt"
@@ -146,13 +157,18 @@ def test_stale_sidecar_is_detected_and_refreshed(matter: Path, monkeypatch):
     assert states(docs)["assets/letter.pdf"] == "searchable"
 
 
-def test_cache_keys_on_size_and_mtime(matter: Path, monkeypatch):
+def test_cache_keys_on_size_and_mtime(matter: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     tc.ensure(matter, jobs=1)
     assert (matter / ".state" / tc.CACHE_NAME).is_file()
-    calls = []
+    calls: list[str] = []
     real = tc.classify_pdf
-    monkeypatch.setattr(tc, "classify_pdf", lambda m, p: calls.append(p.name) or real(m, p))
+
+    def spy(m: Path, p: Path) -> tc.Doc:
+        calls.append(p.name)
+        return real(m, p)
+
+    monkeypatch.setattr(tc, "classify_pdf", spy)
     tc.audit(matter)
     assert "letter.pdf" not in calls, "unchanged documents come from the cache"
     time.sleep(0.01)
@@ -162,7 +178,7 @@ def test_cache_keys_on_size_and_mtime(matter: Path, monkeypatch):
 
 
 @pytest.mark.skipif(not shutil.which("ocrmypdf"), reason="ocrmypdf not installed")
-def test_ensure_ocrs_an_image_only_pdf(matter: Path):
+def test_ensure_ocrs_an_image_only_pdf(matter: Path) -> None:
     docs = tc.ensure(matter, jobs=1)
     st = states(docs)
     assert st["assets/scan.pdf"] == "searchable", [d for d in docs if d.path == "assets/scan.pdf"]
@@ -175,26 +191,31 @@ def test_ensure_ocrs_an_image_only_pdf(matter: Path):
 
 
 @pytest.mark.skipif(not shutil.which("tesseract"), reason="tesseract not installed")
-def test_ensure_ocrs_an_image(matter: Path):
+def test_ensure_ocrs_an_image(matter: Path) -> None:
     docs = tc.ensure(matter, jobs=1)
     assert states(docs)["assets/photo.png"] == "searchable"
     side = (matter / "derived" / "text" / "assets" / "photo.png.txt").read_text()
     assert side.startswith(tc.HEADER_MARK)
 
 
-def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(SC), *argv], cwd=cwd,
-                          capture_output=True, text=True, timeout=300)
+def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SC), *argv], cwd=cwd, capture_output=True, text=True, timeout=300
+    )
 
 
-def test_sc_find_exits_2_while_anything_is_unsearchable(matter: Path, monkeypatch):
+def test_sc_find_exits_2_while_anything_is_unsearchable(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     proc = sc("find", "quick brown", "--matter-dir", str(matter), cwd=matter)
     assert proc.returncode == 2, proc.stdout + proc.stderr
     assert "UNSEARCHED:" in proc.stdout and "[needs-ocr] assets/scan.pdf" in proc.stdout
     assert "UNTRIAGED (inbox/" in proc.stdout
 
 
-def test_find_cites_the_original_and_page_for_derived_text(matter: Path, monkeypatch):
+def test_find_cites_the_original_and_page_for_derived_text(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     tc.ensure(matter, jobs=1)
     proc = sc("find", "page 2 of 2", "--matter-dir", str(matter), cwd=matter)
@@ -202,7 +223,7 @@ def test_find_cites_the_original_and_page_for_derived_text(matter: Path, monkeyp
     assert "p.2 L" in proc.stdout
 
 
-def test_sc_text_audit_and_brief_report_coverage(matter: Path):
+def test_sc_text_audit_and_brief_report_coverage(matter: Path) -> None:
     proc = sc("text", "audit", str(matter), cwd=matter)
     assert proc.returncode == 1
     assert proc.stdout.startswith("text coverage: 0/3 document(s) searchable")
@@ -210,11 +231,13 @@ def test_sc_text_audit_and_brief_report_coverage(matter: Path):
     assert "text coverage: 0/3" in brief.stdout
 
 
-def test_symlinked_document_gets_its_own_derived_files(matter: Path, monkeypatch):
+def test_symlinked_document_gets_its_own_derived_files(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
     (matter / "processed_files").mkdir()
     make_text_pdf(matter / "processed_files" / "orig.pdf")
-    os.symlink(matter / "processed_files" / "orig.pdf", matter / "assets" / "orig.pdf")
+    (matter / "assets" / "orig.pdf").symlink_to(matter / "processed_files" / "orig.pdf")
     docs = tc.ensure(matter, jobs=1)
     st = states(docs)
     assert st["assets/orig.pdf"] == "searchable" and st["processed_files/orig.pdf"] == "searchable"
@@ -222,11 +245,15 @@ def test_symlinked_document_gets_its_own_derived_files(matter: Path, monkeypatch
     assert (matter / "derived" / "text" / "processed_files" / "orig.pdf.txt").exists()
 
 
-def test_migrate_removes_a_redundant_tool_legacy_file(matter: Path, monkeypatch):
+def test_migrate_removes_a_redundant_tool_legacy_file(
+    matter: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     monkeypatch.setattr(tc, "_tool", lambda name: None)
-    tc.ensure(matter, jobs=1)                                     # derived text exists
+    tc.ensure(matter, jobs=1)  # derived text exists
     legacy = matter / "assets" / "letter.txt"
-    tc.write_pdf_sidecar(matter, matter / "assets" / "letter.pdf", matter / "assets" / "letter.pdf", legacy)
+    tc.write_pdf_sidecar(
+        matter, matter / "assets" / "letter.pdf", matter / "assets" / "letter.pdf", legacy
+    )
     moves = tc.migrate(matter)
     assert any(m.startswith("rm assets/letter.txt (redundant") for m in moves), moves
     assert not legacy.exists()

@@ -64,6 +64,13 @@ extend-exclude = [
     "tests/test_system_dependencies.py",
 ]
 
+[tool.ruff.lint.per-file-ignores]
+# Test files favor dense fixture setup: semicolon one-liners and long
+# literal lines read better than reflowed fixtures, and pytest requests
+# fixtures by name for their side effects, so an "unused" argument is
+# the mechanism working as designed, not an oversight.
+"**/test_*.py" = ["E501", "E702", "ARG"]
+
 [tool.ruff.lint]
 select = [
     "E", "W",    # pycodestyle
@@ -82,10 +89,24 @@ select = [
 [tool.mypy]
 strict = true
 python_version = "3.12"
+# One deliberate loosening: the tests call into the ported trees, which
+# are deliberately untyped (the same boundary as the ruff excludes), so
+# no-untyped-call is off. The tests themselves are fully annotated ---
+# no-untyped-def stays on.
+disallow_untyped_calls = false
 # Same boundary as the ruff excludes above: the ported trees keep upstream
 # style so upstream fixes merge cleanly. Exclusions apply because CI passes
 # `tests` as a directory, not as a list of files.
 exclude = ["^tests/(harness|scenarios)/", "^tests/test_(docs_coverage|platform_seams|repo_hygiene|system_dependencies)\\.py$"]
+
+[[tool.mypy.overrides]]
+# Imported by tests through sys.path insertions into the ported
+# pleading/ tree; mypy cannot resolve them as packages and must not
+# try. Native triage modules are NOT listed: they resolve normally
+# and are held to the same bar as the tests.
+module = ["form_fill", "jc_common", "md_pleading"]
+ignore_missing_imports = true
+follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "pleading/tests", "signing/tests"]

@@ -26,11 +26,11 @@ from __future__ import annotations
 import datetime as _dt
 from abc import ABC, abstractmethod
 from dataclasses import dataclass, field
-from enum import Enum
+from enum import StrEnum
 from pathlib import Path
 
 
-class SlotRole(str, Enum):
+class SlotRole(StrEnum):
     """What a discovered blank wants written in it.
 
     The vocabulary is explicit about *form* as well as content, because
@@ -118,7 +118,7 @@ class SignRequest:
     timestamp: bool = True
 
 
-class Outcome(str, Enum):
+class Outcome(StrEnum):
     COMPLETED = "completed"
     PENDING = "pending"
 
@@ -172,8 +172,6 @@ class Signer(ABC):
     def request(self, req: SignRequest) -> SignResult:
         """Sign, or ask for signature. See Outcome."""
 
-    def poll(self, reference: str) -> SignResult:
+    def poll(self, reference: str) -> SignResult:  # noqa: ARG002 -- interface; async backends use it
         """Resolve a PENDING request. Synchronous backends never need it."""
-        raise SignerError(
-            f"{self.name} completes synchronously; there is nothing to poll"
-        )
+        raise SignerError(f"{self.name} completes synchronously; there is nothing to poll")

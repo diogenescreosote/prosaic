@@ -22,8 +22,8 @@ from pathlib import Path
 
 sys.path.insert(0, str(Path(__file__).resolve().parent.parent))
 
-from signing import SignRequest, SignerError, get_signer  # noqa: E402
-from signing import audit, slots as slots_mod, store  # noqa: E402
+from signing import SignerError, SignRequest, audit, get_signer, store
+from signing import slots as slots_mod
 
 
 def _matter_root(start: Path) -> Path | None:
@@ -69,9 +69,7 @@ def cmd_apply(args: argparse.Namespace) -> int:
             )
         audit_root = root / "audit_log"
 
-    when = (
-        _dt.date.fromisoformat(args.date) if args.date else _dt.date.today()
-    )
+    when = _dt.date.fromisoformat(args.date) if args.date else _dt.date.today()
 
     # The sidecar binds a mark to a name and a key, so neither has to be
     # retyped. An explicit flag still wins --- a one-off signing under a
@@ -104,8 +102,8 @@ def cmd_apply(args: argparse.Namespace) -> int:
         timestamp=not args.no_timestamp,
     )
     signer = get_signer(
-        args.backend, **({"include_form_lines": args.include_form_lines}
-                        if args.backend == "local" else {})
+        args.backend,
+        **({"include_form_lines": args.include_form_lines} if args.backend == "local" else {}),
     )
     result = signer.request(req)
 
@@ -144,8 +142,11 @@ def main() -> None:
 
     sp = sub.add_parser("slots", help="list the signature blanks in a PDF")
     sp.add_argument("pdf")
-    sp.add_argument("--include-form-lines", action="store_true",
-                    help="also anchor on Judicial Council signature labels")
+    sp.add_argument(
+        "--include-form-lines",
+        action="store_true",
+        help="also anchor on Judicial Council signature labels",
+    )
     sp.set_defaults(func=cmd_slots)
 
     sp = sub.add_parser("marks", help="list available signature images")
@@ -153,27 +154,42 @@ def main() -> None:
 
     sp = sub.add_parser("apply", help="sign a document and attest it")
     sp.add_argument("pdf")
-    sp.add_argument("--as", dest="signer_key", required=True,
-                    metavar="KEY", help="signature image key (see `marks`)")
-    sp.add_argument("--name", default=None,
-                    help="legal name for the statement of assent "
-                         "(default: from the mark's .meta.yaml)")
-    sp.add_argument("--gpg-key", default=None,
-                    help="gpg key to sign the statement with (fingerprint; "
-                         "default: from the mark's .meta.yaml)")
-    sp.add_argument("--block", default=None, metavar="PRINTED",
-                    help="the name as printed under the signature rule, when "
-                         "it differs from --name")
-    sp.add_argument("--date", default=None, metavar="YYYY-MM-DD",
-                    help="date of execution (default: today)")
-    sp.add_argument("-o", "--output", default=None,
-                    help="destination PDF (default: <matter>/staging/...)")
-    sp.add_argument("--audit-root", default=None,
-                    help="default: <matter>/audit_log")
+    sp.add_argument(
+        "--as",
+        dest="signer_key",
+        required=True,
+        metavar="KEY",
+        help="signature image key (see `marks`)",
+    )
+    sp.add_argument(
+        "--name",
+        default=None,
+        help="legal name for the statement of assent (default: from the mark's .meta.yaml)",
+    )
+    sp.add_argument(
+        "--gpg-key",
+        default=None,
+        help="gpg key to sign the statement with (fingerprint; "
+        "default: from the mark's .meta.yaml)",
+    )
+    sp.add_argument(
+        "--block",
+        default=None,
+        metavar="PRINTED",
+        help="the name as printed under the signature rule, when it differs from --name",
+    )
+    sp.add_argument(
+        "--date", default=None, metavar="YYYY-MM-DD", help="date of execution (default: today)"
+    )
+    sp.add_argument(
+        "-o", "--output", default=None, help="destination PDF (default: <matter>/staging/...)"
+    )
+    sp.add_argument("--audit-root", default=None, help="default: <matter>/audit_log")
     sp.add_argument("--backend", default="local", help="local | docuseal")
     sp.add_argument("--include-form-lines", action="store_true")
-    sp.add_argument("--no-timestamp", action="store_true",
-                    help="skip OpenTimestamps (needs network)")
+    sp.add_argument(
+        "--no-timestamp", action="store_true", help="skip OpenTimestamps (needs network)"
+    )
     sp.set_defaults(func=cmd_apply)
 
     sp = sub.add_parser("verify", help="re-check a recorded signing event")

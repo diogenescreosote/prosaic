@@ -22,14 +22,14 @@ from .base import (
 
 __all__ = [
     "Outcome",
-    "Signer",
-    "SignerError",
     "SignRequest",
     "SignResult",
+    "Signer",
+    "SignerError",
     "Slot",
     "SlotRole",
-    "get_signer",
     "backends",
+    "get_signer",
 ]
 
 
@@ -46,6 +46,4 @@ def get_signer(name: str, **kwargs) -> Signer:
         from .docuseal import DocuSealSigner
 
         return DocuSealSigner()
-    raise SignerError(
-        f"unknown signing backend {name!r}; have {', '.join(backends())}"
-    )
+    raise SignerError(f"unknown signing backend {name!r}; have {', '.join(backends())}")

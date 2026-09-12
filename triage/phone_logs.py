@@ -22,6 +22,7 @@ import re
 import sys
 import xml.etree.ElementTree as ET
 from pathlib import Path
+from typing import Any
 
 CALL_TYPES = {
     "1": "incoming",
@@ -41,13 +42,10 @@ SMS_TYPES = {
 }
 MMS_BOXES = {"1": "received", "2": "sent"}
 
-BANNER = (
-    "**MACHINE EXTRACT — VERIFY AGAINST THE SOURCE BACKUP "
-    "BEFORE CITING IN ANY FILING**"
-)
+BANNER = "**MACHINE EXTRACT — VERIFY AGAINST THE SOURCE BACKUP BEFORE CITING IN ANY FILING**"
 
 
-def normalize_number(raw):
+def normalize_number(raw: str | None) -> str:
     """Digits only; a US 11-digit number loses its leading 1."""
     digits = re.sub(r"\D", "", raw or "")
     if len(digits) == 11 and digits.startswith("1"):
@@ -55,7 +53,7 @@ def normalize_number(raw):
     return digits
 
 
-def numbers_match(a, b):
+def numbers_match(a: str, b: str) -> bool:
     """Format-blind comparison: last ten digits for full-length
     numbers, exact for short codes."""
     if not a or not b:
@@ -65,12 +63,14 @@ def numbers_match(a, b):
     return a == b
 
 
-def matches_any(number, targets):
+def matches_any(number: str | None, targets: list[str]) -> bool:
     n = normalize_number(number)
     return any(numbers_match(n, t) for t in targets)
 
 
-def parse_window(after, before):
+def parse_window(
+    after: str | None, before: str | None
+) -> tuple[datetime.datetime | None, datetime.datetime | None]:
     """Inclusive local-time bounds from YYYY-MM-DD or ISO timestamps."""
     lo = hi = None
     if after:
@@ -82,47 +82,48 @@ def parse_window(after, before):
     return lo, hi
 
 
-def in_window(ms, lo, hi):
+def in_window(ms: str | int, lo: datetime.datetime | None, hi: datetime.datetime | None) -> bool:
     when = datetime.datetime.fromtimestamp(int(ms) / 1000.0)
     if lo and when < lo:
         return False
-    if hi and when > hi:
-        return False
-    return True
+    return not (hi and when > hi)
 
 
-def _mms_participants(elem):
-    addrs = [
-        (a.get("address"), a.get("type"))
-        for a in elem.iter("addr")
-        if a.get("address")
-    ]
+def _mms_participants(elem: ET.Element) -> list[tuple[str | None, str | None]]:
+    addrs = [(a.get("address"), a.get("type")) for a in elem.iter("addr") if a.get("address")]
     if not addrs:
         addrs = [(part, None) for part in (elem.get("address") or "").split("~") if part]
     return addrs
 
 
-def _mms_content(elem):
+def _mms_content(elem: ET.Element) -> tuple[str, list[str]]:
     texts, attachments = [], []
     for part in elem.iter("part"):
         ct = part.get("ct") or "unknown"
         if ct == "application/smil":
             continue
         if ct.startswith("text/"):
-            if part.get("text") not in (None, "null"):
-                texts.append(part.get("text"))
+            text = part.get("text")
+            if text not in (None, "null"):
+                texts.append(str(text))
         else:
             attachments.append(ct)
     return "\n".join(texts), attachments
 
 
-def scan_file(path, targets, lo, hi, records, seen, stats):
+def scan_file(
+    path: Path,
+    targets: list[str],
+    lo: datetime.datetime | None,
+    hi: datetime.datetime | None,
+    records: list[dict[str, Any]],
+    seen: set[tuple[Any, ...]],
+    stats: dict[str, Any],
+) -> None:
     """Stream one backup file, appending matching records."""
     context = ET.iterparse(str(path), events=("start", "end"))
     _, root = next(context)
-    stats.setdefault("sources", []).append(
-        (Path(path).name, root.get("count"), root.tag)
-    )
+    stats.setdefault("sources", []).append((Path(path).name, root.get("count"), root.tag))
     for event, elem in context:
         if event != "end" or elem.tag not in ("call", "sms", "mms"):
             continue
@@ -130,7 +131,7 @@ def scan_file(path, targets, lo, hi, records, seen, stats):
             number = elem.get("number")
             if matches_any(number, targets) and in_window(elem.get("date"), lo, hi):
                 stats["raw"] = stats.get("raw", 0) + 1
-                key = (
+                key: tuple[Any, ...] = (
                     "call",
                     elem.get("date"),
                     normalize_number(number),
@@ -144,7 +145,7 @@ def scan_file(path, targets, lo, hi, records, seen, stats):
                             "kind": "call",
                             "ms": int(elem.get("date")),
                             "direction": CALL_TYPES.get(
-                                elem.get("type"), "type=%s" % elem.get("type")
+                                elem.get("type"), "type={}".format(elem.get("type"))
                             ),
                             "duration": int(elem.get("duration") or 0),
                             "number": number,
@@ -169,7 +170,7 @@ def scan_file(path, targets, lo, hi, records, seen, stats):
                             "kind": "message",
                             "ms": int(elem.get("date")),
                             "direction": SMS_TYPES.get(
-                                elem.get("type"), "type=%s" % elem.get("type")
+                                elem.get("type"), "type={}".format(elem.get("type"))
                             ),
                             "number": address,
                             "contact": elem.get("contact_name"),
@@ -193,16 +194,14 @@ def scan_file(path, targets, lo, hi, records, seen, stats):
                 )
                 if key not in seen:
                     seen.add(key)
-                    others = [
-                        a for a, _ in participants if matches_any(a, targets)
-                    ]
+                    others = [a for a, _ in participants if matches_any(a, targets)]
                     records.append(
                         {
                             "kind": "message",
                             "ms": int(elem.get("date")),
                             "direction": MMS_BOXES.get(
                                 elem.get("msg_box"),
-                                "msg_box=%s" % elem.get("msg_box"),
+                                "msg_box={}".format(elem.get("msg_box")),
                             ),
                             "number": others[0] if others else elem.get("address"),
                             "contact": elem.get("contact_name"),
@@ -214,43 +213,47 @@ def scan_file(path, targets, lo, hi, records, seen, stats):
         root.clear()
 
 
-def fmt_when(ms):
+def fmt_when(ms: float) -> str:
     return datetime.datetime.fromtimestamp(ms / 1000.0).strftime("%Y-%m-%d %H:%M:%S")
 
 
-def fmt_duration(seconds):
+def fmt_duration(seconds: float) -> str:
     m, s = divmod(int(seconds), 60)
     h, m = divmod(m, 60)
     if h:
-        return "%dh %dm %ds" % (h, m, s)
+        return f"{h}h {m}m {s}s"
     if m:
-        return "%dm %ds" % (m, s)
-    return "%ds" % s
+        return f"{m}m {s}s"
+    return f"{s}s"
 
 
-def render(records, numbers, after, before, stats):
+def render(
+    records: list[dict[str, Any]],
+    numbers: list[str],
+    after: str | None,
+    before: str | None,
+    stats: dict[str, Any],
+) -> str:
     records.sort(key=lambda r: (r["ms"], r["kind"]))
     calls = [r for r in records if r["kind"] == "call"]
     messages = [r for r in records if r["kind"] == "message"]
 
     out = []
-    out.append("# Phone log extract: %s" % ", ".join(numbers))
+    out.append("# Phone log extract: {}".format(", ".join(numbers)))
     out.append("")
     out.append(BANNER)
     out.append("")
-    out.append("- Number(s): %s" % ", ".join(numbers))
-    window = "%s to %s" % (after or "(start of backup)", before or "(end of backup)")
-    out.append("- Window: %s (local time, inclusive)" % window)
+    out.append("- Number(s): {}".format(", ".join(numbers)))
+    window = "{} to {}".format(after or "(start of backup)", before or "(end of backup)")
+    out.append(f"- Window: {window} (local time, inclusive)")
     out.append("- Sources:")
     for name, count, tag in stats.get("sources", []):
-        out.append("  - `%s` (%s, %s records)" % (name, tag, count or "?"))
+        out.append("  - `{}` ({}, {} records)".format(name, tag, count or "?"))
     out.append(
-        "- Result: %d calls, %d messages (de-duplicated from %d matching rows)"
-        % (len(calls), len(messages), stats.get("raw", 0))
+        f"- Result: {len(calls)} calls, {len(messages)} messages "
+        f"(de-duplicated from {stats.get('raw', 0)} matching rows)"
     )
-    out.append(
-        "- Generated by `triage/phone_logs.py` from SMS Backup & Restore XML."
-    )
+    out.append("- Generated by `triage/phone_logs.py` from SMS Backup & Restore XML.")
     out.append("")
 
     out.append("## Calls")
@@ -260,8 +263,7 @@ def render(records, numbers, after, before, stats):
         out.append("|---|---|---|---|---|")
         for r in calls:
             out.append(
-                "| %s | %s | %s | %s | %s |"
-                % (
+                "| {} | {} | {} | {} | {} |".format(
                     fmt_when(r["ms"]),
                     r["direction"],
                     fmt_duration(r["duration"]),
@@ -277,17 +279,17 @@ def render(records, numbers, after, before, stats):
     out.append("")
     if messages:
         for r in messages:
-            label = "%s — %s" % (fmt_when(r["ms"]), r["direction"])
+            label = "{} — {}".format(fmt_when(r["ms"]), r["direction"])
             if r.get("group"):
                 label += " (group)"
-            out.append("**%s** (%s):" % (label, r["number"]))
+            out.append("**{}** ({}):".format(label, r["number"]))
             out.append("")
             body = r.get("body") or ""
             if body:
                 for line in body.replace("\r\n", "\n").split("\n"):
-                    out.append("> %s" % line)
+                    out.append(f"> {line}")
             for ct in r.get("attachments", []):
-                out.append("> [attachment: %s — not extracted]" % ct)
+                out.append(f"> [attachment: {ct} — not extracted]")
             if not body and not r.get("attachments"):
                 out.append("> (empty message)")
             out.append("")
@@ -298,10 +300,10 @@ def render(records, numbers, after, before, stats):
     return "\n".join(out).rstrip() + "\n"
 
 
-def gather_inputs(paths, kind):
+def gather_inputs(paths: list[str], kind: str) -> list[Path]:
     files = []
-    for p in paths:
-        p = Path(p)
+    for raw in paths:
+        p = Path(raw)
         if p.is_dir():
             if kind in ("calls", "both"):
                 files.extend(sorted(p.glob("calls-*.xml")))
@@ -312,10 +314,9 @@ def gather_inputs(paths, kind):
     return files
 
 
-def main(argv=None):
+def main(argv: list[str] | None = None) -> int:
     ap = argparse.ArgumentParser(
-        description="Filter SMS Backup & Restore XML by phone number "
-        "into a markdown report."
+        description="Filter SMS Backup & Restore XML by phone number into a markdown report."
     )
     ap.add_argument(
         "-n",
@@ -345,17 +346,16 @@ def main(argv=None):
     if not files:
         ap.error("no calls-*.xml or sms-*.xml found in the given inputs")
 
-    records, seen, stats = [], set(), {}
+    records: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    stats: dict[str, Any] = {}
     for f in files:
         scan_file(f, targets, lo, hi, records, seen, stats)
 
     report = render(records, args.number, args.after, args.before, stats)
     if args.output:
         Path(args.output).write_text(report, encoding="utf-8")
-        sys.stderr.write(
-            "wrote %s: %d records from %d file(s)\n"
-            % (args.output, len(records), len(files))
-        )
+        sys.stderr.write(f"wrote {args.output}: {len(records)} records from {len(files)} file(s)\n")
     else:
         sys.stdout.write(report)
     return 0

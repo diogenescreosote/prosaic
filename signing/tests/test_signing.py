@@ -33,8 +33,16 @@ fitz = pytest.importorskip("fitz")
 PIL = pytest.importorskip("PIL")
 from PIL import Image, ImageDraw  # noqa: E402
 
-from signing import SignRequest, SignerError, get_signer  # noqa: E402
-from signing import audit, marks, slots as slots_mod, stamp, store  # noqa: E402
+from signing import (  # noqa: E402  # noqa: E402
+    SignerError,
+    SignRequest,
+    audit,
+    get_signer,
+    marks,
+    stamp,
+    store,
+)
+from signing import slots as slots_mod  # noqa: E402
 from signing.base import SlotRole  # noqa: E402
 
 PLEADING = ROOT / "pleading" / "md_pleading.py"
@@ -59,7 +67,9 @@ def build_pleading(tmp_path: Path, body: str) -> Path:
     out = tmp_path / "doc.pdf"
     proc = subprocess.run(
         [sys.executable, str(PLEADING), str(src), str(out)],
-        capture_output=True, text=True, cwd=tmp_path,
+        capture_output=True,
+        text=True,
+        cwd=tmp_path,
     )
     assert proc.returncode == 0, proc.stderr
     return out
@@ -93,9 +103,7 @@ def test_slots_found_in_real_build(tmp_path):
 
 
 def test_dated_style_takes_a_whole_date(tmp_path):
-    pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
-    )
+    pdf = build_pleading(tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}")
     roles = [s.role for s in slots_mod.discover(pdf)]
     assert SlotRole.DATE_FULL in roles
     # A whole-date blank must not be mistaken for a day/month pair.
@@ -117,9 +125,7 @@ def test_whereof_clause_wraps_and_all_four_blanks_are_found(tmp_path):
     merely skip it, it shifted every later blank up one and put a
     two-digit year into the *location* blank.
     """
-    pdf = build_pleading(
-        tmp_path, "\\signblock{whereof}{JOHN Q. DOE}{Testator}{Will}"
-    )
+    pdf = build_pleading(tmp_path, "\\signblock{whereof}{JOHN Q. DOE}{Testator}{Will}")
     roles = [s.role for s in slots_mod.discover(pdf) if s.for_signer]
     assert roles == [
         SlotRole.DAY_ORDINAL,
@@ -136,9 +142,7 @@ def test_letter_block_has_a_mark_and_no_date(tmp_path):
     assert roles == [SlotRole.SIGNATURE_MARK]
 
 
-@pytest.mark.parametrize(
-    "title", ["JUDGE OF THE SUPERIOR COURT", "HON. PAT MORRISON"]
-)
+@pytest.mark.parametrize("title", ["JUDGE OF THE SUPERIOR COURT", "HON. PAT MORRISON"])
 def test_a_judges_signature_area_is_never_ours(tmp_path, title):
     """The one defect in this file that would be unrecoverable.
 
@@ -147,7 +151,7 @@ def test_a_judges_signature_area_is_never_ours(tmp_path, title):
     distinguishes them --- and an earlier version drew the filer's mark on
     the judicial officer's line.
     """
-    pdf = build_pleading(tmp_path, "\\signblock{judge}{%s}" % title)
+    pdf = build_pleading(tmp_path, f"\\signblock{{judge}}{{{title}}}")
     found = slots_mod.discover(pdf)
     assert found, "the judge's slots should be reported, not dropped"
     assert not any(s.for_signer for s in found)
@@ -170,20 +174,19 @@ def test_a_stipulation_signs_the_party_and_not_the_judge(tmp_path):
     assert SlotRole.DATE_FULL in theirs
 
 
-def test_signing_refuses_a_document_that_is_only_a_judges_order(
-    tmp_path, monkeypatch, stub_gpg
-):
-    pdf = build_pleading(
-        tmp_path, "\\signblock{judge}{JUDGE OF THE SUPERIOR COURT}"
-    )
+def test_signing_refuses_a_document_that_is_only_a_judges_order(tmp_path, monkeypatch, stub_gpg):
+    pdf = build_pleading(tmp_path, "\\signblock{judge}{JUDGE OF THE SUPERIOR COURT}")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "john_doe.png")
     with pytest.raises(SignerError, match="JUDGE OF THE SUPERIOR COURT"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
+                pdf=pdf,
+                signer_key="john_doe",
+                signer_name="John Doe",
                 audit_root=tmp_path / "audit_log",
-                output=tmp_path / "s.pdf", timestamp=False,
+                output=tmp_path / "s.pdf",
+                timestamp=False,
             )
         )
 
@@ -218,9 +221,14 @@ def test_prepare_reads_a_vector_pdf_source(tmp_path):
     pdf = tmp_path / "sig.pdf"
     doc = fitz.open()
     page = doc.new_page(width=140, height=40)
-    page.draw_bezier(fitz.Point(10, 30), fitz.Point(40, 2),
-                     fitz.Point(90, 38), fitz.Point(130, 10),
-                     color=(0, 0, 0), width=2.5)
+    page.draw_bezier(
+        fitz.Point(10, 30),
+        fitz.Point(40, 2),
+        fitz.Point(90, 38),
+        fitz.Point(130, 10),
+        color=(0, 0, 0),
+        width=2.5,
+    )
     doc.save(str(pdf))
     doc.close()
 
@@ -240,9 +248,12 @@ def test_prepare_keeps_the_colour_of_a_source_that_has_alpha(tmp_path):
 
     m = marks.prepare(src, ink=(16, 24, 92))
     out = Image.open(io.BytesIO(m.png))
-    opaque = [out.getpixel((x, y))[:3]
-              for x in range(out.width) for y in range(out.height)
-              if out.getpixel((x, y))[3] > 200]
+    opaque = [
+        out.getpixel((x, y))[:3]
+        for x in range(out.width)
+        for y in range(out.height)
+        if out.getpixel((x, y))[3] > 200
+    ]
     assert opaque, "no opaque ink found"
     assert all(px[0] > px[2] for px in opaque), "red was not preserved"
 
@@ -251,9 +262,12 @@ def test_prepare_recolours_only_a_scan(tmp_path):
     """`ink` applies when alpha had to be derived from luminance."""
     m = marks.prepare(specimen(tmp_path), ink=(0, 0, 200))
     out = Image.open(io.BytesIO(m.png))
-    opaque = [out.getpixel((x, y))[:3]
-              for x in range(0, out.width, 3) for y in range(0, out.height, 3)
-              if out.getpixel((x, y))[3] > 240]
+    opaque = [
+        out.getpixel((x, y))[:3]
+        for x in range(0, out.width, 3)
+        for y in range(0, out.height, 3)
+        if out.getpixel((x, y))[3] > 240
+    ]
     assert opaque
     assert all(px[2] > px[0] for px in opaque), "ink colour was not applied"
 
@@ -313,7 +327,8 @@ def test_store_refuses_a_signature_inside_a_repo_with_a_remote(tmp_path, monkeyp
     subprocess.run(["git", "init", "-q"], cwd=repo, check=True)
     subprocess.run(
         ["git", "remote", "add", "origin", "https://example.invalid/x.git"],
-        cwd=repo, check=True,
+        cwd=repo,
+        check=True,
     )
     Image.new("RGB", (200, 80), "white").save(repo / "john_doe.png")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(repo))
@@ -414,16 +429,17 @@ def test_apply_signs_stamps_and_attests(tmp_path, monkeypatch, stub_gpg):
 
 
 def test_verify_notices_altered_bytes(tmp_path, monkeypatch, stub_gpg):
-    pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
-    )
+    pdf = build_pleading(tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "john_doe.png")
     result = get_signer("local").request(
         SignRequest(
-            pdf=pdf, signer_key="john_doe", signer_name="John Doe",
+            pdf=pdf,
+            signer_key="john_doe",
+            signer_name="John Doe",
             audit_root=tmp_path / "audit_log",
-            output=tmp_path / "signed.pdf", timestamp=False,
+            output=tmp_path / "signed.pdf",
+            timestamp=False,
         )
     )
     retained = result.attestation_dir / "signed.pdf"
@@ -434,32 +450,35 @@ def test_verify_notices_altered_bytes(tmp_path, monkeypatch, stub_gpg):
 
 
 def test_refuses_to_write_into_a_build_directory(tmp_path, monkeypatch, stub_gpg):
-    pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
-    )
+    pdf = build_pleading(tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "john_doe.png")
     with pytest.raises(SignerError, match="build directory"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
+                pdf=pdf,
+                signer_key="john_doe",
+                signer_name="John Doe",
                 audit_root=tmp_path / "audit_log",
-                output=tmp_path / "out" / "signed.pdf", timestamp=False,
+                output=tmp_path / "out" / "signed.pdf",
+                timestamp=False,
             )
         )
 
 
 def test_refuses_to_sign_in_place(tmp_path, monkeypatch, stub_gpg):
-    pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
-    )
+    pdf = build_pleading(tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "john_doe.png")
     with pytest.raises(SignerError, match="in place"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
-                audit_root=tmp_path / "audit_log", output=pdf, timestamp=False,
+                pdf=pdf,
+                signer_key="john_doe",
+                signer_name="John Doe",
+                audit_root=tmp_path / "audit_log",
+                output=pdf,
+                timestamp=False,
             )
         )
 
@@ -471,9 +490,12 @@ def test_unsigned_document_offers_nothing_to_sign(tmp_path, monkeypatch, stub_gp
     with pytest.raises(SignerError, match="no signature line"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
+                pdf=pdf,
+                signer_key="john_doe",
+                signer_name="John Doe",
                 audit_root=tmp_path / "audit_log",
-                output=tmp_path / "s.pdf", timestamp=False,
+                output=tmp_path / "s.pdf",
+                timestamp=False,
             )
         )
 
@@ -508,8 +530,7 @@ FOUR_PARTY = (
 
 def test_each_block_is_attributed_to_the_name_printed_under_it(tmp_path):
     pdf = build_pleading(tmp_path, FOUR_PARTY)
-    owners = [s.belongs_to for s in slots_mod.discover(pdf)
-              if s.role is SlotRole.SIGNATURE_MARK]
+    owners = [s.belongs_to for s in slots_mod.discover(pdf) if s.role is SlotRole.SIGNATURE_MARK]
     assert owners == [
         "JANE ROE",
         "JOHN DOE",
@@ -518,9 +539,7 @@ def test_each_block_is_attributed_to_the_name_printed_under_it(tmp_path):
     ]
 
 
-def test_a_stipulation_signs_one_block_and_leaves_the_others(
-    tmp_path, monkeypatch, stub_gpg
-):
+def test_a_stipulation_signs_one_block_and_leaves_the_others(tmp_path, monkeypatch, stub_gpg):
     """The defect this exists to prevent: signing all four party lines.
 
     Every rule on a stipulation is the same string of underscores. Only
@@ -534,42 +553,42 @@ def test_a_stipulation_signs_one_block_and_leaves_the_others(
     signer = get_signer("local")
     mine, theirs = signer._partition(
         signer.slots(pdf),
-        SignRequest(pdf=pdf, signer_key="john_doe",
-                    signer_name="John Doe", audit_root=tmp_path),
+        SignRequest(pdf=pdf, signer_key="john_doe", signer_name="John Doe", audit_root=tmp_path),
     )
-    assert [s.belongs_to for s in mine
-            if s.role is SlotRole.SIGNATURE_MARK] == ["JOHN DOE"]
-    assert len([s for s in theirs
-                if s.role is SlotRole.SIGNATURE_MARK]) == 3
+    assert [s.belongs_to for s in mine if s.role is SlotRole.SIGNATURE_MARK] == ["JOHN DOE"]
+    assert len([s for s in theirs if s.role is SlotRole.SIGNATURE_MARK]) == 3
 
 
-def test_an_unrecognised_name_refuses_rather_than_guessing(
-    tmp_path, monkeypatch, stub_gpg
-):
+def test_an_unrecognised_name_refuses_rather_than_guessing(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(tmp_path, FOUR_PARTY)
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "somebody.png")
     with pytest.raises(SignerError, match="JANE ROE"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="somebody", signer_name="Andrea Doe",
+                pdf=pdf,
+                signer_key="somebody",
+                signer_name="Andrea Doe",
                 audit_root=tmp_path / "audit_log",
-                output=tmp_path / "s.pdf", timestamp=False,
+                output=tmp_path / "s.pdf",
+                timestamp=False,
             )
         )
 
 
-def test_block_override_supplies_the_printed_form_of_a_name(
-    tmp_path, monkeypatch, stub_gpg
-):
+def test_block_override_supplies_the_printed_form_of_a_name(tmp_path, monkeypatch, stub_gpg):
     pdf = build_pleading(tmp_path, FOUR_PARTY)
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "john_doe.png")
     result = get_signer("local").request(
         SignRequest(
-            pdf=pdf, signer_key="john_doe", signer_name="J. Q. Doe",
-            block="JOHN DOE", audit_root=tmp_path / "audit_log",
-            output=tmp_path / "s.pdf", timestamp=False,
+            pdf=pdf,
+            signer_key="john_doe",
+            signer_name="J. Q. Doe",
+            block="JOHN DOE",
+            audit_root=tmp_path / "audit_log",
+            output=tmp_path / "s.pdf",
+            timestamp=False,
         )
     )
     assert result.signed_pdf and result.signed_pdf.is_file()
@@ -594,13 +613,12 @@ def test_a_failed_attestation_leaves_nothing_behind(tmp_path, monkeypatch):
     a reference resolving to nothing, and outlives the error: the next run
     mints a different nonce and the orphan stays to be found and believed.
     """
+
     def boom(statement, gpg_key):
         raise SignerError("gpg: signing failed: Inappropriate ioctl for device")
 
     monkeypatch.setattr(audit, "_clearsign", boom)
-    pdf = build_pleading(
-        tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}"
-    )
+    pdf = build_pleading(tmp_path, "\\signblock{dated}{JOHN DOE}{Respondent}")
     monkeypatch.setenv("PROSAIC_SIGNATURE_DIR", str(tmp_path))
     specimen(tmp_path).rename(tmp_path / "john_doe.png")
 
@@ -609,14 +627,21 @@ def test_a_failed_attestation_leaves_nothing_behind(tmp_path, monkeypatch):
     with pytest.raises(SignerError, match="ioctl"):
         get_signer("local").request(
             SignRequest(
-                pdf=pdf, signer_key="john_doe", signer_name="John Doe",
-                audit_root=audit_root, output=out, timestamp=False,
+                pdf=pdf,
+                signer_key="john_doe",
+                signer_name="John Doe",
+                audit_root=audit_root,
+                output=out,
+                timestamp=False,
             )
         )
 
     assert not out.exists(), "the signed artifact must not survive"
-    events = list((audit_root / "signatures" / "local").glob("*")) \
-        if (audit_root / "signatures" / "local").is_dir() else []
+    events = (
+        list((audit_root / "signatures" / "local").glob("*"))
+        if (audit_root / "signatures" / "local").is_dir()
+        else []
+    )
     assert events == [], f"half-built attestation left behind: {events}"
     # and the unsigned build is untouched
     assert pdf.is_file()

@@ -29,15 +29,15 @@ import subprocess
 import sys
 from pathlib import Path
 
+from . import slots as slots_mod
 from .base import (
     Outcome,
+    Signer,
     SignerError,
     SignRequest,
     SignResult,
-    Signer,
     Slot,
 )
-from . import slots as slots_mod
 
 _ROOT = Path(__file__).resolve().parent.parent
 
@@ -85,9 +85,7 @@ class DocuSealSigner(Signer):
         entry = _ROOT / "docuseal-client" / "client.py"
         if not entry.is_file():
             raise SignerError(f"no DocuSeal client at {entry}")
-        proc = subprocess.run(
-            [sys.executable, str(entry), *args], capture_output=True, text=True
-        )
+        proc = subprocess.run([sys.executable, str(entry), *args], capture_output=True, text=True)
         if proc.returncode != 0:
             raise SignerError(f"docuseal {args[0]} failed: {proc.stderr.strip()}")
         return proc.stdout

@@ -87,7 +87,8 @@ _CLAUSES: tuple[tuple[re.Pattern[str], tuple[SlotRole, ...]], ...] = (
 # apart.
 _JUDICIAL_TITLE_RE = re.compile(
     r"^(?:HON\.|HONORABLE\b|JUDGE\b|COMMISSIONER\b|JUDICIAL OFFICER\b|"
-    r"JUDGE PRO TEM\b|REFEREE\b)", re.I
+    r"JUDGE PRO TEM\b|REFEREE\b)",
+    re.I,
 )
 
 # How far below a slot a judicial title may sit and still claim it. The
@@ -213,10 +214,14 @@ def discover(pdf: Path) -> list[Slot]:
                     owner = _owner_below(lines, i)
                     judicial = bool(_JUDICIAL_TITLE_RE.match(owner))
                     page_slots.append(
-                        Slot(pno, SlotRole.SIGNATURE_MARK,
-                             _blank_boxes(line)[0], text,
-                             for_signer=not judicial,
-                             belongs_to=owner)
+                        Slot(
+                            pno,
+                            SlotRole.SIGNATURE_MARK,
+                            _blank_boxes(line)[0],
+                            text,
+                            for_signer=not judicial,
+                            belongs_to=owner,
+                        )
                     )
                     for idx in pending:
                         page_slots[idx] = replace(
@@ -228,9 +233,7 @@ def discover(pdf: Path) -> list[Slot]:
                     i += 1
                     continue
 
-                clause = next(
-                    (roles for rx, roles in _CLAUSES if rx.search(text)), None
-                )
+                clause = next((roles for rx, roles in _CLAUSES if rx.search(text)), None)
                 if clause:
                     # Gather blanks across the clause's own lines, in
                     # printed order, stopping at the signature rule.
@@ -241,7 +244,7 @@ def discover(pdf: Path) -> list[Slot]:
                             break
                         boxes += _blank_boxes(lines[j])
                         j += 1
-                    for role, box in zip(clause, boxes):
+                    for role, box in zip(clause, boxes, strict=False):
                         pending.append(len(page_slots))
                         page_slots.append(Slot(pno, role, box, text))
                     i = max(j, i + 1)
@@ -251,9 +254,7 @@ def discover(pdf: Path) -> list[Slot]:
                     boxes = _blank_boxes(line)
                     if boxes:
                         pending.append(len(page_slots))
-                        page_slots.append(
-                            Slot(pno, SlotRole.DATE_FULL, boxes[0], text)
-                        )
+                        page_slots.append(Slot(pno, SlotRole.DATE_FULL, boxes[0], text))
                 i += 1
 
             found += page_slots
@@ -296,10 +297,8 @@ def describe(slots: list[Slot]) -> str:
         return "no signature slots found"
     out = []
     for s in slots:
-        x0, y0, x1, y1 = (round(v, 1) for v in s.rect)
+        _x0, _y0, _x1, _y1 = (round(v, 1) for v in s.rect)
         owner = s.belongs_to or "(unattributed)"
         never = "" if s.for_signer else "  NEVER SIGNED HERE"
-        out.append(
-            f"  p{s.page + 1}  {s.role.value:<15} {owner:<28}{never}"
-        )
+        out.append(f"  p{s.page + 1}  {s.role.value:<15} {owner:<28}{never}")
     return "\n".join(out)

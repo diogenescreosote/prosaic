@@ -8,6 +8,7 @@ from __future__ import annotations
 
 import datetime
 from pathlib import Path
+from typing import Any
 
 from triage import phone_logs
 
@@ -15,7 +16,7 @@ from triage import phone_logs
 # in any timezone the suite runs in (promise 3: local-time bounds).
 
 
-def ms(y, mo, d, h=12, mi=0, s=0):
+def ms(y: int, mo: int, d: int, h: int = 12, mi: int = 0, s: int = 0) -> int:
     return int(datetime.datetime(y, mo, d, h, mi, s).timestamp() * 1000)
 
 
@@ -62,14 +63,14 @@ def write_backups(tmp_path: Path) -> Path:
     return tmp_path
 
 
-def run(tmp_path, argv):
+def run(tmp_path: Path, argv: list[str]) -> str:
     out = tmp_path / "report.md"
-    rc = phone_logs.main(argv + ["-o", str(out), str(tmp_path)])
+    rc = phone_logs.main([*argv, "-o", str(out), str(tmp_path)])
     assert rc == 0
     return out.read_text(encoding="utf-8")
 
 
-def test_number_matching_is_format_blind():
+def test_number_matching_is_format_blind() -> None:
     assert phone_logs.numbers_match(
         phone_logs.normalize_number("1-555-000-1234"),
         phone_logs.normalize_number("(555) 000-1234"),
@@ -79,7 +80,7 @@ def test_number_matching_is_format_blind():
     assert not phone_logs.numbers_match("882867", "5550882867")
 
 
-def test_extract_filters_dedupes_and_reports(tmp_path):
+def test_extract_filters_dedupes_and_reports(tmp_path: Path) -> None:
     report = run(write_backups(tmp_path), ["-n", TARGET])
     # 3 calls and 3 messages survive, though every row appears in two files.
     assert "Result: 3 calls, 3 messages (de-duplicated from 12 matching rows)" in report
@@ -96,7 +97,7 @@ def test_extract_filters_dedupes_and_reports(tmp_path):
     assert report.index("hello from fixture") < report.index("group hello")
 
 
-def test_window_is_inclusive_and_local(tmp_path):
+def test_window_is_inclusive_and_local(tmp_path: Path) -> None:
     report = run(
         write_backups(tmp_path),
         ["-n", TARGET, "--after", "2026-04-10", "--before", "2026-04-12"],
@@ -108,7 +109,7 @@ def test_window_is_inclusive_and_local(tmp_path):
     assert "group hello" not in report
 
 
-def test_sources_are_read_only(tmp_path):
+def test_sources_are_read_only(tmp_path: Path) -> None:
     write_backups(tmp_path)
     before = {p.name: p.read_bytes() for p in tmp_path.glob("*.xml")}
     run(tmp_path, ["-n", TARGET])
@@ -116,14 +117,16 @@ def test_sources_are_read_only(tmp_path):
     assert before == after
 
 
-def test_streaming_root_is_cleared(tmp_path):
+def test_streaming_root_is_cleared(tmp_path: Path) -> None:
     """Bounded memory: after a scan the parse tree holds no records.
 
     (A true multi-GB test has no place in a suite; clearing the root
     per record is the mechanism the promise rides on.)
     """
     write_backups(tmp_path)
-    records, seen, stats = [], set(), {}
+    records: list[dict[str, Any]] = []
+    seen: set[tuple[Any, ...]] = set()
+    stats: dict[str, Any] = {}
     phone_logs.scan_file(
         tmp_path / "sms-20260601000000.xml",
         [phone_logs.normalize_number(TARGET)],

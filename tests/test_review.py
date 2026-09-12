@@ -14,8 +14,10 @@ REPO_ROOT = Path(__file__).resolve().parent.parent
 SC = REPO_ROOT / "cli" / "sc"
 
 
-def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess:
-    return subprocess.run([sys.executable, str(SC), *argv], cwd=cwd, capture_output=True, text=True, timeout=300)
+def sc(*argv: str, cwd: Path) -> subprocess.CompletedProcess[str]:
+    return subprocess.run(
+        [sys.executable, str(SC), *argv], cwd=cwd, capture_output=True, text=True, timeout=300
+    )
 
 
 DRAFT = """---
@@ -39,35 +41,77 @@ def matter(tmp_path: Path) -> Path:
     (m / "src" / "mpa.md").write_text(DRAFT)
     (m / "envelopes.yaml").write_text("envelopes:\n  motion:\n    sources:\n      - file: mpa.md\n")
     (m / "knowledge" / "authorities.yaml").write_text(
-        'authorities:\n  "code civ. proc., § 1987.1":\n    status: verified\n    proposition: compliance on terms\n')
+        'authorities:\n  "code civ. proc., § 1987.1":\n    status: verified\n    proposition: compliance on terms\n'
+    )
     return m
 
 
-def test_cites_extracts_every_form_and_reads_the_cache(matter: Path):
+def test_cites_extracts_every_form_and_reads_the_cache(matter: Path) -> None:
     out = sc("review", "cites", "motion", "--matter-dir", str(matter), cwd=matter).stdout
-    for cite in ("Code Civ. Proc., § 1987.1", "Fam. Code §§ 3020, 3040(a)", "Evid. Code, section 1014",
-                 "Cal. Rules of Court, rule 5.92(d)(1)", "LR 9.12B", "45 C.F.R. § 164.512(e)(1)(v)",
-                 "42 U.S.C. § 1320d-6", "In re Marriage of Smith (2019) 40 Cal.App.5th 100, 105",
-                 "Zeng v. Wang (2024) 100 Cal.App.5th 123"):
+    for cite in (
+        "Code Civ. Proc., § 1987.1",
+        "Fam. Code §§ 3020, 3040(a)",
+        "Evid. Code, section 1014",
+        "Cal. Rules of Court, rule 5.92(d)(1)",
+        "LR 9.12B",
+        "45 C.F.R. § 164.512(e)(1)(v)",
+        "42 U.S.C. § 1320d-6",
+        "In re Marriage of Smith (2019) 40 Cal.App.5th 100, 105",
+        "Zeng v. Wang (2024) 100 Cal.App.5th 123",
+    ):
         assert cite in out, f"missed {cite!r}\n{out}"
     assert "| verified" in out and "unverified" in out
     assert "src/mpa.md:5" in out
 
 
-def test_paths_and_report_header_carry_the_source_hash(matter: Path):
+def test_paths_and_report_header_carry_the_source_hash(matter: Path) -> None:
     paths = sc("review", "paths", "motion", "--matter-dir", str(matter), cwd=matter).stdout
-    assert "src/mpa.md" in paths and "source_hash:" in paths and "current reports for this target: 0" in paths
-    rp = Path(sc("review", "report", "motion", "--check", "judgereview", "--matter-dir", str(matter), cwd=matter).stdout.strip())
+    assert (
+        "src/mpa.md" in paths
+        and "source_hash:" in paths
+        and "current reports for this target: 0" in paths
+    )
+    rp = Path(
+        sc(
+            "review",
+            "report",
+            "motion",
+            "--check",
+            "judgereview",
+            "--matter-dir",
+            str(matter),
+            cwd=matter,
+        ).stdout.strip()
+    )
     assert rp.parent == matter / "derived" / "review" / "motion"
     text = rp.read_text()
-    assert text.startswith("---\ncheck: judgereview\n") and "source_hash:" in text and "sha256:" in text
+    assert (
+        text.startswith("---\ncheck: judgereview\n")
+        and "source_hash:" in text
+        and "sha256:" in text
+    )
     assert "status: current" in text
-    again = Path(sc("review", "report", "motion", "--check", "judgereview", "--matter-dir", str(matter), cwd=matter).stdout.strip())
+    again = Path(
+        sc(
+            "review",
+            "report",
+            "motion",
+            "--check",
+            "judgereview",
+            "--matter-dir",
+            str(matter),
+            cwd=matter,
+        ).stdout.strip()
+    )
     assert again == rp, "same target, same day, same hash: same file"
 
 
-def test_status_marks_a_report_stale_when_the_source_changes(matter: Path):
-    rp = Path(sc("review", "report", "motion", "--check", "oppo", "--matter-dir", str(matter), cwd=matter).stdout.strip())
+def test_status_marks_a_report_stale_when_the_source_changes(matter: Path) -> None:
+    rp = Path(
+        sc(
+            "review", "report", "motion", "--check", "oppo", "--matter-dir", str(matter), cwd=matter
+        ).stdout.strip()
+    )
     rp.write_text(rp.read_text() + "\n1. The draft is weak on notice.\n")
     st = sc("review", "status", "motion", "--matter-dir", str(matter), cwd=matter).stdout
     assert "current" in st and "0 stale" in st
@@ -81,34 +125,55 @@ def test_status_marks_a_report_stale_when_the_source_changes(matter: Path):
     assert "superseded/" in st and not rp.exists()
     assert (rp.parent / "superseded" / rp.name).exists()
     # a fresh report for the new revision gets a new hash in its name
-    new = Path(sc("review", "report", "motion", "--check", "oppo", "--matter-dir", str(matter), cwd=matter).stdout.strip())
+    new = Path(
+        sc(
+            "review", "report", "motion", "--check", "oppo", "--matter-dir", str(matter), cwd=matter
+        ).stdout.strip()
+    )
     assert new.name != rp.name
 
 
-def test_source_path_target_works_without_an_envelope(matter: Path):
+def test_source_path_target_works_without_an_envelope(matter: Path) -> None:
     out = sc("review", "cites", "src/mpa.md", "--matter-dir", str(matter), cwd=matter).stdout
     assert "citations in src/mpa.md" in out and "Zeng v. Wang" in out
 
 
-def test_find_scope_restricts_to_named_directories(matter: Path):
+def test_find_scope_restricts_to_named_directories(matter: Path) -> None:
     (matter / "pleadings").mkdir(exist_ok=True)
     (matter / "pleadings" / "order.txt").write_text("The court ordered mediation.\n")
     (matter / "knowledge" / "topics").mkdir(parents=True, exist_ok=True)
-    (matter / "knowledge" / "topics" / "note.md").write_text("---\ntitle: n\ntype: topic\nupdated: 2026-09-07\n---\nmediation strategy\n")
-    out = sc("find", "mediation", "--scope", "pleadings", "--matter-dir", str(matter), cwd=matter).stdout
+    (matter / "knowledge" / "topics" / "note.md").write_text(
+        "---\ntitle: n\ntype: topic\nupdated: 2026-09-07\n---\nmediation strategy\n"
+    )
+    out = sc(
+        "find", "mediation", "--scope", "pleadings", "--matter-dir", str(matter), cwd=matter
+    ).stdout
     assert "pleadings/order.txt" in out and "knowledge/topics/note.md" not in out
 
 
-def test_second_opinion_uses_the_role_command_and_writes_a_report(matter: Path, tmp_path: Path):
+def test_second_opinion_uses_the_role_command_and_writes_a_report(
+    matter: Path, tmp_path: Path
+) -> None:
     fake = tmp_path / "other_model.sh"
-    fake.write_text("#!/bin/bash\nprompt=$(cat)\necho \"model=${AGENT_RUN_MODEL:-none}\"\n"
-                    "echo \"1. **[Relief]** --- narrow it --- **why**: overbroad. STRUCTURAL\"\n"
-                    "grep -q 'shorten time' <<<\"$prompt\" && echo 'saw the brief'\n")
+    fake.write_text(
+        '#!/bin/bash\nprompt=$(cat)\necho "model=${AGENT_RUN_MODEL:-none}"\n'
+        'echo "1. **[Relief]** --- narrow it --- **why**: overbroad. STRUCTURAL"\n'
+        "grep -q 'shorten time' <<<\"$prompt\" && echo 'saw the brief'\n"
+    )
     fake.chmod(0o755)
     (matter / "matter.yaml").write_text(
-        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: test-gpt\n")
-    proc = sc("review", "second-opinion", "motion", "--brief", "we must shorten time before the 28th",
-              "--matter-dir", str(matter), cwd=matter)
+        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: test-gpt\n"
+    )
+    proc = sc(
+        "review",
+        "second-opinion",
+        "motion",
+        "--brief",
+        "we must shorten time before the 28th",
+        "--matter-dir",
+        str(matter),
+        cwd=matter,
+    )
     assert proc.returncode == 0, proc.stderr
     rp = Path(proc.stdout.splitlines()[0].strip())
     text = rp.read_text()
@@ -116,19 +181,40 @@ def test_second_opinion_uses_the_role_command_and_writes_a_report(matter: Path, 
     assert "narrow it" in text
     # unconfigured role is a clear message, not a crash
     (matter / "matter.yaml").write_text("case:\n  name: Smith v. Roe\n")
-    proc = sc("review", "second-opinion", "motion", "--brief", "x", "--matter-dir", str(matter), cwd=matter)
+    proc = sc(
+        "review",
+        "second-opinion",
+        "motion",
+        "--brief",
+        "x",
+        "--matter-dir",
+        str(matter),
+        cwd=matter,
+    )
     assert proc.returncode == 2 and "no command configured" in proc.stderr
 
 
-def test_second_opinion_reports_and_ledgers_the_cost(matter: Path, tmp_path: Path):
+def test_second_opinion_reports_and_ledgers_the_cost(matter: Path, tmp_path: Path) -> None:
     fake = tmp_path / "other_model.sh"
-    fake.write_text("#!/bin/bash\ncat >/dev/null\necho '1. **[x]** --- y --- **why** z'\n"
-                    "echo '@@USAGE {\"model\": \"gpt-test\", \"input_tokens\": 2000000, \"output_tokens\": 100000}' >&2\n")
+    fake.write_text(
+        "#!/bin/bash\ncat >/dev/null\necho '1. **[x]** --- y --- **why** z'\n"
+        'echo \'@@USAGE {"model": "gpt-test", "input_tokens": 2000000, "output_tokens": 100000}\' >&2\n'
+    )
     fake.chmod(0o755)
     (matter / "matter.yaml").write_text(
         f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: gpt-test\n"
-        "      price_per_million: {input: 1.0, output: 10.0}\n")
-    proc = sc("review", "second-opinion", "motion", "--brief", "b", "--matter-dir", str(matter), cwd=matter)
+        "      price_per_million: {input: 1.0, output: 10.0}\n"
+    )
+    proc = sc(
+        "review",
+        "second-opinion",
+        "motion",
+        "--brief",
+        "b",
+        "--matter-dir",
+        str(matter),
+        cwd=matter,
+    )
     assert proc.returncode == 0, proc.stderr
     assert "cost: $3.0000" in proc.stdout and "2,000,000 input + 100,000 output" in proc.stdout
     rp = Path(proc.stdout.splitlines()[0].strip())
@@ -138,6 +224,17 @@ def test_second_opinion_reports_and_ledgers_the_cost(matter: Path, tmp_path: Pat
     brief = sc("brief", str(matter), cwd=matter).stdout
     assert "outside-model calls this month: 1, $3.00" in brief
     # without a price the tokens still show and the cost is marked unknown
-    (matter / "matter.yaml").write_text(f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n")
-    proc = sc("review", "second-opinion", "motion", "--brief", "b", "--matter-dir", str(matter), cwd=matter)
+    (matter / "matter.yaml").write_text(
+        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n"
+    )
+    proc = sc(
+        "review",
+        "second-opinion",
+        "motion",
+        "--brief",
+        "b",
+        "--matter-dir",
+        str(matter),
+        cwd=matter,
+    )
     assert "cost: unknown (set agent.roles" in proc.stdout and "2,000,000 input" in proc.stdout

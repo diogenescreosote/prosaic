@@ -400,19 +400,21 @@ def sidecar_geometry_problems(pdf: Path, sidecar: dict) -> list[str]:
             # a word overlaps it by far more than 3 pt.
             if ox > 3.0 and y0 <= cy <= y1:
                 problems.append(
-                    f"{f.get('name')} (page {pno}) covers printed text "
-                    f"{text.strip()[:40]!r}")
+                    f"{f.get('name')} (page {pno}) covers printed text {text.strip()[:40]!r}"
+                )
                 break
         if f.get("type") in ("signature", "date", "text", "initials"):
-            below = [ry for (rx0, rx1, ry) in rules
-                     if min(x1, rx1) - max(x0, rx0) > 10 and ry >= y0 - 2]
+            below = [
+                ry for (rx0, rx1, ry) in rules if min(x1, rx1) - max(x0, rx0) > 10 and ry >= y0 - 2
+            ]
             if below:
                 rule_y = min(below)
                 if y1 > rule_y + 4.0:
                     problems.append(
                         f"{f.get('name')} (page {pno}) straddles its line: box bottom "
                         f"{y1:.0f} pt is below the rule at {rule_y:.0f} pt; the box "
-                        f"should rest on the rule")
+                        f"should rest on the rule"
+                    )
     return problems
 
 
@@ -458,7 +460,7 @@ def cmd_send(args: argparse.Namespace) -> int:
         if sidecar.get("source") != "build" and not args.allow_hand_fields:
             raise SystemExit(
                 f"{pdf.name}.fields.json was not written by the build (no "
-                f"\"source\": \"build\"). Rebuild the document so the renderer "
+                f'"source": "build"). Rebuild the document so the renderer '
                 f"or the form descriptor places its fields, or pass "
                 f"--allow-hand-fields to send hand-placed geometry on purpose."
             )
@@ -470,8 +472,7 @@ def cmd_send(args: argparse.Namespace) -> int:
             )
 
     per_doc_fields = [
-        sidecar_api_fields(field_sidecar(pdf)) if field_sidecar(pdf) else []
-        for pdf in pdfs
+        sidecar_api_fields(field_sidecar(pdf)) if field_sidecar(pdf) else [] for pdf in pdfs
     ]
 
     # Reconcile field roles with the roster. A build sidecar names roles
@@ -504,7 +505,7 @@ def cmd_send(args: argparse.Namespace) -> int:
                 )
 
     documents = []
-    for pdf, fields in zip(pdfs, per_doc_fields):
+    for pdf, fields in zip(pdfs, per_doc_fields, strict=True):
         doc: dict = {
             "name": pdf.name,
             "file": base64.b64encode(pdf.read_bytes()).decode(),
@@ -530,9 +531,12 @@ def cmd_send(args: argparse.Namespace) -> int:
 
     if not distinct and shutil.which("pdftotext"):
         untagged = [
-            pdf.name for pdf in pdfs
-            if "{{" not in subprocess.run(
-                ["pdftotext", str(pdf), "-"], capture_output=True, text=True).stdout
+            pdf.name
+            for pdf in pdfs
+            if "{{"
+            not in subprocess.run(
+                ["pdftotext", str(pdf), "-"], capture_output=True, text=True
+            ).stdout
         ]
         if untagged:
             print(
@@ -592,6 +596,7 @@ def cmd_fetch(args: argparse.Namespace) -> int:
     doc_list = docs.get("documents") if isinstance(docs, dict) else docs
     if not doc_list:
         doc_list = sub.get("documents", [])
+
     def rel(pth: Path) -> str:
         try:
             return str(pth.resolve().relative_to(Path.cwd()))
@@ -710,10 +715,13 @@ def main() -> None:
     sub = parser.add_subparsers(dest="command", required=True)
 
     sp = sub.add_parser("send", help="create a submission from a PDF and email signers")
-    sp.add_argument("pdf", nargs="+",
-                    help="one or more PDFs signed in ONE submission "
-                         "(each keeps its own sidecar; a shared roster "
-                         "signs them all)")
+    sp.add_argument(
+        "pdf",
+        nargs="+",
+        help="one or more PDFs signed in ONE submission "
+        "(each keeps its own sidecar; a shared roster "
+        "signs them all)",
+    )
     sp.add_argument(
         "--envelope",
         help="take the signing roster from this envelope's signers: list in envelopes.yaml",
@@ -733,9 +741,10 @@ def main() -> None:
         "--allow-draft", action="store_true", help="send even though the PDF carries a DRAFT banner"
     )
     sp.add_argument(
-        "--allow-hand-fields", action="store_true",
+        "--allow-hand-fields",
+        action="store_true",
         help="send a <pdf>.fields.json the build did not write "
-             "(hand placement is a deliberate override)"
+        "(hand placement is a deliberate override)",
     )
     sp.set_defaults(func=cmd_send)
 

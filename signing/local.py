@@ -24,13 +24,14 @@ from pathlib import Path
 
 import fitz
 
-from . import audit, marks, slots as slots_mod, stamp, store
+from . import audit, marks, stamp, store
+from . import slots as slots_mod
 from .base import (
     Outcome,
+    Signer,
     SignerError,
     SignRequest,
     SignResult,
-    Signer,
     Slot,
     SlotRole,
 )
@@ -97,14 +98,13 @@ class LocalSigner(Signer):
         found, skipped_theirs = self._partition(every, req)
         marks_found = [s for s in found if s.role is SlotRole.SIGNATURE_MARK]
         if not marks_found:
-            others = sorted(
-                {s.belongs_to for s in skipped_theirs if s.belongs_to}
-            )
+            others = sorted({s.belongs_to for s in skipped_theirs if s.belongs_to})
             detail = (
                 "\n  Blocks on this document belong to: "
                 + "; ".join(others)
                 + f"\n  Signing as: {req.signer_name}"
-                if others else ""
+                if others
+                else ""
             )
             raise SignerError(
                 f"{req.pdf.name} has no signature line for "
@@ -123,8 +123,9 @@ class LocalSigner(Signer):
                 page = doc[slot.page]
                 if slot.role is SlotRole.SIGNATURE_MARK:
                     rect = marks.place_rect(mark, slot.rect)
-                    page.insert_image(fitz.Rect(*rect), stream=mark.png,
-                                      keep_proportion=True, overlay=True)
+                    page.insert_image(
+                        fitz.Rect(*rect), stream=mark.png, keep_proportion=True, overlay=True
+                    )
                     continue
                 text = _slot_text(slot.role, req.date, req.signer_name, "")
                 if not text:
@@ -149,10 +150,8 @@ class LocalSigner(Signer):
                 f"  note: no clear space for the reference stamp on page(s) "
                 f"{pages}; those pages carry no stamp",
             )
-        for owner in sorted({s.belongs_to or "(unattributed)"
-                             for s in skipped_theirs}):
-            n = sum(1 for s in skipped_theirs
-                    if (s.belongs_to or "(unattributed)") == owner)
+        for owner in sorted({s.belongs_to or "(unattributed)" for s in skipped_theirs}):
+            n = sum(1 for s in skipped_theirs if (s.belongs_to or "(unattributed)") == owner)
             print(f"  left blank for {owner}: {n} field(s)")
 
         # If the attestation cannot be completed, the signed artifact must
@@ -189,9 +188,7 @@ class LocalSigner(Signer):
 
     # -- whose blanks are whose --------------------------------------------
 
-    def _partition(
-        self, every: list[Slot], req: SignRequest
-    ) -> tuple[list[Slot], list[Slot]]:
+    def _partition(self, every: list[Slot], req: SignRequest) -> tuple[list[Slot], list[Slot]]:
         """Split discovered slots into this signer's and everyone else's.
 
         A multi-party document --- a stipulation carries four party blocks
@@ -213,9 +210,9 @@ class LocalSigner(Signer):
         for slot in every:
             if not slot.for_signer:
                 theirs.append(slot)
-            elif slots_mod.normalise_name(slot.belongs_to) in wanted:
-                mine.append(slot)
-            elif not slot.belongs_to and not anyone_named:
+            elif slots_mod.normalise_name(slot.belongs_to) in wanted or (
+                not slot.belongs_to and not anyone_named
+            ):
                 mine.append(slot)
             else:
                 theirs.append(slot)
@@ -228,11 +225,7 @@ class LocalSigner(Signer):
             out = Path(req.output)
         else:
             root = _matter_root(req.pdf) or req.pdf.parent.parent
-            out = (
-                root
-                / "staging"
-                / f"{req.date.isoformat()}_{req.pdf.stem}_SIGNED.pdf"
-            )
+            out = root / "staging" / f"{req.date.isoformat()}_{req.pdf.stem}_SIGNED.pdf"
         if out.resolve() == req.pdf.resolve():
             raise SignerError(
                 "refusing to sign a document in place: the unsigned build is "

@@ -158,6 +158,24 @@ written here while skipping the ported trees
 lint failure appears in an excluded path, the exclusion is what is
 wrong, not the file.
 
+## A push is not done until CI is green
+
+Sixty consecutive CI runs were red before September 2026 because
+nobody looked. Two mechanisms keep that from recurring, and both are
+part of the ordinary dev cycle:
+
+- **The pre-push hook runs CI's static gates locally** (ruff check,
+  format --check, mypy tests, plus the hygiene/leak suite). It takes
+  seconds. If it fails, the push was about to fail CI; fix it, do
+  not `--no-verify` past it.
+- **After any push, verify the run.** Kick it off in the background
+  and keep working: `gh run watch $(gh run list -L1 --json databaseId
+  -q '.[0].databaseId')` — or at minimum check `gh run list -L1`
+  before ending the session. Only pytest can fail at this point (the
+  hook cleared the static gates), so a red run is a real test
+  failure: it is your next task, ahead of new work. Nothing new gets
+  pushed on top of a red main.
+
 ## Code style: no buried magic
 
 Magic values (literal numbers, strings, paths, dimensions, format

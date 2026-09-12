@@ -65,9 +65,10 @@ Usage:
   --min-image   fraction of page area a raster must cover to make the
                 page `image-bodied` (default 0.15)
 """
+
 import json
-import os
 import sys
+from pathlib import Path
 
 try:
     import pymupdf as fitz  # PyMuPDF >= 1.24 (the `fitz` alias warns on stdout)
@@ -83,8 +84,23 @@ UNCOVERED = ("image-bodied", "sparse", "image-only", "garbled")
 # contains at least one of these, in some case. A page of correctly
 # extracted text that contains none of them is nearly always a font
 # encoding failure rather than a document without common words.
-FUNCTION_WORDS = ("the", "and", "for", "of", "to", "in", "is", "on",
-                  "you", "that", "with", "not", "this", "or", "by")
+FUNCTION_WORDS = (
+    "the",
+    "and",
+    "for",
+    "of",
+    "to",
+    "in",
+    "is",
+    "on",
+    "you",
+    "that",
+    "with",
+    "not",
+    "this",
+    "or",
+    "by",
+)
 
 
 def looks_garbled(text):
@@ -145,7 +161,7 @@ def dump_text(path, min_chars, min_image=DEFAULT_MIN_IMAGE):
     doc = fitz.open(path)
     try:
         total = doc.page_count
-        print(f"[[[ {os.path.basename(path)} -- {total} page(s) ]]]")
+        print(f"[[[ {Path(path).name} -- {total} page(s) ]]]")
         unread = []
         for i, page in enumerate(doc, 1):
             kind, _ = classify(page, min_chars, min_image)
@@ -158,26 +174,31 @@ def dump_text(path, min_chars, min_image=DEFAULT_MIN_IMAGE):
             else:
                 print(body)
                 if kind == "sparse":
-                    print(f"<< SPARSE ({len(body)} chars) -- likely a scan or an "
-                          f"image-bodied page; OCR or rasterize to confirm >>")
+                    print(
+                        f"<< SPARSE ({len(body)} chars) -- likely a scan or an "
+                        f"image-bodied page; OCR or rasterize to confirm >>"
+                    )
                     unread.append(i)
                 elif kind == "garbled":
-                    print("<< GARBLED -- the text above extracted cleanly "
-                          "but contains no common English word, which "
-                          "means the font encoding is nonstandard and the "
-                          "text layer is nonsense. The page itself is "
-                          "fine: rasterize and read it, or OCR --force >>")
+                    print(
+                        "<< GARBLED -- the text above extracted cleanly "
+                        "but contains no common English word, which "
+                        "means the font encoding is nonstandard and the "
+                        "text layer is nonsense. The page itself is "
+                        "fine: rasterize and read it, or OCR --force >>"
+                    )
                     unread.append(i)
                 elif kind == "image-bodied":
-                    print("<< IMAGE-BODIED -- the text above is the page's "
-                          "header/footer only; its body is a raster image "
-                          "(a screenshot, a photographed exhibit). Extract "
-                          "the image and look at it >>")
+                    print(
+                        "<< IMAGE-BODIED -- the text above is the page's "
+                        "header/footer only; its body is a raster image "
+                        "(a screenshot, a photographed exhibit). Extract "
+                        "the image and look at it >>"
+                    )
                     unread.append(i)
-        print(f"\n[[[ end {os.path.basename(path)} -- {total} page(s) emitted ]]]")
+        print(f"\n[[[ end {Path(path).name} -- {total} page(s) emitted ]]]")
         if unread:
-            print(f"[[[ pages NOT covered by this dump: "
-                  f"{', '.join(str(p) for p in unread)} ]]]")
+            print(f"[[[ pages NOT covered by this dump: {', '.join(str(p) for p in unread)} ]]]")
         return not unread
     finally:
         doc.close()
@@ -193,12 +214,12 @@ def main():
     if "--min-chars" in args:
         i = args.index("--min-chars")
         min_chars = int(args[i + 1])
-        args = args[:i] + args[i + 2:]
+        args = args[:i] + args[i + 2 :]
     min_image = DEFAULT_MIN_IMAGE
     if "--min-image" in args:
         i = args.index("--min-image")
         min_image = float(args[i + 1])
-        args = args[:i] + args[i + 2:]
+        args = args[:i] + args[i + 2 :]
     paths = [a for a in args if not a.startswith("--")]
     if not paths:
         sys.exit("no input files")

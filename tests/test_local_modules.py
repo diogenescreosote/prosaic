@@ -12,6 +12,8 @@ import sys
 import textwrap
 from pathlib import Path
 
+import pytest
+
 PLEADING = Path(__file__).resolve().parent.parent / "pleading"
 sys.path.insert(0, str(PLEADING))
 
@@ -21,15 +23,17 @@ import md_pleading  # noqa: E402
 
 
 def _write_descriptor(d: Path, form_id: str, blank: str) -> None:
-    (d / f"{form_id}.yaml").write_text(textwrap.dedent(f"""\
+    (d / f"{form_id}.yaml").write_text(
+        textwrap.dedent(f"""\
         form: {form_id.upper()}
         blank: {blank}
         technology: overlay
         fields: []
-    """))
+    """)
+    )
 
 
-def test_local_registry_joins_and_wins(tmp_path, monkeypatch):
+def test_local_registry_joins_and_wins(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     stock = tmp_path / "stock"
     local = tmp_path / "local"
     stock.mkdir()
@@ -37,14 +41,16 @@ def test_local_registry_joins_and_wins(tmp_path, monkeypatch):
     _write_descriptor(stock, "zz900", "zz900.pdf")
     _write_descriptor(stock, "zz901", "zz901.pdf")
     _write_descriptor(local, "zz901", "zz901-local.pdf")  # collision: local wins
-    _write_descriptor(local, "zz902", "zz902.pdf")        # local-only
+    _write_descriptor(local, "zz902", "zz902.pdf")  # local-only
     monkeypatch.setattr(form_fill, "registry_dirs", lambda: [local, stock])
     assert form_fill.list_forms() == ["zz900", "zz901", "zz902"]
     assert form_fill.load_descriptor("zz901")["blank"] == "zz901-local.pdf"
     assert form_fill.load_descriptor("zz902")["form"] == "ZZ902"
 
 
-def test_missing_descriptor_error_names_known_forms(tmp_path, monkeypatch):
+def test_missing_descriptor_error_names_known_forms(
+    tmp_path: Path, monkeypatch: pytest.MonkeyPatch
+) -> None:
     stock = tmp_path / "stock"
     stock.mkdir()
     _write_descriptor(stock, "zz900", "zz900.pdf")
@@ -57,7 +63,7 @@ def test_missing_descriptor_error_names_known_forms(tmp_path, monkeypatch):
         raise AssertionError("expected FileNotFoundError")
 
 
-def test_blank_path_resolves_across_dirs(tmp_path, monkeypatch):
+def test_blank_path_resolves_across_dirs(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     stock = tmp_path / "stock"
     local = tmp_path / "local"
     stock.mkdir()
@@ -67,7 +73,7 @@ def test_blank_path_resolves_across_dirs(tmp_path, monkeypatch):
     assert form_fill.blank_path({"blank": "only-local.pdf"}) == local / "only-local.pdf"
 
 
-def test_local_front_matter_keys_merge(tmp_path, monkeypatch):
+def test_local_front_matter_keys_merge(tmp_path: Path, monkeypatch: pytest.MonkeyPatch) -> None:
     extra = tmp_path / "front_matter_keys.yaml"
     extra.write_text("local:\n  - zz_local_key\n")
     monkeypatch.setattr(md_pleading, "LOCAL_FRONT_MATTER_KEYS_FILE", extra)
@@ -76,13 +82,14 @@ def test_local_front_matter_keys_merge(tmp_path, monkeypatch):
     assert "paper_title" in keys  # stock schema still present
 
 
-def test_recognized_keys_without_local_overlay(monkeypatch, tmp_path):
-    monkeypatch.setattr(md_pleading, "LOCAL_FRONT_MATTER_KEYS_FILE",
-                        tmp_path / "absent.yaml")
+def test_recognized_keys_without_local_overlay(
+    monkeypatch: pytest.MonkeyPatch, tmp_path: Path
+) -> None:
+    monkeypatch.setattr(md_pleading, "LOCAL_FRONT_MATTER_KEYS_FILE", tmp_path / "absent.yaml")
     assert "paper_title" in md_pleading.recognized_front_matter_keys()
 
 
-def test_local_auto_bindings_load_and_merge(tmp_path):
+def test_local_auto_bindings_load_and_merge(tmp_path: Path) -> None:
     mod = tmp_path / "auto_bindings.py"
     mod.write_text(
         "AUTO_BINDINGS = {'zz_local': lambda m: 'ZZ ' + str(m.get('case_number', ''))}\n"
@@ -92,5 +99,5 @@ def test_local_auto_bindings_load_and_merge(tmp_path):
     assert loaded["zz_local"]({"case_number": "26CV00123"}) == "ZZ 26CV00123"
 
 
-def test_local_auto_bindings_absent_is_empty(tmp_path):
+def test_local_auto_bindings_absent_is_empty(tmp_path: Path) -> None:
     assert jc_common._load_local_auto_bindings(tmp_path / "absent.py") == {}

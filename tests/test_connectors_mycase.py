@@ -19,9 +19,7 @@ import pytest
 REPO_ROOT = Path(__file__).resolve().parent.parent
 MYCASE = REPO_ROOT / "connectors" / "mycase"
 
-pytestmark = pytest.mark.skipif(
-    shutil.which("node") is None, reason="node not installed"
-)
+pytestmark = pytest.mark.skipif(shutil.which("node") is None, reason="node not installed")
 
 
 def _node(expr: str) -> str:
@@ -55,7 +53,7 @@ def _node(expr: str) -> str:
         ("not a date at all", "bill_77"),
     ],
 )
-def test_bill_file_name(detail, expected) -> None:
+def test_bill_file_name(detail: dict[str, str], expected: str) -> None:
     got = _node(f"require('./pull.js').billFileName({json.dumps(detail)}, '77')")
     assert got == expected
 
@@ -97,10 +95,7 @@ FIXTURE = """
 
 def test_parse_bill_rows() -> None:
     got = json.loads(
-        _node(
-            "JSON.stringify(require('./pull.js')"
-            f".parseBillRows({json.dumps(FIXTURE)}))"
-        )
+        _node(f"JSON.stringify(require('./pull.js').parseBillRows({json.dumps(FIXTURE)}))")
     )
     assert got == [
         {
@@ -157,12 +152,9 @@ BARE_PDF_LINK = '<a href="/bills/98765.pdf">export</a>'
         (BARE_PDF_LINK, "/bills/98765.pdf"),
     ],
 )
-def test_bill_export_href(html, expected) -> None:
+def test_bill_export_href(html: str, expected: list[str] | None) -> None:
     got = json.loads(
-        _node(
-            "JSON.stringify(require('./pull.js')"
-            f".billExportHref({json.dumps(html)}))"
-        )
+        _node(f"JSON.stringify(require('./pull.js').billExportHref({json.dumps(html)}))")
     )
     assert got == expected
 
