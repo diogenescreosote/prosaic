@@ -71,62 +71,92 @@ rules exist because a real filing was once wrong without them.
   any commit carrying case material, and the matter format keeps the case
   out of the code tree by construction.
 
-## What it does
+## What it does for a practice
 
-**Intake.** Connectors pull Gmail threads and law-firm client portals
-into the matter on a schedule; a headless triage pass OCRs what needs it,
-files each document under the conventions, updates the evidence index and
-folds what matters into the knowledge vault. A watched `inbox/` does the
-same for anything you drop in by hand
+**It keeps you from missing a deadline.** Every session opens with a
+brief: what arrived, what is due, what you owe a response to, which
+threads from counsel have gone unanswered and which reply never left
+Drafts. Hearings and due dates live as dated notes in the vault and the
+brief lists what is upcoming; when a subpoena is served, the brief knows
+the production date. Calendar integration is pending; today the interface
+itself is the reminder to serve, respond, and file.
+
+**Clients can just hand you things.** A client drops documents in a
+shared Drive folder, or emails them to a bespoke address per matter
+(`inbox+24CV00000@example.com`, one line in the matter's config). Either
+way the attachments are pulled, OCR'd, triaged, filed under the
+conventions, indexed and folded into the case knowledge, on a schedule,
+with no one forwarding anything by hand
 ([docs/connectors.md](docs/connectors.md),
 [docs/triage.md](docs/triage.md)).
 
-**Knowledge.** One Markdown note per person, organization, event, topic,
-issue and filing, with front matter, sources and wikilinks; a nightly
-refinement pass proposes corrections and questions and a morning standup
-puts them to you, so the vault is human-verified rather than
-model-asserted ([docs/knowledge.md](docs/knowledge.md)). Every draft
-reads from it.
+**It turns an hour-long call into evidence.** Recordings of client
+interviews are transcribed locally, speaker-separated, with a provenance
+header and a verify-against-audio banner, and become citable sources in
+the vault ([docs/stt.md](docs/stt.md)). The agent drafts structured
+interview guides from the vault's open questions, so the next call
+covers what the record still lacks. This matters most in abuse and
+trauma cases, where the person being interviewed is hard to follow, the
+account is disorganized, and the facts that decide the case are buried in
+an emotionally laden hour that no one can take notes on fast enough.
 
-**Drafting.** Sources are Markdown with YAML front matter: caption,
-parties, exhibits, cover forms, service. The model drafts prose; it never
-lays out a page, letters an exhibit, numbers a heading or fills a form
-field. Everything between the source and the PDF is deterministic code
+**It runs your opposition for you.** Four review passes read a draft the
+way the people who will decide it read it: the clerk (captions, boxes,
+signatures, service, page limits), the bench officer (unsupported
+assertions, relief without authority, what will not be believed),
+opposing counsel briefed from how your actual opponent has argued in
+this matter, and a citation check of every authority for existence,
+form and the proposition cited. A second-opinion pass puts a different
+model's suggestions against the sources and the record and reports what
+to accept, reject and put to you ([docs/review.md](docs/review.md)).
+
+**Everything known about the case is one graph.** Emails, meeting
+notes, pleadings, recordings, memos and productions are integrated into
+a per-matter knowledge vault: one Markdown note per person,
+organization, event, topic, issue and filing, with front matter,
+sources and wikilinks, in the Obsidian convention, so the matter opens
+as an Obsidian vault with backlinks and a graph and needs nothing
+proprietary to do it. A nightly refinement pass proposes corrections and
+questions; a morning standup puts them to you; the answers are written
+back as human-verified. Knowledge maintenance becomes cheap, fast and
+consistent, and every draft reads from it
+([docs/knowledge.md](docs/knowledge.md)).
+
+**Privilege is handled.** Local by default; audio never leaves the
+machine; attorney-client threads are labeled in the catalog; nothing is
+forwarded anywhere on its own. Under development: intelligent routing
+of which model sees which material, so that the use of AI services does
+not itself raise a waiver question.
+
+**And the pipeline underneath.** Drafts are Markdown with YAML front
+matter; the model drafts prose and never lays out a page, letters an
+exhibit, numbers a heading or fills a form field
 ([docs/writing-style.md](docs/writing-style.md),
 [pleading/pleading_markdown_spec.md](pleading/pleading_markdown_spec.md)).
-
-**Building.** An envelope is a filing packet: pleading PDF and DOCX,
-exhibits with slip sheets, filled Judicial Council cover forms, consumer
-and employee notices, proofs of service, in public and sealed variants
-([docs/forms.md](docs/forms.md)). Thirteen forms are registered on the
+An envelope is a filing packet: pleading PDF and DOCX, exhibits with
+slip sheets, filled Judicial Council cover forms, consumer and employee
+notices, proofs of service, public and sealed variants
+([docs/forms.md](docs/forms.md)); thirteen forms are registered on the
 overlay engine (CIV-110, EFS-020, EFS-050, FW-001, MC-025, MC-030,
-MC-040, MC-050, SUBP-001, SUBP-002, SUBP-010, SUBP-015, SUBP-025);
-family-law forms ship as a separate module.
-
-**Review.** Four preflight passes, each optional and none a gate: a
-citation check, a clerk's-window check, a skeptical bench officer, and
-opposing counsel briefed from how your actual opponent has argued.
-A second-opinion pass puts a different model's suggestions against the
-sources and the record ([docs/review.md](docs/review.md)).
-
-**Execution.** E-signature through DocuSeal with the signed original and
-audit log brought back into the matter; remote online notarization
-through Proof; cryptographic hashing, signing and timestamping of matter
-documents against a paper-anchored key.
-
-**The record.** Every event lands as a typed commit: `intake`, `triage`,
-`draft`, `build`, `docket`, `discovery`, `record`, `config`. A hook
-enforces the shape and pushes to a private backup remote. Undo is `git
-checkout` ([docs/commits.md](docs/commits.md),
-[docs/backup.md](docs/backup.md)).
+MC-040, MC-050, SUBP-001, SUBP-002, SUBP-010, SUBP-015, SUBP-025), and
+family-law forms ship as a separate module. Execution is e-signature
+through DocuSeal with the signed original and audit log brought back,
+remote online notarization through Proof, and cryptographic hashing,
+signing and timestamping against a paper-anchored key. Every event
+lands as a typed commit (`intake`, `triage`, `draft`, `build`, `docket`,
+`discovery`, `record`, `config`), enforced by hook and pushed to a
+private backup; undo is `git checkout`
+([docs/commits.md](docs/commits.md), [docs/backup.md](docs/backup.md)).
 
 ## A working day
 
 The standby supervisor pulled overnight: two threads from opposing
-counsel, a filing acceptance from the e-filing vendor, a client-portal
-invoice. Triage filed them, OCR'd the image-only pages, and the standup
-agenda asks you three questions about what changed. You answer; the vault
-updates and commits.
+counsel, a filing acceptance from the e-filing vendor, a client's photos
+of a text exchange sent to the matter's intake address. Triage filed
+them, OCR'd the image-only pages, and the standup agenda asks you three
+questions about what changed. You answer; the vault updates and commits.
+The brief notes that counsel's letter of Tuesday is unanswered and that
+the response to a records subpoena is due in nine days.
 
 You open the matter in Claude Code and ask for a reply to counsel's
 letter. The agent reads the relevant notes and the cited production,
