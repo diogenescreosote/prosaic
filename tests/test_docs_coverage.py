@@ -133,15 +133,15 @@ def test_system_dependencies_are_documented_not_only_declared():
 
 
 def test_readme_test_count_is_current():
-    """The README quotes a test count, so the number has to be true.
+    """TECHNICAL.md quotes a test count, so the number has to be true.
 
     A figure like "370 tests" is doing the work an adjective would
     otherwise do, which means a reader may check it — and a reader who
     runs the suite and gets a different number learns the opposite of
     what the sentence was for.
     """
-    claimed = re.search(r"(\d[\d,]*) tests, ", read("README.md"))
-    assert claimed, "README no longer states a test count"
+    claimed = re.search(r"(\d[\d,]*) tests, ", read("TECHNICAL.md"))
+    assert claimed, "TECHNICAL.md no longer states a test count"
 
     proc = subprocess.run(
         [sys.executable, "-m", "pytest", "--collect-only",
@@ -153,6 +153,6 @@ def test_readme_test_count_is_current():
 
     stated, collected = int(claimed.group(1).replace(",", "")), int(found.group(1))
     assert stated == collected, (
-        f"README says {stated} tests; the suite collects {collected}. "
-        "Update the README."
+        f"TECHNICAL.md says {stated} tests; the suite collects {collected}. "
+        "Update TECHNICAL.md."
     )
