@@ -220,7 +220,14 @@ def test_supervisor_dispatches_only_what_is_due(matter: Path, tmp_path: Path) ->
     agendas = list((matter / "derived" / "standup").glob("*.md"))
     assert len(agendas) == 1, "agenda written once after 08:50"
     inputs = list((matter / "derived" / "refine").glob("*_inputs.md"))
-    assert inputs, "refine ran after 02:30 (the fake agent stands in for the model)"
+    log_root = subprocess.run(
+        [sys.executable, str(SC), "paths", "log-dir"], capture_output=True, text=True
+    ).stdout.strip()
+    log = Path(log_root) / f"sync-{matter.name}.log"
+    assert inputs, (
+        "refine ran after 02:30 (the fake agent stands in for the model); "
+        f"supervisor log:\n{log.read_text() if log.exists() else f'(no log at {log})'}"
+    )
     proc = subprocess.run(
         ["/bin/bash", str(sup), str(matter)], env=env, capture_output=True, text=True, timeout=600
     )
