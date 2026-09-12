@@ -103,7 +103,12 @@ def test_watch_mode_triages_settled_inbox_files_and_writes_a_summary(
     fake = tmp_path / "agent.sh"
     fake.write_text(f"#!/bin/bash\ncat > {seen}\n")
     fake.chmod(0o755)
-    env = {**os.environ, "PROSAIC_AGENT_CMD": str(fake), "PROSAIC_ROOT": str(REPO_ROOT)}
+    env = {
+        **os.environ,
+        "PROSAIC_AGENT_CMD": str(fake),
+        "PROSAIC_ROOT": str(REPO_ROOT),
+        "PROSAIC_PYTHON": sys.executable,
+    }
     proc = subprocess.run(
         ["/bin/bash", str(SYNC), str(matter), "--watch"],
         env=env,
@@ -196,6 +201,7 @@ def test_supervisor_dispatches_only_what_is_due(matter: Path, tmp_path: Path) ->
         **os.environ,
         "PROSAIC_AGENT_CMD": str(fake),
         "PROSAIC_ROOT": str(REPO_ROOT),
+        "PROSAIC_PYTHON": sys.executable,
         "PROSAIC_NOW": "01:00",
         "PROSAIC_MIN_INTERVAL_HOURS": "999",
     }

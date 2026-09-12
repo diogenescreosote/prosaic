@@ -22,6 +22,12 @@ while [ -L "$SOURCE" ]; do SOURCE="$(readlink "$SOURCE")"; done
 PROSAIC_ROOT="${PROSAIC_ROOT:-$(cd "$(dirname "$SOURCE")/.." && pwd)}"
 export PROSAIC_ROOT
 SC="$PROSAIC_ROOT/cli/sc"
+# The PATH reset above is for launchd; it also hides any virtualenv, so
+# sc would run under whatever python3 the minimal PATH finds. That
+# python must carry the deps (pymupdf et al.) -- true on a configured
+# Mac, false on CI. PROSAIC_PYTHON names the interpreter explicitly,
+# same convention as matter_sync.sh.
+SC_PY="${PROSAIC_PYTHON:-python3}"
 SYNC="$PROSAIC_ROOT/sync/matter_sync.sh"
 . "$PROSAIC_ROOT/sync/lib.sh"
 LOG_ROOT="$(sc_log_root)"; mkdir -p "$LOG_ROOT"
@@ -45,12 +51,12 @@ after() { [ "$((10#${NOW//:/}))" -ge "$((10#${1//:/}))" ]; }
 # 3. refine: once a day, after the configured hour
 if after "$REFINE_AFTER" && [ ! -f "$MATTER_DIR/derived/refine/$TODAY.md" ]; then
   log "refine start"
-  if "$SC" refine "$MATTER_DIR" --scheduled >> "$LOG_FILE" 2>&1; then log "refine done"; else log "refine FAILED"; fi
+  if "$SC_PY" "$SC" refine "$MATTER_DIR" --scheduled >> "$LOG_FILE" 2>&1; then log "refine done"; else log "refine FAILED"; fi
 fi
 
 # 4. standup agenda: once a day, after the configured time
 if after "$STANDUP_AT" && [ ! -f "$MATTER_DIR/derived/standup/$TODAY.md" ]; then
   log "standup agenda"
-  "$SC" standup agenda "$MATTER_DIR" --notify >> "$LOG_FILE" 2>&1 || log "standup agenda FAILED"
+  "$SC_PY" "$SC" standup agenda "$MATTER_DIR" --notify >> "$LOG_FILE" 2>&1 || log "standup agenda FAILED"
 fi
 exit 0
