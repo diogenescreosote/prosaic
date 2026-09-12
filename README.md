@@ -66,10 +66,15 @@ rules exist because a real filing was once wrong without them.
   Before a public version reaches anyone, it is checked against your
   list of protected terms, and the protected text is removed from the
   file, not covered with a box that can be lifted off.
-- **It will not produce what a clerk or a judge would reject.** A form
-  attachment captioned as if it were a separate pleading, a case name
-  not in italics, a Bates cite that does not lead to the page: the
-  document does not build until it is fixed.
+- **No more e-filing rejections.** Before you file, a review reads the
+  packet the way the clerk's window will, against the rules of court and
+  the local rules of the court in question: a missing date, an unchecked
+  box, a signature or proof of service that is not there, a caption that
+  does not match the case. prosaic catches these so the clerk does not
+  have to. The purely mechanical mistakes, an attachment captioned as if
+  it were a separate pleading, a case name not in italics, a Bates cite
+  that leads nowhere, never get out at all: the document is not produced
+  until they are fixed.
 - **The software can never carry your case.** The program and your
   matters are kept entirely apart, and a guard on the program's own
   source rejects anything that looks like case material.
