@@ -35,6 +35,20 @@ Verify before finishing any `src/` edit:
 rg -n ' --- ' path/to/file.md
 ```
 
+## STOP. A question about the record is answered by searching it
+
+"When did she say X", "is there an email about Y", "where is Z": run
+`sc find` (with `--near` for two words that belong together) and, for
+a sender in a date window, `sc mail-index . --from … --after … --before …`,
+then read every hit, before answering and before asking the user
+anything. The search is ripgrep over every text file, sidecar and the
+per-message mail index; it takes a second. A message lives in a thread
+whose file is dated by the thread's FIRST message, so a date-based
+guess at a filename finds nothing; the index does. Never ask the user
+for the date or the subject line of something the record can be
+searched for. Only after the search is exhausted and reported may you
+say it is not there.
+
 ## STOP. Case names are italicized: `*Doe v. Roe*`
 
 In any `.md` under any `src/`, every case name in running text is set

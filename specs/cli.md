@@ -182,7 +182,25 @@ agent CLI is named (ADR-0020). Its promises:
   matter.yaml are searched too; 1 means searched everything and found
   nothing; 0 means hits and full coverage. `--ensure` runs
   `sc text ensure` first. A document that was not searched is reported,
-  never silently skipped (ADR-0041). *(tested)*
+  never silently skipped (ADR-0041). `--near` turns the terms into one
+  proximity search: a line where every term is within `--within` words
+  (default 6) of the others, in any order, so "family" near "therapist"
+  finds "from Heather's therapist to family therapist" whether or not
+  the phrase was ever written; the per-message mail index under
+  `derived/mail/` is among what is searched, so a hit carries the
+  message's own date. *(tested)*
+- **`sc mail-index [matter] [--from S] [--after D] [--before D] [--grep RE] [--rebuild]`**
+  writes `derived/mail/messages.tsv` and `messages.md`, one row per
+  message in every stored mbox (its own date and time, from, to, cc,
+  subject, thread stem, position in the thread, attachment count, and
+  a snippet of the message's own words with quoted chains, forwards
+  and signature boilerplate cut). A thread's PDF is named for its
+  first message, so without this index a message is findable only by a
+  date that may be weeks earlier than its own. Pure function of the
+  mbox files; rebuilt after every sync; with any of `--from`,
+  `--after`, `--before`, `--grep` it queries instead (building first
+  if absent), printing matching rows with their thread pointers.
+  *(tested: tests/test_mail_index.py)*
 - **`sc text audit|ensure|migrate [matter] [--json] [--include-inbox] [--dry-run] [--redo-ocr] [--jobs N] [--include-legacy-ocr]`**
   writes under `derived/text/` and `derived/ocr/` (ADR-0042), reads legacy
   siblings, and `migrate` moves the tool's own siblings into the tree;

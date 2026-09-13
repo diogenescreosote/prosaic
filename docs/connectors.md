@@ -98,6 +98,19 @@ Then add a `manifest.json`, document the config keys in it and here,
 and it's live: `sc sync` discovers connectors purely from
 `matter.yaml` config keys + the connectors directory.
 
+## The per-message index
+
+A thread's PDF is named for its first message, so a message sent weeks
+into a long thread has no file that carries its date. `sc mail-index`
+reads every stored mbox and writes `derived/mail/messages.tsv` and
+`messages.md`: one row per message with its own date and time, sender,
+recipients, subject, thread stem and position, attachment count, and a
+snippet of the message's own words (quoted chains, forwards and
+signature boilerplate cut). The sync rebuilds it after every pull;
+`sc find` searches it; and `sc mail-index . --from <sender> --after
+<date> --before <date> [--grep <regex>]` answers "what did she write
+in mid-November" directly, each row pointing at its thread PDF.
+
 ## Re-rendering stored mail
 
 The gmail connector's presentation layer stands on its own:

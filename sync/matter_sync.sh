@@ -297,6 +297,11 @@ fi
 # _ocr sibling where pages lack text) before any agent reads or searches.
 # Deterministic, cached, and never dependent on a model remembering to.
 log "TEXT ensure start"
+# The per-message mail index (derived/mail/): a pure function of the
+# stored mbox files, so it is rebuilt after every pull. Without it a
+# message is findable only by its thread's first-message date.
+"$PROSAIC_ROOT/cli/sc" mail-index "$MATTER_DIR" >> "$LOG_FILE" 2>&1 || log "mail-index failed (non-fatal)"
+
 if "$PROSAIC_ROOT/cli/sc" text ensure "$MATTER_DIR" --jobs 2 > "$STATE_DIR/text_ensure_last.txt" 2>> "$LOG_FILE"; then
   log "TEXT ensure ok: $(head -1 "$STATE_DIR/text_ensure_last.txt")"
 else
