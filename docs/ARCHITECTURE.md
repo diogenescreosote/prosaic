@@ -132,6 +132,11 @@ directory, and turns Markdown drafting into filing-ready documents.
    contract, catalogs each new file, routes staged documents to their
    homes, and folds case-significant facts into `KNOWLEDGE.md`.
 
+   A **listening session** (`sc listen`, [../specs/listen.md](../specs/listen.md),
+   ADR-0048) uses the same seam the other way round: local live
+   transcription feeds one headless reviewer call per utterance, and
+   the product is a notes file, never a change to the matter.
+
 5. **Pleading generation**
    ([../pleading/pleading_markdown_spec.md](../pleading/pleading_markdown_spec.md))
    converts Markdown + YAML front matter into California-style pleading

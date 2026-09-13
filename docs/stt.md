@@ -125,3 +125,14 @@ For transcripts of evidence audio, regardless of pipeline:
   `assets/calls/advisor_call_recording_jun23.{mp3,txt,srt}` — audio,
   cleaned attributed transcript, and raw timestamped output side by
   side.
+
+## Live: listening sessions
+
+`sc listen` runs `whisper-stream` (the whisper.cpp live-microphone
+binary, installed with `whisper-cpp`) in voice-activity mode and hands
+each utterance to a headless reviewer while the speaker pages through
+a Bates-stamped set; the notes land in a Markdown file organized by
+record. Same rule as above: nothing leaves the machine but the prompt
+to the configured agent, and the transcript is machine text to verify
+before citing. Contract: [../specs/listen.md](../specs/listen.md);
+ADR-0048; skill `skills/listen/SKILL.md`.

@@ -31,6 +31,8 @@ backup:
 #     triage: {max_turns: 80}
 #     refine: {max_turns: 40}
 #     judge:  {model: claude-sonnet-5, max_turns: 20}
+    # The listening session's reviewer (ADR-0048): one call per utterance, so fast.
+    listen: {model: claude-sonnet-5, max_turns: 1}
 #     second-opinion:                   # a different vendor's mind on a draft (/secondopinion)
 #       cmd: <prosaic>/sync/second_opinion_openai.sh
 #       credential: prosaic.openai      # Keychain item; exported as OPENAI_API_KEY at run time

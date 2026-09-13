@@ -252,6 +252,23 @@ agent CLI is named (ADR-0020). Its promises:
   `second-opinion` role over the draft and writes its suggestions as a
   report. Nothing here gates a build or a signature. *(tested:
   tests/test_review)*
+- **`sc listen --role R --docset PDF --bates-first TOKEN --out NOTES.md`**
+  runs a listening session (ADR-0048; contract in
+  [listen.md](listen.md)): live local transcription from the
+  microphone through `whisper-stream` (or typed input, `--stdin-only`),
+  a page pointer that follows the speaker through the Bates-stamped set
+  (explicit cues, then the utterance's own words, then the reviewer),
+  and one headless `agent-run --role listen` call per utterance that
+  logs witness questions under the record they concern with any
+  warning, answers what the speaker asks, keeps cross-cutting
+  realizations, and on Ctrl-C writes a closing synthesis. The notes
+  file is rewritten after every event, organized by record in Bates
+  order and marked NOTREAL; the transcript and the event stream are
+  sidecars beside it. `--index` supplies titles from a Markdown index
+  with a Bates column; `--brief` supplies the matter-specific brief.
+  Nothing is uploaded except the prompt to the configured agent, and
+  the session never drives an interactive harness. *(tested:
+  tests/test_listen.py)*
 - **`sc form` is a pass-through** to the form engine's own CLI; its
   surface grows with the engine, not with the dispatcher — `sc`
   stays thin on purpose, so component behavior is testable without

@@ -265,6 +265,11 @@ def cmd_list(_args: argparse.Namespace) -> int:
     return _build(["--list"])
 
 
+def cmd_listen(args: argparse.Namespace) -> int:
+    rest = [a for a in args.rest if a != "--"]
+    return subprocess.run([sys.executable, str(ROOT / "listen" / "session.py"), *rest]).returncode
+
+
 def cmd_ocr(args: argparse.Namespace) -> int:
     return subprocess.run(
         [sys.executable, str(ROOT / "pleading" / "ocr_supplement.py"), args.pdf, args.outdir]
@@ -2404,6 +2409,10 @@ def main() -> int:
 
     sp = sub.add_parser("list", help="list envelopes (run from the matter dir)")
     sp.set_defaults(func=cmd_list)
+
+    sp = sub.add_parser("listen", help="a listening session: local live transcription, a page pointer that follows you through a Bates-stamped set, a reviewer keeping the notes (ADR-0048)")
+    sp.add_argument("rest", nargs=argparse.REMAINDER, help="passed through to listen/session.py (see -h there)")
+    sp.set_defaults(func=cmd_listen)
 
     sp = sub.add_parser("ocr", help="OCR-supplement one PDF into an output dir")
     sp.add_argument("pdf")
