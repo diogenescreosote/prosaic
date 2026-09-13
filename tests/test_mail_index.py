@@ -10,6 +10,7 @@ from __future__ import annotations
 
 import mailbox
 import subprocess
+import sys
 from email.message import EmailMessage
 from pathlib import Path
 from typing import Any
@@ -26,6 +27,9 @@ def _load_mail_index() -> Any:
     spec = spec_from_loader("mail_index", loader)
     assert spec
     mod = module_from_spec(spec)
+    # Register before exec: dataclass processing resolves cls.__module__
+    # through sys.modules, and an unregistered module arrives as None.
+    sys.modules["mail_index"] = mod
     loader.exec_module(mod)
     return mod
 
