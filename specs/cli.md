@@ -199,7 +199,10 @@ agent CLI is named (ADR-0020). Its promises:
   date that may be weeks earlier than its own. Pure function of the
   mbox files; rebuilt after every sync; with any of `--from`,
   `--after`, `--before`, `--grep` it queries instead (building first
-  if absent), printing matching rows with their thread pointers.
+  if absent), printing matching rows with their thread pointers;
+  `--grep` is matched against each candidate message's FULL body read
+  from the mbox, not the snippet, so a phrase deep in a long message
+  is found.
   *(tested: tests/test_mail_index.py)*
 - **`sc text audit|ensure|migrate [matter] [--json] [--include-inbox] [--dry-run] [--redo-ocr] [--jobs N] [--include-legacy-ocr]`**
   writes under `derived/text/` and `derived/ocr/` (ADR-0042), reads legacy

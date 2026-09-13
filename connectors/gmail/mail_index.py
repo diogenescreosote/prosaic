@@ -28,7 +28,7 @@ from datetime import UTC
 from html import unescape
 from pathlib import Path
 
-SNIPPET_CHARS = 200
+SNIPPET_CHARS = 300
 
 _QUOTE_HEAD_RE = re.compile(r"(?:^|\n)On .{0,200}?wrote:", re.S)
 _BOILERPLATE_RE = re.compile(
@@ -221,7 +221,19 @@ def _matches(
         return False
     if before and r.date > before:
         return False
-    return not (grep and not grep.search(" ".join([r.subject, r.snippet, r.to, r.cc])))
+    return True
+
+
+def _full_body(matter: Path, thread: str, n: int, cache: dict[str, list[str]]) -> str:
+    """The whole text of message n of a thread, from the mbox, cached per thread."""
+    if thread not in cache:
+        mb = matter / "assets" / "gmail" / "mbox" / f"{thread}.mbox"
+        try:
+            cache[thread] = [_body_text(m) for m in mailbox.mbox(str(mb))]
+        except Exception:
+            cache[thread] = []
+    bodies = cache[thread]
+    return bodies[n - 1] if 0 < n <= len(bodies) else ""
 
 
 def search(
@@ -235,6 +247,7 @@ def search(
     if not tsv.exists():
         build(matter)
     pat = re.compile(grep, re.I) if grep else None
+    cache: dict[str, list[str]] = {}
     out: list[Row] = []
     with tsv.open(encoding="utf-8", newline="") as f:
         reader = csv.reader(f, delimiter="\t")
@@ -254,8 +267,13 @@ def search(
                 int(cells[8]),
                 cells[9],
             )
-            if _matches(r, sender, after, before, pat):
-                out.append(r)
+            if not _matches(r, sender, after, before, pat):
+                continue
+            if pat and not pat.search(
+                " ".join([r.subject, r.to, r.cc, _full_body(matter, r.thread, r.n, cache)])
+            ):
+                continue
+            out.append(r)
     return out
 
 
