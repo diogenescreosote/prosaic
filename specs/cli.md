@@ -199,7 +199,13 @@ agent CLI is named (ADR-0020). Its promises:
   date that may be weeks earlier than its own. Pure function of the
   mbox files; rebuilt after every sync; with any of `--from`,
   `--after`, `--before`, `--grep` it queries instead (building first
-  if absent), printing matching rows with their thread pointers;
+  if absent), printing matching rows with their thread pointers. It
+  also writes `derived/mail/threads/<stem>.txt`, one decoded full-text
+  file per thread **including the quoted reply chains the rendered PDF
+  collapses to "[Quoted text hidden]"** --- an email that exists in
+  the record only as text quoted inside a later message is otherwise
+  invisible to every search, since the rendered text hides it and the
+  stored mbox is MIME-encoded so grep finds nothing there either;
   `--grep` is matched against each candidate message's FULL body read
   from the mbox, not the snippet, so a phrase deep in a long message
   is found.
