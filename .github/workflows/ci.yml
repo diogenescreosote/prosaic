@@ -17,7 +17,10 @@ jobs:
           python-version: "3.12"
       # The scenario suite reads its own output back with pdftotext; see
       # system-dependencies.yaml for what each program is for.
-      - run: sudo apt-get update && sudo apt-get install -y poppler-utils
+      # poppler for pdftotext; ripgrep because sc find's grep fallback
+      # cannot express the --near regex (ERE has no (?: groups) --- rg is
+      # the declared engine (system-dependencies.yaml).
+      - run: sudo apt-get update && sudo apt-get install -y poppler-utils ripgrep
       # The gmail connector is Node; its tests exercise render.js and
       # pull.js against the lockfile-pinned modules (cheerio et al.).
       - run: npm ci --prefix connectors
