@@ -102,8 +102,7 @@ MODULES_DIR = LAYERS_ROOT / "modules"
 def _overlay_dirs(*sub: str) -> list[Path]:
     dirs = [LOCAL_PLEADING_DIR.joinpath(*sub)]
     if MODULES_DIR.is_dir():
-        dirs += [m / "pleading" / Path(*sub)
-                 for m in sorted(MODULES_DIR.iterdir()) if m.is_dir()]
+        dirs += [m / "pleading" / Path(*sub) for m in sorted(MODULES_DIR.iterdir()) if m.is_dir()]
     dirs.append(PLEADING_DIR.joinpath(*sub))
     return [d for d in dirs if d.is_dir()]
 
@@ -135,13 +134,11 @@ LEADING_RATIO = 1.15
 # ``esign: {type: date, party: filer}``; parties are declared in
 # descriptor-level ``esign_parties:`` (abstract role names — petitioner,
 # attorney_for_petitioner, server — in signing order). See ADR-0033.
-ESIGN_TYPES = {"signature", "initials", "date", "name",
-               "email", "phone", "text", "checkbox"}
+ESIGN_TYPES = {"signature", "initials", "date", "name", "email", "phone", "text", "checkbox"}
 
 # Geometry-preview palette. Parties get colors by their position in
 # ``esign_parties`` (party 1 red, 2 blue, 3 green, 4 orange).
-PARTY_COLORS = [(0.80, 0.12, 0.12), (0.10, 0.30, 0.80),
-                (0.10, 0.55, 0.20), (0.75, 0.45, 0.00)]
+PARTY_COLORS = [(0.80, 0.12, 0.12), (0.10, 0.30, 0.80), (0.10, 0.55, 0.20), (0.75, 0.45, 0.00)]
 FIELD_BOX_COLOR = (0.25, 0.45, 0.85)
 CHECKBOX_COLOR = (0.45, 0.30, 0.70)
 
@@ -149,6 +146,7 @@ CHECKBOX_COLOR = (0.45, 0.30, 0.70)
 # ---------------------------------------------------------------------------
 # Descriptor loading
 # ---------------------------------------------------------------------------
+
 
 def list_forms() -> list[str]:
     return sorted({p.stem for d in registry_dirs() for p in d.glob("*.yaml")})
@@ -215,6 +213,7 @@ def blank_path(desc: dict) -> Path:
 # PDF introspection
 # ---------------------------------------------------------------------------
 
+
 def _qualified_name(annot_obj) -> str:
     """Reconstruct a widget's fully qualified field name via /Parent chain."""
     parts = []
@@ -266,15 +265,17 @@ def dump_fields(pdf_path: Path) -> list[dict]:
             if hasattr(n, "keys"):
                 states = [str(k) for k in n.keys()]
         flags = int(_inherited(obj, "/Ff", 0) or 0)
-        rows.append({
-            "name": name,
-            "page": page_idx + 1,
-            "type": ftype,
-            "rect": rect,
-            "tooltip": str(obj.get("/TU") or ""),
-            "states": states,
-            "multiline": bool(flags & (1 << 12)),
-        })
+        rows.append(
+            {
+                "name": name,
+                "page": page_idx + 1,
+                "type": ftype,
+                "rect": rect,
+                "tooltip": str(obj.get("/TU") or ""),
+                "states": states,
+                "multiline": bool(flags & (1 << 12)),
+            }
+        )
     return rows
 
 
@@ -324,6 +325,7 @@ def skeleton_yaml(pdf_path: Path) -> str:
 # Text fitting
 # ---------------------------------------------------------------------------
 
+
 def _wrap_to_width(text: str, font: str, size: float, width: float) -> list[str]:
     lines: list[str] = []
     for para in text.split("\n"):
@@ -347,22 +349,24 @@ VALIGNMENTS = ("top", "middle", "bottom")
 LAYOUTS = ("labeled", "line", "box")
 TEXT_INSET = 2.0  # horizontal breathing room from a box edge, in points
 LABEL_GAP = 10.5  # a label ends within this many points of the field's left edge
-RULE_GAP = 5.0    # a signature rule lies within this many points below the field
-RULE_LIFT = 2.0   # baseline sits this far above the rule
+RULE_GAP = 5.0  # a signature rule lies within this many points below the field
+RULE_LIFT = 2.0  # baseline sits this far above the rule
 
 
 # ---------------------------------------------------------------------------
 # Blank geometry: what the page prints around each field
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class PageGeometry:
     """Printed text spans, horizontal rules and bordered cells of one page
     of a blank, in PDF user space (origin bottom-left)."""
+
     spans: list[tuple[float, float, float, float, str]]
-    rules: list[tuple[float, float, float]]          # (x0, y, x1) horizontal
-    vrules: list[tuple[float, float, float]]         # (x, y0, y1) vertical
-    cells: list[tuple[float, float, float, float]]   # bordered rectangles
+    rules: list[tuple[float, float, float]]  # (x0, y, x1) horizontal
+    vrules: list[tuple[float, float, float]]  # (x, y0, y1) vertical
+    cells: list[tuple[float, float, float, float]]  # bordered rectangles
 
 
 _GEOMETRY_CACHE: dict[tuple[str, int], PageGeometry] = {}
@@ -373,6 +377,7 @@ def page_geometry(blank: Path, page_idx: int) -> PageGeometry:
     if key in _GEOMETRY_CACHE:
         return _GEOMETRY_CACHE[key]
     import fitz  # pymupdf
+
     doc = fitz.open(str(blank))
     try:
         page = doc[page_idx]
@@ -414,9 +419,9 @@ def page_geometry(blank: Path, page_idx: int) -> PageGeometry:
 
 @dataclass
 class Layout:
-    kind: str                                   # labeled | line | box
+    kind: str  # labeled | line | box
     why: str
-    rule: Optional[tuple[float, float, float]] = None      # for line
+    rule: Optional[tuple[float, float, float]] = None  # for line
     area: Optional[tuple[float, float, float, float]] = None  # for box
 
 
@@ -441,22 +446,36 @@ def classify_layout(rect: list[float], geom: Optional[PageGeometry]) -> Optional
     x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
     y0, y1 = min(rect[1], rect[3]), max(rect[1], rect[3])
     mid = (y0 + y1) / 2.0
-    labels = [s for s in geom.spans
-              if s[1] < y1 and s[3] > y0 and s[2] <= x0 + 2.0 and x0 - s[2] < LABEL_GAP
-              and not any(s[2] - 0.5 < v[0] < x0 + 0.5 and v[1] <= mid <= v[2]
-                          for v in geom.vrules)]
+    labels = [
+        s
+        for s in geom.spans
+        if s[1] < y1
+        and s[3] > y0
+        and s[2] <= x0 + 2.0
+        and x0 - s[2] < LABEL_GAP
+        and not any(s[2] - 0.5 < v[0] < x0 + 0.5 and v[1] <= mid <= v[2] for v in geom.vrules)
+    ]
     if labels:
         label = max(labels, key=lambda s: s[2])
         return Layout("labeled", f"label {label[4].strip()!r} ends {x0 - label[2]:.1f}pt left")
     # A bordered cell is checked before a rule: a cell's bottom border
     # is also a horizontal rule under the widget, and a case number in
     # its box is not a name on a signature line.
-    cells = [c for c in geom.cells
-             if c[0] <= x0 + 1.0 and c[1] <= y0 + 1.0 and c[2] >= x1 - 1.0 and c[3] >= y1 - 1.0]
+    cells = [
+        c
+        for c in geom.cells
+        if c[0] <= x0 + 1.0 and c[1] <= y0 + 1.0 and c[2] >= x1 - 1.0 and c[3] >= y1 - 1.0
+    ]
     if cells:
         cell = min(cells, key=lambda c: (c[2] - c[0]) * (c[3] - c[1]))
-        inside = [s for s in geom.spans
-                  if s[0] >= cell[0] - 1 and s[2] <= cell[2] + 1 and s[1] >= cell[1] - 1 and s[3] <= cell[3] + 1]
+        inside = [
+            s
+            for s in geom.spans
+            if s[0] >= cell[0] - 1
+            and s[2] <= cell[2] + 1
+            and s[1] >= cell[1] - 1
+            and s[3] <= cell[3] + 1
+        ]
         # A label whose bottom touches the widget's top is above it, not
         # beside it; only real vertical overlap disqualifies the cell.
         beside = [s for s in inside if min(s[3], y1) - max(s[1], y0) > 1.0]
@@ -472,9 +491,13 @@ def classify_layout(rect: list[float], geom: Optional[PageGeometry]) -> Optional
             why = f"cell {cell[0]:.0f},{cell[1]:.0f}-{cell[2]:.0f},{cell[3]:.0f}"
             why += f", label {above[0][4].strip()!r} above" if above else ", no label"
             return Layout("box", why, area=area)
-    rules = [r for r in geom.rules
-             if r[1] <= y0 + 1.0 and y0 - r[1] < RULE_GAP
-             and min(r[2], x1) - max(r[0], x0) > 0.6 * (x1 - x0)]
+    rules = [
+        r
+        for r in geom.rules
+        if r[1] <= y0 + 1.0
+        and y0 - r[1] < RULE_GAP
+        and min(r[2], x1) - max(r[0], x0) > 0.6 * (x1 - x0)
+    ]
     if rules:
         rule = max(rules, key=lambda r: r[2] - r[0])
         # A parenthesized caption right under the rule — "(TYPE OR PRINT
@@ -482,25 +505,41 @@ def classify_layout(rect: list[float], geom: Optional[PageGeometry]) -> Optional
         # convention, whatever is printed above. Otherwise a label
         # touching the field's top ("CASE NUMBER:") makes this a box
         # whose border is drawn with lines: center between label and rule.
-        caption = [s for s in geom.spans
-                   if s[3] <= y0 + 1.0 and y0 - s[3] < 3.5 and s[4].strip().startswith("(")
-                   and min(s[2], x1) - max(s[0], x0) > 0]
-        above = [s for s in geom.spans
-                 if s[1] >= y1 - 1.0 and s[1] - y1 < 2.5
-                 and min(s[2], x1) - max(s[0], x0) > 0]
+        caption = [
+            s
+            for s in geom.spans
+            if s[3] <= y0 + 1.0
+            and y0 - s[3] < 3.5
+            and s[4].strip().startswith("(")
+            and min(s[2], x1) - max(s[0], x0) > 0
+        ]
+        above = [
+            s
+            for s in geom.spans
+            if s[1] >= y1 - 1.0 and s[1] - y1 < 2.5 and min(s[2], x1) - max(s[0], x0) > 0
+        ]
         if above and not caption:
             top = min(s[1] for s in above)
             area = (rule[0], rule[1], rule[2], top)
-            return Layout("box", f"rule {rule[0]:.0f}-{rule[2]:.0f} at y={rule[1]:.1f}, "
-                          f"label {above[0][4].strip()!r} above", area=area)
+            return Layout(
+                "box",
+                f"rule {rule[0]:.0f}-{rule[2]:.0f} at y={rule[1]:.1f}, "
+                f"label {above[0][4].strip()!r} above",
+                area=area,
+            )
         return Layout("line", f"rule {rule[0]:.0f}-{rule[2]:.0f} at y={rule[1]:.1f}", rule=rule)
     return None
 
 
-def text_origins(lines: list[str], rect: list[float], size: float, font: str,
-                 align: Optional[str] = None, valign: Optional[str] = None,
-                 layout: Optional[Layout] = None,
-                 ) -> list[tuple[float, float]]:
+def text_origins(
+    lines: list[str],
+    rect: list[float],
+    size: float,
+    font: str,
+    align: Optional[str] = None,
+    valign: Optional[str] = None,
+    layout: Optional[Layout] = None,
+) -> list[tuple[float, float]]:
     """Baseline origin (x, y) for each line of text drawn into ``rect``.
 
     A block of several lines (an address block, a wrapped answer)
@@ -598,13 +637,11 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     # default: microscopic-but-technically-fitting text is worse for a
     # court filing than a clean "See Attachment N." + MC-025. Authors
     # can opt into shrinking with an explicit min_font_size.
-    default_min = (DEFAULT_FONT_SIZE if strategy == "overflow_attachment"
-                   else DEFAULT_MIN_FONT_SIZE)
+    default_min = DEFAULT_FONT_SIZE if strategy == "overflow_attachment" else DEFAULT_MIN_FONT_SIZE
     min_size = float(spec.get("min_font_size") or default_min)
     font = str(spec.get("font") or DEFAULT_FONT)
     can_shrink = "shrink" in strategy or strategy == "overflow_attachment"
-    can_wrap = ("wrap" in strategy or strategy == "overflow_attachment"
-                or spec.get("multiline"))
+    can_wrap = "wrap" in strategy or strategy == "overflow_attachment" or spec.get("multiline")
 
     while True:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
@@ -631,6 +668,7 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
 # The fill engine
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class FillResult:
     output_path: Path
@@ -638,8 +676,9 @@ class FillResult:
     overflows: list[dict] = dc_field(default_factory=list)  # {label, text, field}
 
 
-def resolve_values(desc: dict, meta: Optional[dict] = None,
-                   data: Optional[dict] = None) -> tuple[dict, dict, list[str]]:
+def resolve_values(
+    desc: dict, meta: Optional[dict] = None, data: Optional[dict] = None
+) -> tuple[dict, dict, list[str]]:
     """Compute logical-field → value from auto bindings, meta, and data.
 
     Precedence (low → high): field ``default`` → ``auto`` binding over
@@ -648,7 +687,7 @@ def resolve_values(desc: dict, meta: Optional[dict] = None,
     """
     meta = meta or {}
     data = dict(data or {})
-    form_block = ((meta.get("forms") or {}).get(desc["form"]) or {})
+    form_block = (meta.get("forms") or {}).get(desc["form"]) or {}
     problems: list[str] = []
 
     texts: dict[str, str] = {}
@@ -710,7 +749,10 @@ def _strip_named_widgets(writer: PdfWriter, names: set[str]) -> None:
             kept = ArrayObject()
             for annot in page["/Annots"]:
                 obj = annot.get_object()
-                if _qualified_name(obj).split(".")[-1] in names or str(obj.get("/T") or "") in names:
+                if (
+                    _qualified_name(obj).split(".")[-1] in names
+                    or str(obj.get("/T") or "") in names
+                ):
                     continue
                 kept.append(annot)
             page[NameObject("/Annots")] = kept
@@ -728,7 +770,7 @@ def _strip_named_widgets(writer: PdfWriter, names: set[str]) -> None:
 
 
 PUSHBUTTON_FLAG = 1 << 16  # PDF 32000-1 12.7.4.2.1: /Ff bit 17
-MULTILINE_FLAG = 1 << 12   # PDF 32000-1 12.7.4.3: /Ff bit 13
+MULTILINE_FLAG = 1 << 12  # PDF 32000-1 12.7.4.3: /Ff bit 13
 
 
 # Chrome pushbuttons by name: the Judicial Council names its
@@ -738,13 +780,12 @@ MULTILINE_FLAG = 1 << 12   # PDF 32000-1 12.7.4.3: /Ff bit 13
 # one request-for-order form draws its blue "Attachment 9." and sibling-form
 # cross-reference labels as pushbutton widgets, and stripping those
 # leaves sentences pointing at blank gaps ("as attached on form ____").
-_CHROME_BUTTON_NAME = re.compile(
-    r"^(print|save|reset|clear|submit|warning)\d*(\[\d+\])?$", re.I)
+_CHROME_BUTTON_NAME = re.compile(r"^(print|save|reset|clear|submit|warning)\d*(\[\d+\])?$", re.I)
 # Appearance fallback for oddly named chrome: the button's own /AP
 # draws the tell-tale text.
 _CHROME_BUTTON_AP = re.compile(
-    rb"(Print|Save|Clear|Reset)\s*this\s*form|protection\s*and\s*privacy",
-    re.I)
+    rb"(Print|Save|Clear|Reset)\s*this\s*form|protection\s*and\s*privacy", re.I
+)
 
 
 def _is_chrome_pushbutton(obj) -> bool:
@@ -788,8 +829,7 @@ def _strip_pushbutton_widgets(writer: PdfWriter) -> None:
             obj = annot.get_object()
             ft = _inherited(obj, "/FT")
             ff = _inherited(obj, "/Ff")
-            if (str(ft) == "/Btn" and int(ff or 0) & PUSHBUTTON_FLAG
-                    and _is_chrome_pushbutton(obj)):
+            if str(ft) == "/Btn" and int(ff or 0) & PUSHBUTTON_FLAG and _is_chrome_pushbutton(obj):
                 name = str(obj.get("/T") or "")
                 if name:
                     doomed_names.add(name)
@@ -827,11 +867,12 @@ def _bake_widgets(writer: PdfWriter) -> PdfWriter:
     """
     import io
     import fitz  # pymupdf, already a hard dependency
+
     buf = io.BytesIO()
     writer.write(buf)
     buf.seek(0)
     doc = fitz.open(stream=buf.read(), filetype="pdf")
-    doc.bake()          # widgets + annotations -> page content
+    doc.bake()  # widgets + annotations -> page content
     baked = io.BytesIO(doc.tobytes())
     doc.close()
     baked.seek(0)
@@ -856,11 +897,44 @@ def _strip_all_form_machinery(writer: PdfWriter) -> None:
         del catalog[NameObject("/AcroForm")]
 
 
-def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
-         data: Optional[dict] = None, strict: bool = False,
-         verbose: bool = False) -> FillResult:
+def parse_page_spec(spec: str, n_pages: int) -> list[int]:
+    """``"2"``, ``"2-3"``, ``"1,3"`` -> zero-based page indices, in the
+    order given, deduplicated. Raises on a page outside the form."""
+    out: list[int] = []
+    for part in str(spec).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        if "-" in part[1:]:
+            a, _, b = part.partition("-")
+            lo, hi = int(a), int(b)
+        else:
+            lo = hi = int(part)
+        if lo < 1 or hi > n_pages or lo > hi:
+            raise ValueError(f"--pages {spec!r}: page {lo}-{hi} outside a {n_pages}-page form")
+        out.extend(range(lo - 1, hi))
+    seen: set[int] = set()
+    return [p for p in out if not (p in seen or seen.add(p))]
+
+
+def fill(
+    form_id: str,
+    output_path: Path,
+    meta: Optional[dict] = None,
+    data: Optional[dict] = None,
+    strict: bool = False,
+    verbose: bool = False,
+    pages: Optional[str] = None,
+) -> FillResult:
     """Fill a form per its descriptor. See module docstring. ``verbose``
-    prints each single-line field's layout decision to stderr."""
+    prints each single-line field's layout decision to stderr.
+
+    ``pages`` keeps only a subset of the filled form ("2", "2-3",
+    "1,3"), renumbering the e-sign sidecar to match so the output still
+    goes straight to ``sc docuseal send``. The case it exists for is a
+    proof of service: page 2 of a subpoena is its own document once
+    service has happened, and shipping the blank page 1 beside it would
+    put an unissued-looking subpoena into circulation."""
     desc = load_descriptor(form_id)
     blank = blank_path(desc)
     if not blank.exists():
@@ -910,7 +984,8 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         if not rect:
             result.warnings.append(
                 f"{name}: overlay field needs a rect, or a map naming a "
-                f"widget in {blank.name} — form revision drift?")
+                f"widget in {blank.name} — form revision drift?"
+            )
             continue
         # Fitting is the point — a field with no explicit fit strategy
         # shrinks rather than warns.
@@ -918,13 +993,22 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
             spec = {**spec, "fit": "shrink"}
         layout = resolve_layout(rect, spec, page_geometry(blank, page_no))
         if verbose:
-            print(f"  layout {name}: {layout.kind} ({layout.why})" if layout
-                  else f"  layout {name}: centered in rect (no label, rule or cell found)",
-                  file=sys.stderr)
-        pending_overlay.append({
-            "name": name, "value": value, "rect": rect,
-            "page": page_no, "spec": spec, "layout": layout,
-        })
+            print(
+                f"  layout {name}: {layout.kind} ({layout.why})"
+                if layout
+                else f"  layout {name}: centered in rect (no label, rule or cell found)",
+                file=sys.stderr,
+            )
+        pending_overlay.append(
+            {
+                "name": name,
+                "value": value,
+                "rect": rect,
+                "page": page_no,
+                "spec": spec,
+                "layout": layout,
+            }
+        )
 
     # Fit the pending overlay text, then enforce size-group consistency:
     # every member of a ``size_group`` renders at the smallest size any
@@ -934,7 +1018,8 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         fitted = fit_text(op["value"], op["rect"], op["spec"])
         if not fitted.fits:
             op["value"], fitted = _handle_overflow(
-                op["name"], op["spec"], op["value"], op["rect"], result)
+                op["name"], op["spec"], op["value"], op["rect"], result
+            )
         op["fit"] = fitted
     group_min: dict[str, float] = {}
     for op in pending_overlay:
@@ -944,13 +1029,12 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     for op in pending_overlay:
         g = op["spec"].get("size_group")
         if g and op["fit"].font_size > group_min[g]:
-            locked = {**op["spec"], "font_size": group_min[g],
-                      "min_font_size": group_min[g]}
+            locked = {**op["spec"], "font_size": group_min[g], "min_font_size": group_min[g]}
             op["fit"] = fit_text(op["value"], op["rect"], locked)
     for op in pending_overlay:
         overlay_ops.setdefault(op["page"], []).append(
-            {"rect": op["rect"], "fit": op["fit"], "spec": op["spec"],
-             "layout": op.get("layout")})
+            {"rect": op["rect"], "fit": op["fit"], "spec": op["spec"], "layout": op.get("layout")}
+        )
 
     # Overflow-linked checkboxes: a field spec may declare
     # ``overflow_checkbox`` (checked iff the value spilled to an
@@ -984,7 +1068,8 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         if not rect:
             result.warnings.append(
                 f"checkbox {name}: needs a rect, or a map naming a "
-                f"widget in {blank.name} — form revision drift?")
+                f"widget in {blank.name} — form revision drift?"
+            )
             continue
         overlay_ops.setdefault(page_idx, []).append({"rect": rect, "mark": True})
 
@@ -1007,15 +1092,21 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         whiteouts.setdefault(int(w.get("page", 1)) - 1, []).append(w["rect"])
     if overlay_ops or whiteouts:
         import io
+
         buf = io.BytesIO()
         c = rl_canvas.Canvas(buf, pagesize=letter)
         max_page = max([*overlay_ops, *whiteouts])
         for i in range(max_page + 1):
             for rect in whiteouts.get(i, []):
                 c.setFillColorRGB(1, 1, 1)
-                c.rect(min(rect[0], rect[2]), min(rect[1], rect[3]),
-                       abs(rect[2] - rect[0]), abs(rect[3] - rect[1]),
-                       fill=1, stroke=0)
+                c.rect(
+                    min(rect[0], rect[2]),
+                    min(rect[1], rect[3]),
+                    abs(rect[2] - rect[0]),
+                    abs(rect[3] - rect[1]),
+                    fill=1,
+                    stroke=0,
+                )
             c.setFillColorRGB(0, 0, 0)
             for op in overlay_ops.get(i, []):
                 rect = op["rect"]
@@ -1035,10 +1126,17 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
                 color = spec.get("color")
                 c.setFillColorRGB(*color) if color else c.setFillColorRGB(0, 0, 0)
                 for line, (x, y) in zip(
+                    fitted.lines,
+                    text_origins(
                         fitted.lines,
-                        text_origins(fitted.lines, rect, fitted.font_size, font,
-                                     spec.get("align"), spec.get("valign"),
-                                     op.get("layout"))):
+                        rect,
+                        fitted.font_size,
+                        font,
+                        spec.get("align"),
+                        spec.get("valign"),
+                        op.get("layout"),
+                    ),
+                ):
                     c.drawString(x, y, line)
             c.showPage()
         c.save()
@@ -1047,6 +1145,14 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
         for i, page in enumerate(writer.pages):
             if (i in overlay_ops or i in whiteouts) and i < len(overlay_reader.pages):
                 page.merge_page(overlay_reader.pages[i])
+
+    keep: Optional[list[int]] = None
+    if pages:
+        keep = parse_page_spec(pages, len(writer.pages))
+        subset = PdfWriter()
+        for idx in keep:
+            subset.add_page(writer.pages[idx])
+        writer = subset
 
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "wb") as fh:
@@ -1060,35 +1166,53 @@ def fill(form_id: str, output_path: Path, meta: Optional[dict] = None,
     # pleading build writes, so a standalone fill can go straight to
     # `sc docuseal send` with its signature and date fields placed by
     # the descriptor --- never by hand from text positions.
-    write_esign_sidecar(form_id, output_path, meta)
+    write_esign_sidecar(form_id, output_path, meta, keep_pages=keep)
     return result
 
 
-def write_esign_sidecar(form_id: str, output_path: Path,
-                        meta: dict | None = None) -> Path | None:
+def write_esign_sidecar(
+    form_id: str, output_path: Path, meta: dict | None = None, keep_pages: list[int] | None = None
+) -> Path | None:
     """Write ``<pdf>.fields.json`` beside a filled form when its descriptor
     declares ``esign:`` fields; remove a stale one when it declares none.
-    Returns the sidecar path when written."""
+    Returns the sidecar path when written.
+
+    ``keep_pages`` (zero-based, in output order) mirrors a ``--pages``
+    subset: fields on a dropped page go with it, and the survivors are
+    renumbered to their new position, so the geometry still describes
+    the PDF actually written."""
     fields = esign_fields(form_id, meta)
+    if keep_pages is not None:
+        renumber = {old: new + 1 for new, old in enumerate(keep_pages)}
+        fields = [
+            {**f, "page": renumber[f["page"] - 1]} for f in fields if (f["page"] - 1) in renumber
+        ]
     path = output_path.with_name(output_path.name + ".fields.json")
     if not fields:
         if path.exists():
             path.unlink()
         return None
-    path.write_text(json.dumps({
-        "page_width": letter[0],
-        "page_height": letter[1],
-        "origin": "top-left",
-        "units": "pt",
-        "source": "build",
-        "form": form_id,
-        "fields": fields,
-    }, indent=2) + "\n")
+    path.write_text(
+        json.dumps(
+            {
+                "page_width": letter[0],
+                "page_height": letter[1],
+                "origin": "top-left",
+                "units": "pt",
+                "source": "build",
+                "form": form_id,
+                "fields": fields,
+            },
+            indent=2,
+        )
+        + "\n"
+    )
     return path
 
 
-def _handle_overflow(name: str, spec: dict, value: str, rect: list[float],
-                     result: FillResult) -> tuple[str, FitResult]:
+def _handle_overflow(
+    name: str, spec: dict, value: str, rect: list[float], result: FillResult
+) -> tuple[str, FitResult]:
     """Apply the overflow policy for text that cannot fit its box."""
     strategy = str(spec.get("fit") or "none")
     if strategy == "overflow_attachment":
@@ -1129,7 +1253,7 @@ def _chunk_for_mc025(text: str, rect: list[float], spec: dict) -> list[str]:
     height = abs(rect[3] - rect[1]) - 2.0
     per_page = max(1, int(height // (size * LEADING_RATIO)))
     lines = _wrap_to_width(text, font, size, width)
-    return ["\n".join(lines[i:i + per_page]) for i in range(0, len(lines), per_page)]
+    return ["\n".join(lines[i : i + per_page]) for i in range(0, len(lines), per_page)]
 
 
 def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) -> None:
@@ -1139,6 +1263,7 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
     "page N of M" filled — never silent truncation (spec:
     specs/pleading/forms/mc025.md)."""
     import tempfile
+
     readers = [PdfReader(str(main_pdf))]
     with tempfile.TemporaryDirectory() as td:
         for i, ov in enumerate(result.overflows):
@@ -1147,8 +1272,7 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
                 rect, body_spec = _mc025_body_capacity(desc025)
             except (FileNotFoundError, ValueError) as exc:
                 result.warnings.append(
-                    f"overflow '{ov['label']}': mc025 unavailable ({exc}); "
-                    "attachment NOT generated"
+                    f"overflow '{ov['label']}': mc025 unavailable ({exc}); attachment NOT generated"
                 )
                 continue
             chunks = _chunk_for_mc025(ov["text"], rect, body_spec)
@@ -1174,6 +1298,7 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
 # E-sign field geometry (for the build's <pdf>.fields.json sidecar)
 # ---------------------------------------------------------------------------
 
+
 def esign_fields(form_id: str, meta: Optional[dict] = None) -> list[dict]:
     """Every ``esign:`` field on a form, as sidecar records the build can
     merge into ``<pdf>.fields.json`` and ``sc docuseal`` can place.
@@ -1189,6 +1314,7 @@ def esign_fields(form_id: str, meta: Optional[dict] = None) -> list[dict]:
     when the form is prepended as a cover sheet.
     """
     from reportlab.lib.pagesizes import letter as _letter
+
     page_h = _letter[1]
     desc = load_descriptor(form_id)
     blank = blank_path(desc)
@@ -1220,22 +1346,25 @@ def esign_fields(form_id: str, meta: Optional[dict] = None) -> list[dict]:
         top, h = max(y0, y1), abs(y1 - y0)
         party = str(es.get("party") or "")
         role_n = parties.index(party) + 1 if party in parties else 1
-        out.append({
-            "name": f"{name}",
-            "role": f"Signer {role_n}",
-            "type": str(es.get("type") or "text"),
-            "page": page_no + 1,
-            "x": round(x, 2),
-            "y_top": round(page_h - top, 2),
-            "w": round(w, 2),
-            "h": round(h, 2),
-        })
+        out.append(
+            {
+                "name": f"{name}",
+                "role": f"Signer {role_n}",
+                "type": str(es.get("type") or "text"),
+                "page": page_no + 1,
+                "x": round(x, 2),
+                "y_top": round(page_h - top, 2),
+                "w": round(w, 2),
+                "h": round(h, 2),
+            }
+        )
     return out
 
 
 # ---------------------------------------------------------------------------
 # Geometry preview
 # ---------------------------------------------------------------------------
+
 
 def geometry_preview(form_id: str, output_path: Path) -> FillResult:
     """Render the blank with a translucent box over every place the
@@ -1287,20 +1416,21 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
             etype = str(es.get("type") or "text")
             if etype not in ESIGN_TYPES:
                 result.warnings.append(
-                    f"{name}: esign type '{etype}' outside taxonomy "
-                    f"{sorted(ESIGN_TYPES)}")
+                    f"{name}: esign type '{etype}' outside taxonomy {sorted(ESIGN_TYPES)}"
+                )
             party = str(es.get("party") or "")
             if party and party not in parties:
                 result.warnings.append(
-                    f"{name}: esign party '{party}' not declared in "
-                    f"esign_parties {parties}")
+                    f"{name}: esign party '{party}' not declared in esign_parties {parties}"
+                )
             if party in parties:
                 color = PARTY_COLORS[parties.index(party) % len(PARTY_COLORS)]
             else:
                 color = (0.4, 0.4, 0.4)
             label = etype.upper() + (f" · {party}" if party else "")
         boxes.setdefault(page_no, []).append(
-            {"rect": rect, "color": color, "label": label, "esign": bool(es)})
+            {"rect": rect, "color": color, "label": label, "esign": bool(es)}
+        )
 
     for name, spec in (desc.get("fields") or {}).items():
         add(name, spec, False)
@@ -1308,6 +1438,7 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
         add(name, spec, True)
 
     import io
+
     buf = io.BytesIO()
     c = rl_canvas.Canvas(buf, pagesize=letter)
     for i in range(len(reader.pages)):
@@ -1330,14 +1461,15 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
             c.saveState()
             c.setFillColorRGB(0, 0, 0)
             c.setFont("Helvetica-Bold", 7)
-            c.drawString(36, 18, f"GEOMETRY PREVIEW — {desc['form']} — "
-                                 "review artifact, not a filing")
+            c.drawString(
+                36, 18, f"GEOMETRY PREVIEW — {desc['form']} — review artifact, not a filing"
+            )
             c.setFont("Helvetica", 7)
             x0 = 36
-            entries = [("text field", FIELD_BOX_COLOR),
-                       ("checkbox", CHECKBOX_COLOR)]
-            entries += [(f"e-sign: {p}", PARTY_COLORS[j % len(PARTY_COLORS)])
-                        for j, p in enumerate(parties)]
+            entries = [("text field", FIELD_BOX_COLOR), ("checkbox", CHECKBOX_COLOR)]
+            entries += [
+                (f"e-sign: {p}", PARTY_COLORS[j % len(PARTY_COLORS)]) for j, p in enumerate(parties)
+            ]
             for lbl, col in entries:
                 c.setFillColorRGB(*col)
                 c.rect(x0, 8, 8, 6, fill=1, stroke=0)
@@ -1361,6 +1493,7 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
 # ---------------------------------------------------------------------------
 # Cover-sheet cache + prepend (generic versions of the per-form helpers)
 # ---------------------------------------------------------------------------
+
 
 def find_case_dir(input_md: Path) -> Path:
     for ancestor in input_md.parents:
@@ -1441,6 +1574,7 @@ def prepend(main_pdf: Path, cover_pdf: Path) -> None:
 # Descriptor check: does every registered form still fill under this engine?
 # ---------------------------------------------------------------------------
 
+
 @dataclass
 class CheckRow:
     form_id: str
@@ -1478,13 +1612,14 @@ def _sample_data(desc: dict) -> dict:
     data: dict = {}
     for name, spec in (desc.get("fields") or {}).items():
         data[name] = str(spec.get("example") or spec.get("default") or f"{name} sample")
-    for name in (desc.get("checkboxes") or {}):
+    for name in desc.get("checkboxes") or {}:
         data[name] = True
     return data
 
 
-def check_forms(form_ids: Optional[list[str]] = None,
-                keep_dir: Optional[Path] = None) -> list[CheckRow]:
+def check_forms(
+    form_ids: Optional[list[str]] = None, keep_dir: Optional[Path] = None
+) -> list[CheckRow]:
     """Fill every registered descriptor twice (auto bindings only, then
     every field populated), render its geometry preview, and report one
     row per form. An exception is a failure; descriptor warnings are
@@ -1501,11 +1636,17 @@ def check_forms(form_ids: Optional[list[str]] = None,
         try:
             desc = load_descriptor(fid)
             row.technology = str(desc.get("technology") or "?")
-            odd = [k for sect in ("fields", "checkboxes")
-                   for k in (desc.get(sect) or {}) if not isinstance(k, str)]
+            odd = [
+                k
+                for sect in ("fields", "checkboxes")
+                for k in (desc.get(sect) or {})
+                if not isinstance(k, str)
+            ]
             if odd:
-                row.notes = (f"{len(odd)} non-string key(s) {odd} --- quote them in "
-                             "the descriptor (YAML reads yes/no/on/off as booleans)")
+                row.notes = (
+                    f"{len(odd)} non-string key(s) {odd} --- quote them in "
+                    "the descriptor (YAML reads yes/no/on/off as booleans)"
+                )
             empty = fill(fid, out_dir / f"{fid}.empty.pdf", meta={}, data={})
             row.warnings_empty = len(empty.warnings)
             full = fill(fid, out_dir / f"{fid}.full.pdf", meta={}, data=_sample_data(desc))
@@ -1526,11 +1667,14 @@ def format_check(rows: list[CheckRow]) -> str:
         status = "ok" if r.ok else f"FAIL {r.error}"
         if r.ok and r.notes:
             status += f" ({r.notes})"
-        lines.append(f"{r.form_id:<10} {r.layer:<28} {r.technology:<9} "
-                     f"{r.pages:>5} {warn:>9}  {status}")
+        lines.append(
+            f"{r.form_id:<10} {r.layer:<28} {r.technology:<9} {r.pages:>5} {warn:>9}  {status}"
+        )
     bad = [r for r in rows if not r.ok]
-    lines.append(f"{len(rows)} forms, {len(rows) - len(bad)} ok, {len(bad)} failed"
-                 f" (warn = empty-fill/full-fill descriptor warnings; layers from {LAYERS_ROOT})")
+    lines.append(
+        f"{len(rows)} forms, {len(rows) - len(bad)} ok, {len(bad)} failed"
+        f" (warn = empty-fill/full-fill descriptor warnings; layers from {LAYERS_ROOT})"
+    )
     return "\n".join(lines)
 
 
@@ -1540,11 +1684,21 @@ def main() -> int:
 
     sp = sub.add_parser("fill", help="fill a form from a YAML data file")
     sp.add_argument("form_id")
-    sp.add_argument("--verbose", action="store_true",
-                    help="print each field's layout decision (labeled / line / box) and why")
+    sp.add_argument(
+        "--verbose",
+        action="store_true",
+        help="print each field's layout decision (labeled / line / box) and why",
+    )
     sp.add_argument("--data", help="YAML file of logical field values")
     sp.add_argument("--meta", help="YAML file of pleading front matter (caption autos)")
     sp.add_argument("-o", "--output", required=True)
+    sp.add_argument(
+        "--pages",
+        metavar="SPEC",
+        help="keep only these pages of the filled form "
+        '("2", "2-3", "1,3"); the e-sign sidecar is '
+        "renumbered to match",
+    )
 
     sp = sub.add_parser("info", help="show a form's agent guide + field schema")
     sp.add_argument("form_id")
@@ -1555,7 +1709,8 @@ def main() -> int:
     sp = sub.add_parser(
         "preview",
         help="render the blank with colored boxes over every fillable/"
-             "e-sign area — visual geometry check for a descriptor")
+        "e-sign area — visual geometry check for a descriptor",
+    )
     sp.add_argument("form_id")
     sp.add_argument("-o", "--output", required=True)
 
@@ -1564,13 +1719,13 @@ def main() -> int:
     sp = sub.add_parser(
         "check",
         help="fill every registered form (autos only, then every field), "
-             "render its geometry preview, and report; exit 1 on any failure. "
-             "PROSAIC_LAYERS_ROOT=<checkout> checks that checkout's local/ "
-             "and modules/ descriptors under this engine")
+        "render its geometry preview, and report; exit 1 on any failure. "
+        "PROSAIC_LAYERS_ROOT=<checkout> checks that checkout's local/ "
+        "and modules/ descriptors under this engine",
+    )
     sp.add_argument("form_ids", nargs="*", help="default: every registered form")
     sp.add_argument("--keep", metavar="DIR", help="keep the rendered PDFs here")
-    sp.add_argument("--strict", action="store_true",
-                    help="also fail on descriptor warnings")
+    sp.add_argument("--strict", action="store_true", help="also fail on descriptor warnings")
 
     args = p.parse_args()
     if args.cmd == "check":
@@ -1583,7 +1738,9 @@ def main() -> int:
     if args.cmd == "list":
         for f in list_forms():
             d = load_descriptor(f)
-            print(f"{f:<10} {d.get('title', '')}  [{d.get('domain', '')} rev {d.get('revision', '?')}]")
+            print(
+                f"{f:<10} {d.get('title', '')}  [{d.get('domain', '')} rev {d.get('revision', '?')}]"
+            )
         return 0
     if args.cmd == "fields":
         print(skeleton_yaml(Path(args.pdf)))
@@ -1618,8 +1775,14 @@ def main() -> int:
     if args.cmd == "fill":
         data = yaml.safe_load(Path(args.data).read_text()) if args.data else {}
         meta = yaml.safe_load(Path(args.meta).read_text()) if args.meta else {}
-        res = fill(args.form_id, Path(args.output), meta=meta, data=data,
-                   verbose=bool(getattr(args, "verbose", False)))
+        res = fill(
+            args.form_id,
+            Path(args.output),
+            meta=meta,
+            data=data,
+            verbose=bool(getattr(args, "verbose", False)),
+            pages=getattr(args, "pages", None),
+        )
         for w in res.warnings:
             print(f"warning: {w}", file=sys.stderr)
         print(f"wrote {res.output_path}")

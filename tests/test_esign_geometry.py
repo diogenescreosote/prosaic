@@ -23,6 +23,7 @@ from pathlib import Path
 from types import ModuleType
 
 import pytest
+from pypdf import PdfReader
 
 REPO_ROOT = Path(__file__).resolve().parent.parent
 FORM_FILL = REPO_ROOT / "pleading" / "form_fill.py"
@@ -65,29 +66,40 @@ def client_module() -> ModuleType:
     return mod
 
 
-def fill(form_id: str, tmp_path: Path) -> Path:
+def _run_fill(
+    form_id: str,
+    tmp_path: Path,
+    pages: str | None = None,
+    stem: str | None = None,
+) -> tuple[Path, subprocess.CompletedProcess[str]]:
+    """Fill a form into ``tmp_path``; the caller decides what a nonzero
+    exit means."""
     import yaml
 
+    tmp_path.mkdir(parents=True, exist_ok=True)
     (tmp_path / "meta.yaml").write_text(yaml.safe_dump(META))
     (tmp_path / "data.yaml").write_text(yaml.safe_dump(DATA))
-    out = tmp_path / f"{form_id}.pdf"
-    proc = subprocess.run(
-        [
-            sys.executable,
-            str(FORM_FILL),
-            "fill",
-            form_id,
-            "--meta",
-            str(tmp_path / "meta.yaml"),
-            "--data",
-            str(tmp_path / "data.yaml"),
-            "-o",
-            str(out),
-        ],
-        capture_output=True,
-        text=True,
-        timeout=300,
-    )
+    out = tmp_path / f"{stem or form_id}.pdf"
+    argv = [
+        sys.executable,
+        str(FORM_FILL),
+        "fill",
+        form_id,
+        "--meta",
+        str(tmp_path / "meta.yaml"),
+        "--data",
+        str(tmp_path / "data.yaml"),
+        "-o",
+        str(out),
+    ]
+    if pages:
+        argv += ["--pages", pages]
+    proc = subprocess.run(argv, capture_output=True, text=True, timeout=300)
+    return out, proc
+
+
+def fill(form_id: str, tmp_path: Path, pages: str | None = None, stem: str | None = None) -> Path:
+    out, proc = _run_fill(form_id, tmp_path, pages=pages, stem=stem)
     assert proc.returncode == 0, proc.stderr
     return out
 
@@ -110,6 +122,43 @@ def test_form_fill_writes_a_build_sidecar_on_the_rules(
     assert sidecar["source"] == "build"
     assert {f["name"]: f["type"] for f in sidecar["fields"]} == expected
     assert client_module().sidecar_geometry_problems(out, sidecar) == []
+
+
+@pytest.mark.parametrize("form_id", ["subp001", "subp002", "subp010", "subp015"])
+def test_proof_of_service_pages_carry_signature_geometry(form_id: str, tmp_path: Path) -> None:
+    """Every subpoena's proof of service is signed by the server after
+    service, so its date and signature must be placeable by the build."""
+    out = fill(form_id, tmp_path)
+    sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
+    got = {f["name"]: f["type"] for f in sidecar["fields"]}
+    assert got == {"pos_sig_date": "date", "pos_signature": "signature"}
+    assert client_module().sidecar_geometry_problems(out, sidecar) == []
+
+
+def test_pages_subset_renumbers_the_sidecar(tmp_path: Path) -> None:
+    """A proof of service travels without the subpoena's face. The kept
+    page becomes page 1 and its geometry has to follow, or DocuSeal
+    places the signature on a page that is no longer there."""
+    whole = fill("subp010", tmp_path / "whole")
+    whole_fields = json.loads(whole.with_name(whole.name + ".fields.json").read_text())["fields"]
+    assert {f["page"] for f in whole_fields} == {2}
+
+    out = fill("subp010", tmp_path / "pos", pages="2")
+    assert len(PdfReader(str(out)).pages) == 1
+    fields = json.loads(out.with_name(out.name + ".fields.json").read_text())["fields"]
+    assert {f["page"] for f in fields} == {1}
+    # Only the page moved; the box itself is untouched.
+    assert [(f["name"], f["x"], f["y_top"], f["w"], f["h"]) for f in fields] == [
+        (f["name"], f["x"], f["y_top"], f["w"], f["h"]) for f in whole_fields
+    ]
+    sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
+    assert client_module().sidecar_geometry_problems(out, sidecar) == []
+
+
+def test_pages_subset_rejects_a_page_the_form_does_not_have(tmp_path: Path) -> None:
+    _, proc = _run_fill("subp010", tmp_path, pages="5")
+    assert proc.returncode != 0
+    assert "outside a 2-page form" in proc.stderr
 
 
 def test_form_without_esign_fields_writes_no_sidecar(tmp_path: Path) -> None:

@@ -31,6 +31,11 @@ blank: subp015.pdf
 # a service copy (ADR-0046).
 technology: overlay
 
+# The proof of service is signed by whoever served the papers ---
+# never by the clerk who issued the form. One party, so the roster
+# for `sc docuseal send` is a single --to.
+esign_parties: [server]
+
 # UI chrome under SUBP-015[0].#pageSet[0].LastPage[0].PXFooter[0].
 # FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,
 # drawn on page 2. Stripped from service copies.
@@ -305,6 +310,18 @@ fields:
       Date next to the server's perjury signature — LEAVE BLANK for the
       server to hand-date when signing.
     default: ""
+    esign: {type: date, party: server}
+  pos_signature:
+    page: 2
+    rect: [54, 86, 270, 111]
+    # No widget exists for the signature stroke --- the blank draws
+    # only a rule. Hand-authored rect, sitting on that rule and
+    # stopping clear of the date box above it; the rule's own
+    # extent came from the blank's vector geometry, not from text
+    # positions, which sit inside a transformed XObject here.
+    doc: "(SIGNATURE) on the proof of service --- reserved; never machine-filled"
+    default: ''
+    esign: {type: signature, party: server}
   pos_sheriff_sig_date:
     map: "SUBP-015[0].Page2[0].Sign2[0].Date3[0]"
     page: 2
