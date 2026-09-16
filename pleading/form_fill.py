@@ -741,6 +741,33 @@ def resolve_values(
                 f"unknown key '{leftover}' in forms.{desc['form']} block "
                 f"(not in {desc['form']} descriptor) --- it was IGNORED"
             )
+    # A descriptor may declare `checkbox_groups:` to enforce a role-style
+    # checkbox constraint (MC-030's Attorney/Plaintiff/Petitioner/
+    # Defendant/Respondent/Other row is the motivating case). The
+    # constraint only fires once a caller has actually started setting
+    # boxes in the group --- an mc030 left entirely blank for the human
+    # to hand-check at signing is the long-documented default and stays
+    # valid; a source that sets ONE box in a group but not correctly
+    # (zero, or more than one, or "Other" without its specify text) is
+    # a real defect the build should catch before it becomes a signed
+    # page with a wrong or missing box.
+    for group in desc.get("checkbox_groups") or []:
+        boxes = group.get("boxes") or []
+        if group.get("require") == "exactly_one" and any(b in explicit_checks for b in boxes):
+            checked = [b for b in boxes if checks.get(b)]
+            if len(checked) != 1:
+                raise ValueError(
+                    f"{desc['form']}: checkbox group {boxes} requires "
+                    f"exactly one checked box, got {len(checked)} "
+                    f"({checked or 'none'})"
+                )
+        for box, field in (group.get("text_required_when") or {}).items():
+            if checks.get(box) and not texts.get(field, "").strip():
+                raise ValueError(
+                    f"{desc['form']}: checkbox '{box}' is checked but "
+                    f"required field '{field}' is blank"
+                )
+
     return texts, checks, explicit_checks, problems
 
 
@@ -1627,8 +1654,19 @@ def _sample_data(desc: dict) -> dict:
     data: dict = {}
     for name, spec in (desc.get("fields") or {}).items():
         data[name] = str(spec.get("example") or spec.get("default") or f"{name} sample")
+    # A checkbox_groups member can't just be set True indiscriminately
+    # like an ordinary checkbox --- exactly one member of the group may
+    # be checked at once, or the fill itself raises. Check the first
+    # (still exercises its rect) and explicitly clear the rest.
+    grouped: set[str] = set()
+    for group in desc.get("checkbox_groups") or []:
+        boxes = group.get("boxes") or []
+        grouped.update(boxes)
+        for i, box in enumerate(boxes):
+            data[box] = i == 0
     for name in desc.get("checkboxes") or {}:
-        data[name] = True
+        if name not in grouped:
+            data[name] = True
     return data
 
 

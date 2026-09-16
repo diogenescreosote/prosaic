@@ -144,10 +144,50 @@ fields:
     doc: "'Other (Specify):' next to the role checkboxes — usually blank"
     default: ""
 
-checkboxes: {}
-# The Attorney/Plaintiff/Petitioner/Defendant/Respondent/Other role
-# checkboxes are deliberately unmapped: the declarant checks the right
-# one by hand at signing time, like the date and signature.
+checkboxes:
+  # Hand-authored rects, not `map:` --- the blank's AcroForm gives every
+  # one of these six widgets the SAME qualified name ("CheckBox 2" /
+  # "CheckBx 2"), so a name lookup can only ever reach the first.
+  role_attorney:
+    page: 1
+    rect: [315.70258, 83.73532, 328.09927, 93.65268]
+    doc: "'Attorney for' role checkbox"
+  role_plaintiff:
+    page: 1
+    rect: [390.90921, 83.73532, 403.30591, 93.65268]
+    doc: "'Plaintiff' role checkbox"
+  role_petitioner:
+    page: 1
+    rect: [447.10757, 83.73532, 459.50427, 93.65268]
+    doc: "'Petitioner' role checkbox"
+  role_defendant:
+    page: 1
+    rect: [515.70264, 83.73532, 528.09933, 93.65268]
+    doc: "'Defendant' role checkbox"
+  role_respondent:
+    page: 1
+    rect: [315.70258, 68.85928, 328.09927, 78.77664]
+    doc: "'Respondent' role checkbox"
+  role_other:
+    page: 1
+    rect: [390.90921, 68.03284, 403.30591, 78.77664]
+    doc: "'Other (Specify):' role checkbox"
+
+# Left entirely blank (the historic default), the declarant checks the
+# right one by hand at signing time, like the date and signature --
+# that stays valid. But once a source starts setting any box in this
+# row (the third-party-declarant case: the declarant is not a party or
+# attorney in this case, so their role is knowable and worth filling in
+# at drafting time rather than leaving for hand-completion), exactly
+# one of Plaintiff/Petitioner/Defendant/Respondent/Other must be
+# checked -- role_attorney is independent (a party's own attorney can
+# also be, e.g., the Respondent) -- and Other requires
+# other_role_specify to say what the role is.
+checkbox_groups:
+  - boxes: [role_plaintiff, role_petitioner, role_defendant, role_respondent, role_other]
+    require: exactly_one
+    text_required_when:
+      role_other: other_role_specify
 
 agent_guide: |
   MC-030 is the general-purpose declaration cover form. prosaic's
@@ -164,5 +204,23 @@ agent_guide: |
           body: "Custom body text instead of 'See attached…'"
           print_name: "Declarant Name"     # else parsed from paper_title
 
-  Date, signature, and the role checkbox are ALWAYS left blank for the
-  human to complete at signing. Do not fill them.
+  Date and signature are ALWAYS left blank for the human to complete
+  at signing. Do not fill them.
+
+  The role checkbox (Attorney for/Plaintiff/Petitioner/Defendant/
+  Respondent/Other) is usually ALSO left blank for hand-completion at
+  signing, when the declarant is a party or their attorney and their
+  own role could plausibly be checked either way. For a third-party
+  declarant whose role is fixed and knowable at drafting time (an
+  expert, a treating provider, a witness), set it explicitly instead:
+
+      forms:
+        mc030:
+          role_other: true
+          other_role_specify: "Family Therapist"
+
+  The build enforces exactly one of Plaintiff/Petitioner/Defendant/
+  Respondent/Other once any of them is set, and requires
+  other_role_specify whenever role_other is checked; role_attorney is
+  independent of that group (a party's own attorney may also be, say,
+  the Respondent).
