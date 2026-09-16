@@ -140,6 +140,7 @@ fields:
     auto: declarant_name
   other_role_specify:
     map: FillText1885
+    align: center
     page: 1
     doc: "'Other (Specify):' next to the role checkboxes — usually blank"
     default: ""
