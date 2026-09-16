@@ -539,6 +539,7 @@ def text_origins(
     align: Optional[str] = None,
     valign: Optional[str] = None,
     layout: Optional[Layout] = None,
+    leading_ratio: Optional[float] = None,
 ) -> list[tuple[float, float]]:
     """Baseline origin (x, y) for each line of text drawn into ``rect``.
 
@@ -549,7 +550,9 @@ def text_origins(
     centered in its cell; with no geometry it centers in the rect.
     ``align`` (left, center, right) and ``valign`` (top, middle, bottom)
     pin exceptions per field and override the layout's placement.
+    ``leading_ratio`` overrides the module default line spacing.
     """
+    leading_ratio = leading_ratio if leading_ratio is not None else LEADING_RATIO
     x0, x1 = min(rect[0], rect[2]), max(rect[0], rect[2])
     y0, y1 = min(rect[1], rect[3]), max(rect[1], rect[3])
     multi = len(lines) > 1
@@ -575,7 +578,7 @@ def text_origins(
     # first line's baseline. Cap height is taken as 0.72 em, so a line
     # is visually centered when its baseline sits 0.36 em below the
     # midline — the same convention a viewer uses for a widget's text.
-    spread = (len(lines) - 1) * size * LEADING_RATIO
+    spread = (len(lines) - 1) * size * leading_ratio
     if valign == "top":
         first = y1 - size
     elif valign == "bottom":
@@ -592,7 +595,7 @@ def text_origins(
             x = x1 - TEXT_INSET - w
         else:
             x = (x0 + x1) / 2.0 - w / 2.0
-        origins.append((x, first - j * size * LEADING_RATIO))
+        origins.append((x, first - j * size * leading_ratio))
     return origins
 
 
@@ -642,15 +645,16 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     font = str(spec.get("font") or DEFAULT_FONT)
     can_shrink = "shrink" in strategy or strategy == "overflow_attachment"
     can_wrap = "wrap" in strategy or strategy == "overflow_attachment" or spec.get("multiline")
+    leading_ratio = float(spec.get("leading_ratio") or LEADING_RATIO)
 
     while True:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
         widest = max((stringWidth(l, font, size) for l in lines), default=0.0)
         if len(lines) > 1:
             # We draw the lines ourselves (first baseline one size below
-            # the top, then LEADING_RATIO per line), so the extent is
+            # the top, then leading_ratio per line), so the extent is
             # exactly what the renderer will use; no viewer is involved.
-            fits_h = size * (1 + (len(lines) - 1) * LEADING_RATIO) <= height
+            fits_h = size * (1 + (len(lines) - 1) * leading_ratio) <= height
         else:
             # Single line: viewers vertically center the text in the
             # widget, and JC forms routinely give one-line fields a rect
@@ -966,6 +970,15 @@ def fill(
     pending_overlay: list[dict] = []
 
     fields = desc.get("fields") or {}
+    style_overrides = (meta.get("form_style") or {}).get(form_id) or {}
+    if style_overrides:
+        merged = dict(fields)
+        for fname, overrides in style_overrides.items():
+            if fname not in merged:
+                continue
+            keep = {k: v for k, v in overrides.items() if k in ("font_size", "leading_ratio")}
+            merged[fname] = {**merged[fname], **keep}
+        fields = merged
     for name, spec in fields.items():
         value = texts.get(name, "")
         if not value:
@@ -1135,6 +1148,7 @@ def fill(
                         spec.get("align"),
                         spec.get("valign"),
                         op.get("layout"),
+                        spec.get("leading_ratio"),
                     ),
                 ):
                     c.drawString(x, y, line)
@@ -1248,10 +1262,11 @@ def _chunk_for_mc025(text: str, rect: list[float], spec: dict) -> list[str]:
     # render size re-wrap in the viewer into orphan fragments.
     size = float(spec.get("font_size") or DEFAULT_FONT_SIZE)
     font = str(spec.get("font") or DEFAULT_FONT)
+    leading_ratio = float(spec.get("leading_ratio") or LEADING_RATIO)
     pad = 4.0
     width = abs(rect[2] - rect[0]) - pad
     height = abs(rect[3] - rect[1]) - 2.0
-    per_page = max(1, int(height // (size * LEADING_RATIO)))
+    per_page = max(1, int(height // (size * leading_ratio)))
     lines = _wrap_to_width(text, font, size, width)
     return ["\n".join(lines[i : i + per_page]) for i in range(0, len(lines), per_page)]
 

@@ -130,6 +130,41 @@ def test_checkbox_mark_lands_inside_its_box(tmp_path):
         f"no X mark inside role_respondent box {rect}; X's at {xs}")
 
 
+def test_text_origins_leading_ratio_overrides_default_spacing():
+    lines = ["Line one", "Line two", "Line three"]
+    rect = [100, 100, 300, 400]
+    default = form_fill.text_origins(lines, rect, 10, "Helvetica", "left", "top")
+    wide = form_fill.text_origins(
+        lines, rect, 10, "Helvetica", "left", "top", leading_ratio=1.5)
+    default_gap = default[0][1] - default[1][1]
+    wide_gap = wide[0][1] - wide[1][1]
+    assert abs(default_gap - 10 * form_fill.LEADING_RATIO) < 1e-6
+    assert abs(wide_gap - 10 * 1.5) < 1e-6
+    assert wide_gap > default_gap
+
+
+def test_form_style_overrides_font_size_for_one_field(tmp_path):
+    """A document's own front matter (``form_style:``) can pin a bigger
+    or smaller size for one field without editing the shared registry.
+    (mc040_effective_date carries no size_group, so nothing else in the
+    form can pull the override back down.)"""
+    out, _ = _fill(tmp_path)
+    baseline = [s for (t, _x, _y, s) in _runs(PdfReader(str(out)).pages[0])
+                if t == "August 21, 2026"][0]
+
+    out2 = tmp_path / "mc040_styled.pdf"
+    target = baseline * 0.65  # smaller than baseline: guaranteed to still fit the
+                              # widget's rect, so the shrink loop cannot mask
+                              # whether the override actually took effect
+    meta = {**META, "form_style": {"mc040": {
+        "mc040_effective_date": {"font_size": target, "leading_ratio": 1.5},
+    }}}
+    form_fill.fill("mc040", out2, meta=meta, data=dict(DATA))
+    styled = [s for (t, _x, _y, s) in _runs(PdfReader(str(out2)).pages[0])
+              if t == "August 21, 2026"][0]
+    assert abs(styled - target) < 0.01, (baseline, target, styled)
+
+
 def test_size_group_members_share_a_size(tmp_path):
     # A deliberately long street forces a shrink; the (short) city line
     # must come down to the same size rather than render larger.

@@ -88,6 +88,8 @@ forms:
   - cover_sheet              # form id prepended ahead of the document
   - cover_sheet_only         # the filled cover_sheet form IS the whole output; no body page
   - forms                    # per-form field block, keyed by form id
+  - form_style               # per-form, per-field style overrides (font_size, leading_ratio),
+                             # keyed by form id then field name -- values only, not spec
   - consumer_notices         # SUBP-025 recipients, one notice each
   - efs020_party_name        # cover_sheet: efs020 -- overrides item 1 (default: filer_name)
   - efs020_title             # cover_sheet: efs020 -- overrides item 2 (default: paper_title)
