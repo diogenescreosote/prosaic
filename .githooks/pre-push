@@ -26,7 +26,10 @@ set -e
 repo_root=$(git rev-parse --show-toplevel)
 cd "$repo_root"
 
-CHECKS="tests/test_repo_hygiene.py tests/test_leak_guard.py"
+# docs_coverage included: the self-referential checks (the test count
+# in TECHNICAL.md) go stale on any commit that adds tests, and CI was
+# repeatedly red for exactly that. The whole set runs in seconds.
+CHECKS="tests/test_repo_hygiene.py tests/test_leak_guard.py tests/test_docs_coverage.py"
 
 # uv owns the environment for this repo; fall back to a python that
 # already has pytest, for clones driven some other way.
