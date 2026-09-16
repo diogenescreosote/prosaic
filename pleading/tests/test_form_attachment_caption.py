@@ -221,23 +221,33 @@ def test_cover_sheet_only_requires_cover_sheet(tmp_path):
 
 
 @MC050_ONLY
-def test_cover_sheet_only_rejects_exhibits(tmp_path):
-    """No body means no document for an exhibit appendix to attach behind."""
+def test_cover_sheet_only_with_a_cover_sheet_allows_exhibits(tmp_path):
+    """The filled form is itself the thing exhibits attach behind: no
+    separately-built body is needed for the merge that already works
+    for an ordinary body to work the same way here."""
     proc = render_mc050(
         tmp_path,
         extra=(
             "cover_sheet: mc050\n"
             "cover_sheet_only: true\n"
+            "no_exhibit_list: true\n"
             "exhibits:\n"
             "  - shortname: \"stray\"\n"
             "    title: \"Stray Exhibit\"\n"
             "    sealed: true\n"
         ),
     )
-    assert proc.returncode != 0
-    assert "exhibits" in proc.stderr
-    assert "cover_sheet_only" in proc.stderr
-    assert not (tmp_path / "sub.pdf").exists()
+    assert proc.returncode == 0, proc.stderr
+    out = tmp_path / "sub.pdf"
+    assert out.exists()
+    blank_pages = len(PdfReader(str(PLEADING_DIR / "forms" / "mc050.pdf")).pages)
+    built_pages = len(PdfReader(str(out)).pages)
+    # The sealed exhibit gets a placeholder tab in the (default) public
+    # variant: one page beyond the bare form.
+    assert built_pages == blank_pages + 1, (
+        f"expected the {blank_pages}-page MC-050 plus one placeholder "
+        f"tab for the sealed exhibit, got {built_pages} pages"
+    )
 
 
 @MC050_ONLY

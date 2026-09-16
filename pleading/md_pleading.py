@@ -1661,10 +1661,13 @@ def validate_meta(meta: Dict, input_path: Path, variant: str,
             raise ValueError("to_address_lines must be a YAML list of strings")
     exhibits = _parse_exhibits(meta, input_path.parent.resolve(), variant,
                                render_md=render_md_exhibits)
-    if meta.get("cover_sheet_only") and exhibits:
-        # cover_sheet_only skips building any body at all, and an
-        # exhibit appendix has nothing to attach behind -- there is no
-        # document for it to follow.
+    if (meta.get("cover_sheet_only") and exhibits
+            and not meta.get("cover_sheet")):
+        # cover_sheet_only with no cover_sheet at all has no body and no
+        # form either -- an exhibit appendix has nothing to attach
+        # behind. With a cover_sheet, the filled form itself is the
+        # thing exhibits attach behind (see the cover_sheet_only branch
+        # in render_pleading), so this is fine.
         raise ValueError(
             "cover_sheet_only: true has no body to attach exhibits to -- "
             "remove `exhibits:` or drop `cover_sheet_only`"
@@ -5112,6 +5115,21 @@ def main() -> None:
         # Anything registered in forms/registry/ is handled generically
         # by form_fill.py (descriptor-driven fill; see docs/forms.md).
         import form_fill
+        if exhibits:
+            # \exhibit{shortname} works in cover-sheet form field text
+            # too (e.g. a short MC-030 body that cites its own
+            # attached exhibit), not just in a pleading's main body.
+            forms_block = dict(meta.get("forms") or {})
+            form_block = dict(forms_block.get(cover_sheet) or {})
+            substituted = {
+                k: (substitute_exhibit_refs(v, exhibit_map, doctype=doctype)
+                    if isinstance(v, str) else v)
+                for k, v in form_block.items()
+            }
+            if substituted != form_block:
+                forms_block[cover_sheet] = substituted
+                meta = dict(meta)
+                meta["forms"] = forms_block
         try:
             descriptor = form_fill.load_descriptor(cover_sheet)
             pages_attached_field = descriptor.get("pages_attached_field")
@@ -5135,12 +5153,38 @@ def main() -> None:
                 f"Unsupported cover_sheet value: {cover_sheet!r}. {exc}"
             )
         if cover_sheet_only:
-            # The filled form IS the document: write it straight to
-            # output_path rather than prepending it onto a body that
-            # was never built.
-            shutil.copyfile(cover_path, output_path)
-            print(f"Wrote {form_display_id(cover_sheet)} as the entire "
-                  f"output ({output_path}) from {cover_path}")
+            if exhibits:
+                # The filled form IS the "main" page exhibits attach
+                # behind -- there is no separately-built body, but the
+                # same merge used for an ordinary body works unchanged
+                # with the cover sheet standing in for it.
+                exhibit_list_pdf = None
+                if not meta.get("no_exhibit_list"):
+                    with tempfile.TemporaryDirectory(
+                            prefix="md_pleading_cso_") as td:
+                        exhibit_list_pdf = Path(td) / "exhibit_list.pdf"
+                        list_title = f"{attachment_label} List"
+                        LineGridPDF(
+                            str(exhibit_list_pdf), footer_title=list_title,
+                            title=list_title,
+                            draft_banner=draft_banner_text(meta),
+                        ).build_exhibit_list(exhibits, label=attachment_label)
+                        merge_outputs(cover_path, exhibit_list_pdf, exhibits,
+                                      output_path, variant=variant,
+                                      label=attachment_label)
+                else:
+                    merge_outputs(cover_path, None, exhibits, output_path,
+                                  variant=variant, label=attachment_label)
+                print(f"Wrote {form_display_id(cover_sheet)} plus "
+                      f"{len(exhibits)} exhibit(s) as the entire output "
+                      f"({output_path})")
+            else:
+                # The filled form IS the document: write it straight to
+                # output_path rather than prepending it onto a body that
+                # was never built.
+                shutil.copyfile(cover_path, output_path)
+                print(f"Wrote {form_display_id(cover_sheet)} as the entire "
+                      f"output ({output_path}) from {cover_path}")
         else:
             form_fill.prepend(output_path, cover_path)
             print(f"Prepended {form_display_id(cover_sheet)} cover sheet from {cover_path}")
