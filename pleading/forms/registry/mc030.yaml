@@ -101,6 +101,7 @@ fields:
     auto: respondent
   case_number:
     map: FillText15
+    align: center
     page: 1
     auto: case_number
     doc: "Case number"
