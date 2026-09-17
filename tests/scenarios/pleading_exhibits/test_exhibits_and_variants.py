@@ -180,6 +180,32 @@ def test_exhibit_links_are_clickable_and_resolve_to_tab_pages(built):
         assert label in hits or label == "EXHIBIT E"
 
 
+def test_pdf_bookmarks_navigate_to_document_list_and_each_exhibit(built):
+    """The assembled PDF carries an outline (bookmarks): one entry for
+    the main document, one for the exhibit list, and one per attached
+    exhibit, each landing on its tab-sheet page -- so a reader can jump
+    straight to Exhibit C without scrolling a fifty-page packet."""
+    from pypdf import PdfReader
+    _m, sealed, _p = built
+    reader = PdfReader(str(sealed))
+    tabs = _tab_pages(sealed)
+
+    def page_index_of(dest) -> int:
+        target = dest["/Page"].get_object()
+        return next(i for i, p in enumerate(reader.pages) if p.get_object() == target)
+
+    outline = reader.outline
+    titled = {item.title: page_index_of(item) for item in outline
+              if not isinstance(item, list)}
+
+    assert "Document" in titled and titled["Document"] == 0
+    assert "Exhibit List" in titled
+    for label, page_idx in tabs.items():
+        letter = label.rsplit(" ", 1)[-1]
+        assert f"Exhibit {letter}" in titled, f"no bookmark for {label}"
+        assert titled[f"Exhibit {letter}"] == page_idx
+
+
 # ---------------------------------------------------------------------------
 # \redact{} and variants — the adversarial core
 # ---------------------------------------------------------------------------

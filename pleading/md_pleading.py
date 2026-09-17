@@ -4844,9 +4844,12 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
                   label: str = "Exhibit") -> None:
     writer = PdfWriter()
     append_pdf_direct(writer, main_pdf)
+    writer.add_outline_item("Document", 0)
 
     if exhibit_list_pdf and exhibit_list_pdf.exists():
+        exhibit_list_page_idx = len(writer.pages)
         append_pdf_direct(writer, exhibit_list_pdf)
+        writer.add_outline_item(f"{label} List", exhibit_list_page_idx)
 
     tab_page_map: Dict[str, int] = {}
     bates_page_map: Dict[str, int] = {}   # token -> output page index
@@ -4874,6 +4877,7 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
             tab_page_idx = len(writer.pages)
             tab_page_map[f"exhibit_{exhibit.letter}"] = tab_page_idx
             append_pdf_scaled(writer, tab_pdf)
+            writer.add_outline_item(f"{label} {exhibit.letter}", tab_page_idx)
             if exhibit.sealed:
                 continue
             first_idx = len(writer.pages)

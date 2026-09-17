@@ -78,6 +78,15 @@ const PDF_OPTIONS = {
   margin: { top: '0.3in', bottom: '0.3in', left: '0.4in', right: '0.4in' },
 };
 
+//: Real Gmail threads carry the sender's own inline HTML styling
+//: verbatim — pasted Outlook signatures, nested forward blocks, and
+//: mobile-composed replies routinely embed 6-7px font sizes that are
+//: illegible once printed. This is not a rendering bug in any single
+//: thread; it recurs across accounts and correspondents because it
+//: comes from the mail itself. Enforce a print-readable floor after
+//: layout rather than trying to strip or rewrite the source styling.
+const MIN_FONT_PX = 12;
+
 const QUOTED_MODES = ['show', 'hide'];
 const DEFAULT_QUOTED_MODE = 'show';
 
@@ -504,9 +513,25 @@ async function closeBrowser() {
   _page = null;
 }
 
+/** Bump any element whose rendered font size falls below `minPx` up to
+ * it, in place, after layout. Reads computed style (post-cascade) so it
+ * only touches text that is actually too small, regardless of whether
+ * the tiny size came from an inline style, a class, or inheritance. */
+async function enforceMinFontSize(page, minPx) {
+  await page.evaluate((min) => {
+    for (const el of document.body.querySelectorAll('*')) {
+      const size = parseFloat(getComputedStyle(el).fontSize);
+      if (size && size < min) {
+        el.style.setProperty('font-size', `${min}px`, 'important');
+      }
+    }
+  }, minPx);
+}
+
 async function htmlToPdf(htmlPath, pdfPath) {
   const page = await ensureBrowser();
   await page.goto(`file://${htmlPath}`, { waitUntil: 'networkidle2', timeout: 15000 });
+  await enforceMinFontSize(page, MIN_FONT_PX);
   await page.pdf({ path: pdfPath, ...PDF_OPTIONS });
 }
 
