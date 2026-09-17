@@ -1846,10 +1846,17 @@ def dependency_info(input_path: Path, requested_variant: Optional[str] = None,
     }
 
 
+def _is_single_simple_page(pages_spec: str) -> bool:
+    """True for a pages: spec selecting exactly one page number with
+    no range and no list, e.g. '8' but not '7-8' or '1, 3'."""
+    parts = [p.strip() for p in pages_spec.split(",")]
+    return len(parts) == 1 and "-" not in parts[0]
+
+
 def _format_page_citation(pages_spec: str) -> str:
     """Format a pages spec for inline citation, e.g. '2-3' → 'pp. 2–3', '2' → 'p. 2'."""
     parts = [p.strip() for p in pages_spec.split(",")]
-    is_single = len(parts) == 1 and "-" not in parts[0]
+    is_single = _is_single_simple_page(pages_spec)
     formatted = ", ".join(p.replace("-", "\u2013") for p in parts)
     return f"p. {formatted}" if is_single else f"pp. {formatted}"
 
@@ -1946,8 +1953,15 @@ def substitute_exhibit_refs(body: str, exhibit_map: Dict[str, Exhibit],
                             doctype: str = "pleading") -> str:
     """Replace \\exhibit{shortname} or \\attachment{shortname} with the
     doctype-appropriate citation (e.g. 'Exhibit A' for pleadings,
-    'Attachment A' for letters). If the exhibit has a pages spec,
-    appends 'pp. X-Y' to the citation."""
+    'Attachment A' for letters). If the exhibit has a pages spec
+    selecting more than one page, appends 'pp. X-Y' to the citation.
+    A `pages:` spec that selects exactly one simple page number (no
+    range, no list) is not cited by number: the attached exhibit is
+    then a single page with nothing printed on it to match a "p. X"
+    against (a Gmail thread export, say, carries no page numbers of
+    its own), so the pin cite would point at nothing a reader can see.
+    A citation naming a real range or list (the source's own visible
+    numbering, or Bates stamps via \\bates{}) is left alone."""
     label = exhibit_label_for_doctype(doctype)
 
     def repl(match: re.Match[str]) -> str:
@@ -1956,7 +1970,7 @@ def substitute_exhibit_refs(body: str, exhibit_map: Dict[str, Exhibit],
             raise ValueError(f"Unknown exhibit shortname referenced in body: {key}")
         ex = exhibit_map[key]
         cite = f"{label} {ex.letter}"
-        if ex.pages:
+        if ex.pages and not _is_single_simple_page(ex.pages):
             cite += f", {_format_page_citation(ex.pages)}"
         return cite
     return re.sub(r"\\(?:exhibit|attachment)\{([A-Za-z0-9_\-]+)\}", repl, body)
