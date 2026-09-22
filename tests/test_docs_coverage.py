@@ -57,9 +57,7 @@ def test_spec_does_not_promise_commands_that_do_not_exist():
     spec = read("specs/cli.md")
     promised = set(re.findall(r"\*\*`sc ([a-z-]+)", spec))
     stale = sorted(promised - commands)
-    assert not stale, (
-        f"specs/cli.md promises subcommands that no longer exist: {stale}"
-    )
+    assert not stale, f"specs/cli.md promises subcommands that no longer exist: {stale}"
 
 
 # --- decisions ------------------------------------------------------
@@ -71,23 +69,18 @@ def test_every_adr_is_in_the_index():
     assert adrs, "no ADRs found"
     index = read("design/README.md")
     missing = [a.name for a in adrs if a.name not in index]
-    assert not missing, (
-        f"these ADRs are not listed in design/README.md: {missing}"
-    )
+    assert not missing, f"these ADRs are not listed in design/README.md: {missing}"
 
 
 def test_adr_numbers_are_unique_and_contiguous():
     """Two ADRs sharing a number means one of them got written blind."""
     numbers = sorted(
-        int(p.name[:4])
-        for p in (REPO_ROOT / "design" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")
+        int(p.name[:4]) for p in (REPO_ROOT / "design" / "adr").glob("[0-9][0-9][0-9][0-9]-*.md")
     )
     duplicates = {n for n in numbers if numbers.count(n) > 1}
     assert not duplicates, f"duplicate ADR numbers: {sorted(duplicates)}"
     expected = list(range(1, len(numbers) + 1))
-    assert numbers == expected, (
-        f"ADR numbering has a gap: {sorted(set(expected) - set(numbers))}"
-    )
+    assert numbers == expected, f"ADR numbering has a gap: {sorted(set(expected) - set(numbers))}"
 
 
 def test_every_adr_states_a_status():
@@ -111,12 +104,10 @@ def test_every_doc_is_reachable_from_somewhere():
     for extra in ("cli/sc", "templates/matter/matter.yaml"):
         corpus += read(extra)
     # Docs may also legitimately be reached from a sibling doc.
-    sibling = "".join(
-        p.read_text(encoding="utf-8", errors="replace")
-        for p in docs
-    )
+    sibling = "".join(p.read_text(encoding="utf-8", errors="replace") for p in docs)
     orphans = [
-        d.name for d in docs
+        d.name
+        for d in docs
         if d.name not in corpus and d.name not in sibling.replace(d.read_text(), "")
     ]
     assert not orphans, (
@@ -144,15 +135,74 @@ def test_readme_test_count_is_current():
     assert claimed, "TECHNICAL.md no longer states a test count"
 
     proc = subprocess.run(
-        [sys.executable, "-m", "pytest", "--collect-only",
-         "-p", "no:cacheprovider"],
-        cwd=REPO_ROOT, capture_output=True, text=True,
+        [sys.executable, "-m", "pytest", "--collect-only", "-p", "no:cacheprovider"],
+        cwd=REPO_ROOT,
+        capture_output=True,
+        text=True,
     )
     found = re.search(r"(\d+) tests? collected", proc.stdout)
     assert found, f"could not read a collection count:\n{proc.stdout[-800:]}"
 
     stated, collected = int(claimed.group(1).replace(",", "")), int(found.group(1))
     assert stated == collected, (
-        f"TECHNICAL.md says {stated} tests; the suite collects {collected}. "
-        "Update TECHNICAL.md."
+        f"TECHNICAL.md says {stated} tests; the suite collects {collected}. Update TECHNICAL.md."
+    )
+
+
+# --- the pleading markup surface ------------------------------------
+#
+# A drafting agent asked whether the renderer supports paragraph
+# autonumbering, read the spec's "Supported constructs" list, found no
+# ordered lists in it, and answered no. The renderer has had `#. `
+# autonumbering the whole time; the spec had never mentioned it. The
+# list was not wrong so much as closed-looking, which is the ADR-0018
+# failure again: silently absent is indistinguishable from absent on
+# purpose. Six block macros were missing from the spec the same way.
+#
+# These two tests make the spec's coverage mechanical. They do not
+# check that the prose is any good.
+
+SPEC = "pleading/pleading_markdown_spec.md"
+GENERATOR = "pleading/md_pleading.py"
+
+#: Macros the renderer accepts but that are deliberately not in the
+#: spec's own vocabulary sections. Keep this empty if you can; every
+#: entry is a thing a drafter cannot look up.
+MACROS_NOT_IN_SPEC: set[str] = set()
+
+
+def test_every_renderer_macro_is_documented_in_the_spec():
+    """A macro the renderer accepts is a macro a drafter can look up."""
+    macros = set(re.findall(r"\\\\([a-zA-Z]+)\\\{", read(GENERATOR)))
+    assert macros, "found no macros — has md_pleading.py changed shape?"
+    spec = read(SPEC)
+    missing = sorted(m for m in macros - MACROS_NOT_IN_SPEC if "\\" + m not in spec)
+    assert not missing, (
+        f"these macros exist in {GENERATOR} but {SPEC} never mentions "
+        f"them: {missing}. Document each one, or add it to "
+        f"MACROS_NOT_IN_SPEC with a reason. A drafting agent reads the "
+        f"spec and believes it."
+    )
+
+
+def test_body_sentinels_are_documented_in_the_spec():
+    """Block-level sentinels are markup too, and are easy to forget.
+
+    A macro looks like markup and gets written down. A bare sentinel at
+    the head of a line --- `#. ` for paragraph autonumbering --- does
+    not, and that is exactly the one that went undocumented.
+    """
+    spec = read(SPEC)
+    for sentinel, where in (
+        ("`#. `", "paragraph autonumbering"),
+        ("`- `", "bulleted list items"),
+    ):
+        assert sentinel in spec, (
+            f"{SPEC} does not document the {sentinel} sentinel "
+            f"({where}). It is body markup; write it down."
+        )
+    assert "autonumber" in spec.lower(), (
+        f"{SPEC} never uses the word 'autonumber'. Paragraph "
+        f"autonumbering is the standard way to number a declaration; a "
+        f"drafter who greps for it must find it."
     )

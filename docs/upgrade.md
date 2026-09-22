@@ -13,7 +13,7 @@ sc upgrade .
 
 | Change | ADR | What `sc upgrade` does | What remains for a person or an agent |
 |---|---|---|---|
-| Routine commands and session brief | 0040 | installs or refreshes `.claude/settings.json` and the seven skills, path resolved; `settings.local.json` untouched | commit `config(harness)`; start a new session to see the brief |
+| Routine commands and session brief | 0040 | installs or refreshes `.claude/settings.json`, the relay commands and the knowledge skills from `skills/` (all but `deploy` and `new-matter`), paths resolved; `settings.local.json` untouched | commit `config(harness)`; start a new session to see the brief |
 | Text coverage | 0041 | runs `sc text ensure`: OCR copies and page-marked text for every document | photo pages need a human description; audio needs the local STT pipeline; commit `triage(text)` |
 | Derived tree | 0042 | `sc text migrate`: moves tool-written siblings under `derived/`; adds `derived/ocr/` to `.gitignore` | agent-made `_ocr.pdf` siblings that INDEX rows name move only with `--include-legacy-ocr` |
 | Knowledge vault | 0043 | preserves the single file under `knowledge/_migration/`, splits it into staging notes, makes `KNOWLEDGE.md` the index, adds `.obsidian/` to `.gitignore` | the `migrate-knowledge` skill (agent, Fable) folds staging into notes; a human reviews in Obsidian and removes staging; commit `record(knowledge)` |

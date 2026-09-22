@@ -153,17 +153,36 @@ def _copy_template_file(src: Path, target: Path) -> None:
         shutil.copy(src, target)
 
 
+#: Knowledge skills that act on the prosaic deployment or scaffold a new
+#: matter, rather than doing work inside an existing one. Installing these
+#: in a matter would offer an agent a tool whose whole subject is somewhere
+#: else. Everything else in skills/ ships to every matter.
+HARNESS_SKILLS_NOT_IN_MATTERS = {"deploy", "new-matter"}
+
+
 def cmd_harness(args: argparse.Namespace) -> int:
     """Install (or refresh) the coding-agent harness bundle in a matter.
 
-    The bundle is templates/matter/.claude: a SessionStart hook that
-    prints `sc brief`, and the routine slash commands (build, build-doc,
-    open, clean, status, commit, find). Each command runs the CLI and
-    relays; none deliberates (ADR-0040). Existing files are overwritten,
-    because the bundle is prosaic's, not the matter's: a matter
-    customizes through .claude/settings.local.json and its own skills
-    under other names. A matter's own settings.local.json is never
-    touched.
+    Two things get installed, both prosaic's rather than the matter's,
+    both overwritten on refresh. A matter customizes through
+    .claude/settings.local.json and its own skills under other names;
+    its settings.local.json is never touched.
+
+    First, templates/matter/.claude: a SessionStart hook that prints
+    `sc brief`, and the routine slash commands (build, build-doc, open,
+    clean, status, commit, find). Each runs the CLI and relays; none
+    deliberates (ADR-0040).
+
+    Second, the knowledge skills from skills/ --- redact,
+    drafting-conventions, triage-inbox, prove-electronic-service and
+    the rest. These used to live only in the prosaic checkout, which
+    meant no session inside a matter could load one: the workspace
+    contract says "load the `redact` skill and follow it" and that
+    instruction resolved to nothing. An agent that cannot reach the
+    skill does the work from memory, and the specific failure that
+    prompted this was a drafter answering a markup question out of a
+    doc it had half-read. Skills that act on the deployment rather than
+    on a matter stay out.
     """
     dest = _matter_root(Path(args.matter_dir))
     src = ROOT / "templates" / "matter" / ".claude"
@@ -176,6 +195,17 @@ def cmd_harness(args: argparse.Namespace) -> int:
         _copy_template_file(f, target)
         written += 1
         print(f"  wrote {target.relative_to(dest)}")
+    for skill in sorted((ROOT / "skills").iterdir()):
+        if not skill.is_dir() or skill.name in HARNESS_SKILLS_NOT_IN_MATTERS:
+            continue
+        for f in sorted(skill.rglob("*")):
+            if f.is_dir():
+                continue
+            target = dest / ".claude" / "skills" / skill.name / f.relative_to(skill)
+            target.parent.mkdir(parents=True, exist_ok=True)
+            _copy_template_file(f, target)
+            written += 1
+            print(f"  wrote {target.relative_to(dest)}")
     print(f"Harness bundle installed in {dest} ({written} files). "
           "Start a new session there to load the brief.")
     return 0

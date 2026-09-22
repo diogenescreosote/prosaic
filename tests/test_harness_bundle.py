@@ -247,3 +247,47 @@ def test_find_writes_a_checklist_above_ten_files_even_with_snippets(matter: Path
     out = sc("find", "-F", "Roth IRA", "--matter-dir", str(matter)).stdout
     assert "Roth IRA line 3" in out, "snippets still shown below the summary threshold"
     assert "CHECKLIST: derived/find/" in out and "12 file(s)" in out
+
+
+def test_knowledge_skills_reach_the_matter(matter: Path) -> None:
+    """The contract says "load the `redact` skill"; it has to be there.
+
+    Before this, skills/ lived only in the prosaic checkout. A session
+    inside a matter could not load one, so AGENTS.md's instructions to
+    load `redact` or follow `drafting-conventions` resolved to nothing
+    and the agent fell back on memory. That is how a drafter came to
+    answer a markup question out of a half-read doc.
+    """
+    proc = sc("harness", "install", str(matter))
+    assert proc.returncode == 0, proc.stderr
+    skills = matter / ".claude" / "skills"
+    for name in ("redact", "drafting-conventions", "triage-inbox", "prove-electronic-service"):
+        assert (skills / name / "SKILL.md").exists(), (
+            f"{name} did not reach the matter; the workspace contract tells agents to load it"
+        )
+    # the relay commands still land
+    assert (skills / "build" / "SKILL.md").exists()
+
+
+def test_deployment_skills_stay_out_of_matters(matter: Path) -> None:
+    """A matter is not the place to be offered `deploy` or `new-matter`."""
+    proc = sc("harness", "install", str(matter))
+    assert proc.returncode == 0, proc.stderr
+    skills = matter / ".claude" / "skills"
+    for name in ("deploy", "new-matter"):
+        assert not (skills / name).exists(), f"{name} acts on the deployment, not on this matter"
+
+
+def test_every_knowledge_skill_is_accounted_for() -> None:
+    """Each skills/ entry either ships to matters or is excluded on purpose.
+
+    A new skill added to skills/ should not quietly become unreachable
+    from the place the work happens.
+    """
+    source = (REPO_ROOT / "cli" / "sc").read_text()
+    excluded = re.search(r"HARNESS_SKILLS_NOT_IN_MATTERS = \{([^}]*)\}", source)
+    assert excluded, "HARNESS_SKILLS_NOT_IN_MATTERS is gone from cli/sc"
+    names = set(re.findall(r'"([a-z-]+)"', excluded.group(1)))
+    on_disk = {d.name for d in (REPO_ROOT / "skills").iterdir() if d.is_dir()}
+    unknown = sorted(names - on_disk)
+    assert not unknown, f"HARNESS_SKILLS_NOT_IN_MATTERS names skills that do not exist: {unknown}"

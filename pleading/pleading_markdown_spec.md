@@ -1056,9 +1056,29 @@ The body supports a deliberately narrow subset of Markdown so layout remains det
 - `## Heading` → level-2 heading
 - `### Heading` → level-3 heading
 - ordinary paragraphs separated by blank lines
+- **autonumbered paragraphs beginning with `#. `** (see **Paragraph
+  autonumbering** below) --- the standard way to number the paragraphs
+  of a declaration or a motion
 - bulleted list items beginning with `- ` or `* `
+- simple `>` block quotes and simple pipe tables
 - exhibit references in the form `\exhibit{shortname}`
-- inline emphasis: `*italic*`, `**bold**`, `***bold italic***`
+- footnotes (`[^id]`) and inline emphasis: `*italic*`, `**bold**`,
+  `***bold italic***`
+- the block macros, each documented in its own section below:
+  `\signblock{...}`, `\witnessattestation{...}`,
+  `\acknowledgment{...}`, `\jurat{...}`, `\proofofexecution{...}`,
+  `\sigrow{...}`, `\center{...}`, `\leftright{...}`,
+  `\barcode{...}`, `\barcodefile{...}`, `\blank{...}`, and the
+  redaction and proof-of-service macros
+
+**This list is the body grammar, not the whole markup surface.** The
+inline markup is in **Inline body markup**; the macros have their own
+sections. If you need to know whether the renderer supports something,
+the authority is `pleading/md_pleading.py` --- `parse_markdown_blocks`
+for block constructs and `parse_inline_styles` for inline ones --- not
+this list. A test (`tests/test_docs_coverage.py`) fails the build if a
+macro or body sentinel exists in the renderer and is undocumented here,
+so the gap should be small; it is not guaranteed to be zero.
 
 ### Inline formatting
 
@@ -1212,6 +1232,49 @@ These are not the target of the current version:
 
 If such constructs appear, they may render as plain wrapped text.
 
+## Paragraph autonumbering (`#. `)
+
+A body line beginning with the sentinel `#. ` is replaced at render
+time with a running counter: `1. `, `2. `, `3. `, in source order.
+
+```md
+#. I am the Respondent and I make this declaration of my own knowledge.
+
+## THE JANUARY MEETING
+
+#. On January 9 I met with the witness at her office.
+
+#. She produced the file described in \exhibit{file}.
+```
+
+renders as paragraphs `1.`, `2.`, `3.` --- the count does **not** reset
+at the intervening heading.
+
+Why it exists: hand-typed paragraph numbers desynchronize the moment a
+paragraph is inserted, moved or deleted, and the renderer will happily
+print `8, 9, 11, 10` because those are the characters in the file.
+Cross-references written as "paragraph 7" are still hand-maintained, so
+check them after reordering; the numbering itself is not.
+
+- The counter is **document-wide and flat**. It is deliberately not the
+  heading outline (`I.`, `A.`, `1.`), which restarts under each parent
+  --- see **Automatic section numbering** below.
+- Only lines starting exactly `#. ` (hash, period, whitespace) are
+  touched. A literal `1.` at the start of a line is left alone, so
+  existing sources that hard-number their paragraphs keep working and
+  can be converted one file at a time.
+- Indented and quoted sub-items are not affected.
+- The substitution runs before block parsing, so an autonumbered
+  paragraph is an ordinary paragraph in every other respect: inline
+  markup, exhibit references and footnotes all work inside it.
+
+Mixing sentinels and hard numbers in one document produces two
+independent sequences and is always a mistake. Convert the whole file:
+
+```bash
+perl -pi -e 's/^\d+\. /#. /' src/your_declaration.md
+```
+
 ## Automatic section numbering
 
 The generator automatically numbers headings in legal-outline style:
@@ -1341,6 +1404,51 @@ space for wet ink, never a DocuSeal role.
 rule of that length — write intent, not underscore runs. Expansion
 is shared by the PDF, TXT, and DOCX renderers, and the result still
 reads as a blank run to the e-sign field machinery above.
+
+## Notarial certificates and witness attestation
+
+Four block macros, each on a line of its own. All four are **kept
+whole**: a certificate the notary cannot read, sign and seal in one
+place is a defective certificate, so the renderer starts a new page
+rather than split one, and it leaves the seal zone clear so the stamp
+stays photographically reproducible.
+
+```
+\acknowledgment{SIGNER NAME}
+\jurat{SIGNER NAME}
+\proofofexecution{SUBSCRIBING WITNESS}{PRINCIPAL(S)}
+\witnessattestation{First Witness\\Second Witness}
+```
+
+- **`\acknowledgment{...}`** --- a California all-purpose
+  acknowledgment: the signer personally appeared and acknowledged
+  signing. Proves the signature, not the truth of the contents.
+- **`\jurat{...}`** --- a California jurat: the document was signed in
+  the notary's presence and sworn to. Use it where the content is
+  sworn; the acknowledgment is not a substitute.
+- **`\proofofexecution{witness}{principal}`** --- proof of execution by
+  a subscribing witness under Civil Code section 1195, for the case
+  where the principal cannot appear before the notary. The first
+  argument is the subscribing witness, the second the principal or
+  principals.
+- **`\witnessattestation{...}`** --- the attesting-witness signature
+  grid, one row per witness, names separated by `\\`. Not a notarial
+  act; it is the witnesses' own block, and it carries e-sign field
+  geometry like any signature block.
+
+## Barcodes
+
+```
+\barcode{<symbology>}{<payload>}{<caption?>}
+\barcodefile{<symbology>}{<path>}{<caption?>}
+```
+
+Renders a barcode at the text margin, with an optional caption beneath
+it. `\barcode` encodes the literal payload; `\barcodefile` encodes the
+contents of a file --- its path resolves against the **working
+directory**, which for an envelope build is the matter root, so write
+envelope-relative paths. The symbology is lowercase alphanumeric
+(for example `code128`, `qr`).
 
 ## Output specification
 

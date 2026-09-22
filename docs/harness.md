@@ -36,6 +36,21 @@ output on a small model at low effort.
 .claude/skills/secondopinion/  /secondopinion <env> -- <brief>   another vendor's suggestions, weighed and presented
 ```
 
+Alongside the relay commands, the **knowledge skills** from `skills/`
+are installed into the same directory --- `redact`,
+`drafting-conventions`, `triage-inbox`, `prove-electronic-service`,
+`fill-form`, `build-envelope`, `migrate-knowledge`, `proof`,
+`docuseal`, `run-flow`, `phone-logs`, `crypto-attest`, `estate-plan`.
+These are not relays: they are procedures an agent loads and follows.
+`deploy` and `new-matter` are deliberately left out, because their
+subject is the deployment rather than a matter.
+
+They belong in the matter for the same reason the relays do ---
+reachability. The workspace contract tells an agent to "load the
+`redact` skill and follow it," and before this they lived only in the
+prosaic checkout, so that instruction resolved to nothing and the
+agent worked from memory instead.
+
 Each SKILL.md has the checkout path baked in at install time (the
 template carries `@@PROSAIC@@`), so moving the prosaic checkout means
 running `sc harness install` again.
