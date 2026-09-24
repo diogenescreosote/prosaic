@@ -486,6 +486,33 @@ def test_line_layout_centers_on_the_rule():
     assert y == pytest.approx(ry + form_fill.RULE_LIFT)
 
 
+def test_table_row_rule_is_clipped_to_the_fields_column():
+    """A table draws one rule under a whole row and splits it with
+    vertical column rules. Each cell's value centers on its own column's
+    stretch, not the full row, or neighbouring columns overprint."""
+    from reportlab.pdfbase.pdfmetrics import stringWidth
+    geom = form_fill.PageGeometry(
+        spans=[],
+        rules=[(50.0, 298.0, 576.0)],
+        vrules=[(50.0, 219.0, 328.0), (214.0, 219.0, 328.0),
+                (361.0, 219.0, 328.0), (576.0, 219.0, 328.0)],
+        cells=[],
+    )
+    for rect, lo, hi in (([53, 300, 212, 312], 50.0, 214.0),
+                         ([216, 300, 359, 312], 214.0, 361.0)):
+        lay = form_fill.classify_layout(rect, geom)
+        assert lay is not None and lay.kind == "line"
+        assert lay.rule == (lo, 298.0, hi)
+        [(x, _y)] = form_fill.text_origins(["Row text"], rect, 9.0, form_fill.DEFAULT_FONT,
+                                           layout=lay)
+        w = stringWidth("Row text", form_fill.DEFAULT_FONT, 9.0)
+        assert rect[0] <= x and x + w <= rect[2]
+    # A signature line with no vertical rules keeps its full length.
+    bare = form_fill.PageGeometry(spans=[], rules=[(50.0, 298.0, 300.0)], vrules=[], cells=[])
+    lay = form_fill.classify_layout([60, 300, 290, 312], bare)
+    assert lay is not None and lay.rule == (50.0, 298.0, 300.0)
+
+
 def test_box_layout_centers_in_the_cells_free_area():
     from reportlab.pdfbase.pdfmetrics import stringWidth
     import probe

@@ -208,7 +208,8 @@ viewer's layout.
 Placement: the engine reads what the blank prints around each field
 and places a single-line value accordingly — beside its label
 (`labeled`: left, vertically centered), centered on its signature rule
-(`line`), or centered in the free area of its bordered cell (`box`,
+(`line`; in a table, only the stretch of the row rule between the
+column's vertical rules), or centered in the free area of its bordered cell (`box`,
 under a "CASE NUMBER:"-style label); with none of those it centers in
 the widget's rectangle. A block of lines (an address, a wrapped answer)
 anchors at the top left. `layout: labeled | line | box`, `align: left |

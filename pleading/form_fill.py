@@ -500,6 +500,14 @@ def classify_layout(rect: list[float], geom: Optional[PageGeometry]) -> Optional
     ]
     if rules:
         rule = max(rules, key=lambda r: r[2] - r[0])
+        # A table draws one rule under a whole row and splits it into
+        # columns with vertical rules; the field's line is only its own
+        # column's stretch of that rule. A signature line has no
+        # vertical rules crossing it, so it keeps its full length.
+        left = [v[0] for v in geom.vrules if rule[0] < v[0] <= x0 + 2.0 and v[1] <= mid <= v[2]]
+        right = [v[0] for v in geom.vrules if x1 - 2.0 <= v[0] < rule[2] and v[1] <= mid <= v[2]]
+        if left or right:
+            rule = (max(left, default=rule[0]), rule[1], min(right, default=rule[2]))
         # A parenthesized caption right under the rule — "(TYPE OR PRINT
         # NAME)", "(SIGNATURE OF DECLARANT)" — is the signature-line
         # convention, whatever is printed above. Otherwise a label

@@ -60,7 +60,9 @@ have.
    - *line*: a rule spans the field just below it and no label precedes
      it (a parenthesized caption under the rule — "(TYPE OR PRINT NAME)"
      — settles it). The value centers on the rule, baseline just above
-     it.
+     it. A table row's rule runs under every column; vertical rules
+     crossing the row clip it to the field's own column, so each cell
+     centers in its column rather than across the whole table.
    - *box*: the field lies in a bordered cell whose only text is a label
      above it ("CASE NUMBER:"), or on a rule with such a label touching
      its top. The value centers in the cell's free area — between the
