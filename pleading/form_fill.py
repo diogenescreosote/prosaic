@@ -1596,6 +1596,9 @@ def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
         and cache.stat().st_mtime >= input_md.stat().st_mtime
         and cache.stat().st_mtime >= blank.stat().st_mtime
         and cache.stat().st_mtime >= descriptor_file.stat().st_mtime
+        # A placement fix in the engine changes what a fill draws, so an
+        # older engine's cache is stale too.
+        and cache.stat().st_mtime >= Path(__file__).stat().st_mtime
     )
     if not fresh:
         res = fill(form_id, cache, meta=meta)

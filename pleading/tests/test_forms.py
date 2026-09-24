@@ -293,6 +293,18 @@ class TestCoverSheetCachePath:
         assert out_a != out_b
         assert out_a.exists() and out_b.exists()
 
+    def test_ensure_cached_refills_when_the_engine_is_newer(self, tmp_path):
+        import os
+
+        case_dir = tmp_path / "smith_v_roe"
+        src = self._make_source(case_dir, "packet_a", "proposed_order.md")
+        cache = form_fill.ensure_cached("mc030", dict(FIXTURE_META), src)
+        engine = Path(form_fill.__file__).stat().st_mtime
+        os.utime(src, (engine - 100, engine - 100))
+        os.utime(cache, (engine - 50, engine - 50))
+        form_fill.ensure_cached("mc030", dict(FIXTURE_META), src)
+        assert cache.stat().st_mtime > engine - 50
+
 
 @pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
 def test_civ110_dismissal_and_pleading_type_checkboxes_render_checked(tmp_path):
