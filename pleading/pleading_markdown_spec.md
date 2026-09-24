@@ -636,6 +636,16 @@ Which fields a form pre-fills, which it deliberately leaves blank, and
 which per-form keys it accepts are documented per field in the registry
 descriptor — see `sc form info <form_id>`.
 
+**Conditional e-sign areas.** A field's `esign:` tag may carry
+`when: <front-matter key>`. The area is written to the
+`<pdf>.fields.json` sidecar only when the document's front matter
+gives that key a non-empty value; otherwise it is left out, and the
+remaining parties keep their signing order. The case it exists for is
+a line reserved for counsel (an attorney's fee confirmation, say):
+`when: filer_bar_number` keeps a self-represented filer from being
+asked to sign it. The geometry preview still draws the area, labeled
+with its condition. *(tested: tests/test_esign_geometry.py)*
+
 The `court_county` field should hold just the county name (e.g.
 `"SAN FRANCISCO"`) rather than `"COUNTY OF EXAMPLE"`; the generator accepts
 either form and strips the redundant prefix.

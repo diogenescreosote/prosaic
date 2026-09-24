@@ -1394,6 +1394,13 @@ def esign_fields(form_id: str, meta: Optional[dict] = None) -> list[dict]:
         x0, y0, x1, y1 = rect
         x, w = min(x0, x1), abs(x1 - x0)
         top, h = max(y0, y1), abs(y1 - y0)
+        # `when: <front-matter key>` makes the area conditional: an
+        # attorney's confirmation line is emitted only when the filer
+        # is counsel, so a self-represented filer is never asked to
+        # sign where the form wants a lawyer.
+        when = es.get("when")
+        if when and not (meta or {}).get(str(when)):
+            continue
         party = str(es.get("party") or "")
         role_n = parties.index(party) + 1 if party in parties else 1
         out.append(
@@ -1478,6 +1485,8 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
             else:
                 color = (0.4, 0.4, 0.4)
             label = etype.upper() + (f" · {party}" if party else "")
+            if es.get("when"):
+                label += f" · when {es['when']}"
         boxes.setdefault(page_no, []).append(
             {"rect": rect, "color": color, "label": label, "esign": bool(es)}
         )

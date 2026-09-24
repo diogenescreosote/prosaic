@@ -21,6 +21,7 @@ import subprocess
 import sys
 from pathlib import Path
 from types import ModuleType
+from typing import Any
 
 import pytest
 from pypdf import PdfReader
@@ -303,3 +304,39 @@ def test_decl_signblock_inline_blanks_pass_and_a_shifted_copy_fails(
         f["y_top"] += 12
     problems = mod.sidecar_geometry_problems(tmp_path / "decl.pdf", shifted)
     assert {p.split(" ")[0] for p in problems} == {"Day", "Month", "Signature"}, problems
+
+
+def _form_fill_module() -> ModuleType:
+    loader = importlib.machinery.SourceFileLoader("form_fill_under_test", str(FORM_FILL))
+    spec = importlib.util.spec_from_loader("form_fill_under_test", loader)
+    assert spec is not None
+    mod = importlib.util.module_from_spec(spec)
+    sys.modules[spec.name] = mod  # dataclasses resolve their module by name
+    loader.exec_module(mod)
+    return mod
+
+
+def test_esign_when_leaves_out_an_area_whose_key_is_empty(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    """A line reserved for counsel must not reach a self-represented
+    filer's signing session: `when: filer_bar_number` drops it unless
+    the front matter carries a bar number."""
+    ff = _form_fill_module()
+    real = ff.load_descriptor
+
+    def with_condition(form_id: str) -> dict[str, Any]:
+        desc: dict[str, Any] = real(form_id)
+        desc["fields"]["signature"]["esign"] = {
+            **desc["fields"]["signature"]["esign"],
+            "when": "filer_bar_number",
+        }
+        return desc
+
+    monkeypatch.setattr(ff, "load_descriptor", with_condition)
+
+    pro_per = {f["name"] for f in ff.esign_fields("mc030", dict(META))}
+    assert pro_per == {"date"}
+
+    counsel = {f["name"] for f in ff.esign_fields("mc030", {**META, "filer_bar_number": "123456"})}
+    assert counsel == {"date", "signature"}

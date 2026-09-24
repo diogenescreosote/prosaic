@@ -223,7 +223,10 @@ taxonomy (`signature`, `initials`, `date`, `name`, `email`, `phone`,
 `text`, `checkbox`) is the least common multiple of DocuSeal, DocuSign,
 and Dropbox Sign field types, so a descriptor's e-sign map can drive
 `sc docuseal` (or any platform) without translation loss. Parties are
-abstract roles declared in `esign_parties:`, in signing order.
+abstract roles declared in `esign_parties:`, in signing order. An area
+that only some filers sign takes `when: <front-matter key>`
+(`esign: {type: signature, party: attorney, when: filer_bar_number}`)
+and is left out of the sidecar when that key is empty.
 
 ## Two signing paths, and the date trap
 
