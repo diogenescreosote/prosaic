@@ -49,6 +49,30 @@ for the date or the subject line of something the record can be
 searched for. Only after the search is exhausted and reported may you
 say it is not there.
 
+## STOP. An authority is relied on only after its full text is read
+
+Every case, statute, rule and regulation a draft relies on, and every
+one the other side cites in a paper the draft answers, is fetched in
+full from a primary source (the legislature's site, eCFR, the court's
+rules page, CourtListener or the reporter) into the matter's
+`research/authorities/`, and read in full. Not the headnote, not the
+pin page, not a summary from memory or from a secondary source, and not
+the other side's characterization.
+
+Comb it. Facts and posture, holding, every footnote, dicta,
+concurrences and dissents, and later history (disapproved, superseded,
+amended). The useful passage is often not the holding. Write a comb
+note beside the texts: verbatim passages with pin cites, what helps,
+what hurts, and whether each opposing cite says what it is cited for.
+
+No draft states a proposition from an authority whose text is not in
+the library. If a text cannot be fetched after real effort, say so and
+ask the human to fetch it. Skipping an authority requires the human's
+consent given beforehand, never assumed.
+
+A second-opinion model is given the texts or the comb notes, and the
+paper being answered, never the drafter's paraphrase of them.
+
 ## STOP. Case names are italicized: `*Doe v. Roe*`
 
 In any `.md` under any `src/`, every case name in running text is set

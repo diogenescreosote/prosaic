@@ -33,7 +33,7 @@ authority cache at knowledge/authorities.yaml lists cites a human has
 already verified; treat its entries as verified for existence but still
 check the proposition. Where you cannot verify existence offline, say
 unverified rather than guessing; WebSearch is allowed for public law.
-End with a list of rows needing the human, worst first. Rules for every review: read the sources named above in full before writing
+Existence is not enough. For row (3), and for every authority the other side cites in a paper the draft answers, read the full text: fetch it from a primary source into research/authorities/ if it is not already there, read all of it (footnotes, dicta, later history), and write a comb note beside it with verbatim passages and pin cites, including anything useful to the drafter beyond the proposition cited. A row may rest at unverified only with the human's prior consent; otherwise it goes on a list of texts the human is asked to fetch. Never judge a proposition from memory, a headnote or a secondary source. End with a list of rows needing the human, worst first. Rules for every review: read the sources named above in full before writing
 a word; cite the source by file and line for every point; never edit a
 source, a build output or a note; write only the report file; a report
 whose sources changed after review is stale and must not be quoted as

@@ -50,7 +50,7 @@ accepted edits shown as before/after. **Apply nothing.** If the human
 says apply (all, or by number), make exactly those edits to the sources,
 then say what changed and remind them to rebuild. Never invent a fact or
 an authority the other model proposed without verifying it in the record
-or the law. Rules for every review: read the sources named above in full before writing
+or the law. The other model is only as good as its inputs: when the draft answers another paper, or turns on authorities, the brief must carry that paper and the full texts or comb notes of the authorities (research/authorities/), never your paraphrase of them. If they were missing, say so first; its legal suggestions are then unverified. Rules for every review: read the sources named above in full before writing
 a word; cite the source by file and line for every point; never edit a
 source, a build output or a note; write only the report file; a report
 whose sources changed after review is stale and must not be quoted as
