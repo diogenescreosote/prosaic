@@ -813,3 +813,22 @@ def test_bullet_absorbs_indented_continuation_lines():
     assert kinds == ["bullet", "bullet", "paragraph"]
     assert blocks[0].text.endswith("I will pay reasonable costs.")
     assert "Delivery" in blocks[1].text
+
+
+def test_tight_numbered_list_outside_letters():
+    """A tight numbered list is a list on pleading paper; blank-separated
+    numbered paragraphs and a wrapped 'YYYY.' line are not."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading
+
+    tight = "1. **One:** first\n   item.\n2. Second item.\n"
+    kinds = [b.kind for b in md_pleading.parse_markdown_blocks(tight)]
+    assert kinds == ["numbered", "numbered"]
+
+    loose = "1. I am the respondent.\n\n2. I live in Berkeley.\n"
+    kinds = [b.kind for b in md_pleading.parse_markdown_blocks(loose)]
+    assert kinds == ["paragraph", "paragraph"]
+
+    wrapped = "1. The hearing was set in\n2025. The court then ruled.\n"
+    kinds = [b.kind for b in md_pleading.parse_markdown_blocks(wrapped)]
+    assert kinds == ["paragraph"]

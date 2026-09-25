@@ -2242,7 +2242,9 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
 
     When doctype=="letter", lines matching ``^(\\d+)\\.\\s+`` are parsed as
     numbered-list items (kind="numbered"). In pleadings the same syntax is
-    reserved for paragraph numbering and is left inside regular paragraphs.
+    reserved for paragraph numbering and stays inside regular paragraphs,
+    except in a tight list: consecutive non-blank lines, the first an item,
+    item numbers counting up by one.
     """
     lines = body.replace("\r\n", "\n").split("\n")
     blocks: List[Block] = []
@@ -2314,7 +2316,25 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
 
     in_comment = False
     fw_lines: Optional[List[str]] = None
-    for raw_line in lines:
+    # Outside letters, a numbered line opens a list item only inside a
+    # TIGHT list: a run of non-blank lines whose first line is "1." (or
+    # any n.) and whose item lines count up by one. Declarations number
+    # their paragraphs with blank lines between, and a wrapped paragraph
+    # line can begin "2025. The", so neither may become a list.
+    tight_numbered: set = set()
+    run: List[int] = []
+    for idx, ln in enumerate(lines + [""]):
+        if ln.strip():
+            run.append(idx)
+            continue
+        starts = [i for i in run if re.match(r"^\d+\.\s+", lines[i])]
+        if run and starts and starts[0] == run[0] and len(starts) >= 2:
+            nums = [int(re.match(r"^(\d+)\.", lines[i]).group(1)) for i in starts]
+            if all(b == a + 1 for a, b in zip(nums, nums[1:])):
+                tight_numbered.update(starts)
+        run = []
+
+    for line_idx, raw_line in enumerate(lines):
         # \fixedwidth{ ... } collects lines VERBATIM until a lone `}`:
         # no comment stripping, no typographic substitution, no
         # wrapping. A mangled character in an armored block is
@@ -2506,9 +2526,9 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
             flush_para()
             bullet_lines = [re.sub(r"^[-*]\s+", "", line)]
             continue
-        if doctype == "letter":
+        if doctype == "letter" or line_idx in tight_numbered or numbered_lines:
             m_num = re.match(r"^(\d+)\.\s+(.*)$", line)
-            if m_num:
+            if m_num and (doctype == "letter" or line_idx in tight_numbered):
                 flush_para()  # also flushes any pending numbered item
                 numbered_level = int(m_num.group(1))
                 numbered_lines = [m_num.group(2)]

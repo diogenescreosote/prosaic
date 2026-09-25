@@ -30,7 +30,7 @@ already have. The machinery stays local and is never shared.
 
 **Spec-first, tested always.** Every component has a contract in
 [specs/](specs/); every decision that constrains later work is an ADR in
-[design/](design/); 915 tests, with `ruff` and `mypy --strict` clean.
+[design/](design/); 916 tests, with `ruff` and `mypy --strict` clean.
 
 ## Security, in technical terms
 
