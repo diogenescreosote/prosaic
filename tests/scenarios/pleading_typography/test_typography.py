@@ -794,3 +794,22 @@ def test_filelink_renders_display_text_and_gotor_annotation(decl_text, decl_pdf)
             if act and act.get("/S") == "/GoToR":
                 targets.append(str(act.get("/F")))
     assert "records/TKFL1_target.pdf" in targets, targets
+
+
+def test_bullet_absorbs_indented_continuation_lines():
+    """A hard-wrapped bullet is one block, not a bullet plus a paragraph."""
+    body = (
+        "- **Burden:** if retrieval is costly, tell me the steps. I\n"
+        "  will pay reasonable costs.\n"
+        "- **Delivery:** to the officer.\n"
+        "\n"
+        "After.\n"
+    )
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading
+
+    blocks = md_pleading.parse_markdown_blocks(body, doctype="letter")
+    kinds = [b.kind for b in blocks]
+    assert kinds == ["bullet", "bullet", "paragraph"]
+    assert blocks[0].text.endswith("I will pay reasonable costs.")
+    assert "Delivery" in blocks[1].text

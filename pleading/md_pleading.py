@@ -2252,6 +2252,7 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
     bq_lines: List[str] = []
     numbered_lines: List[str] = []
     numbered_level: int = 0
+    bullet_lines: List[str] = []
 
     def flush_blockquote() -> None:
         nonlocal bq_lines
@@ -2274,6 +2275,14 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         numbered_lines = []
         numbered_level = 0
 
+    def flush_bullet() -> None:
+        nonlocal bullet_lines
+        if bullet_lines:
+            raw = typographic_subs(normalize_whitespace(" ".join(bullet_lines)))
+            if raw:
+                blocks.append(Block("bullet", raw, spans=parse_inline_styles(raw)))
+        bullet_lines = []
+
     def flush_para(keep_blockquote: bool = False) -> None:
         nonlocal para_lines
         # A ``>`` line flushes the paragraph it interrupts but must NOT
@@ -2284,6 +2293,7 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         if not keep_blockquote:
             flush_blockquote()
         flush_numbered()
+        flush_bullet()
         if para_lines:
             raw = normalize_whitespace(" ".join(para_lines))
             raw = typographic_subs(raw)
@@ -2364,6 +2374,15 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
         if not line.strip():
             flush_para()
             continue
+        # A bullet runs on through indented continuation lines, as a
+        # hard-wrapped source writes them. Without this each continuation
+        # became a separate paragraph: a blank line after the bullet's
+        # first line and the rest set flush left, not under the text.
+        if bullet_lines:
+            if line[:1] in (" ", "\t") and not re.match(r"^\s*[-*]\s+", line):
+                bullet_lines.append(line.strip())
+                continue
+            flush_bullet()
         m_sign = re.match(r"^\\signblock((?:\{[^{}]*\})+)\s*$", line)
         if m_sign:
             flush_para()
@@ -2485,9 +2504,7 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
             flush_blockquote()
         if re.match(r"^[-*]\s+", line):
             flush_para()
-            bullet_text = typographic_subs(normalize_whitespace(re.sub(r"^[-*]\s+", "", line)))
-            spans = parse_inline_styles(bullet_text)
-            blocks.append(Block("bullet", bullet_text, spans=spans))
+            bullet_lines = [re.sub(r"^[-*]\s+", "", line)]
             continue
         if doctype == "letter":
             m_num = re.match(r"^(\d+)\.\s+(.*)$", line)
