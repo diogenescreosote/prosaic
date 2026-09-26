@@ -832,3 +832,15 @@ def test_tight_numbered_list_outside_letters():
     wrapped = "1. The hearing was set in\n2025. The court then ruled.\n"
     kinds = [b.kind for b in md_pleading.parse_markdown_blocks(wrapped)]
     assert kinds == ["paragraph"]
+
+
+def test_possessive_after_closing_emphasis_is_an_apostrophe():
+    """*Scull*'s renders Scull’s: a right quote, glued, not ‘s after a space."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading
+
+    assert md_pleading.typographic_subs("*Scull*'s and **Act**'s") == "*Scull*’s and **Act**’s"
+    assert md_pleading.typographic_subs("she said 'no'") == "she said ‘no’"
+    blocks = md_pleading.parse_markdown_blocks("*Scull*'s footnote.")
+    words = md_pleading.spans_to_styled_words(blocks[0].spans, {})
+    assert words[1].text == "’s" and words[1].no_space_before

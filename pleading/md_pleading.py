@@ -707,6 +707,11 @@ def typographic_subs(text: str) -> str:
     # apostrophe, not an opening quote; resolve it before the opening-quote
     # rule below would misread it (e.g. C.E.O.'s → C.E.O.\u2019s).
     text = re.sub(r"(?<=\w\.)'(?=\w)", "\u2019", text)
+    # Possessive after closing emphasis ("*Scull*'s", "**Act**'s") is an
+    # apostrophe too. The emphasis marker hides the letter from the
+    # after-a-letter rule above, and the opening-quote rule below would
+    # otherwise turn it into ‘.
+    text = re.sub(r"(\w[*_]{1,3})'", "\\1\u2019", text)
     text = re.sub(r"'(?=\w)", "\u2018", text)              # opening quote before letter → '
     text = text.replace("'", "\u2019")                     # any remaining → '
     return text
