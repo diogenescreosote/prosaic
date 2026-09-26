@@ -157,12 +157,13 @@ def test_second_opinion_uses_the_role_command_and_writes_a_report(
     fake = tmp_path / "other_model.sh"
     fake.write_text(
         '#!/bin/bash\nprompt=$(cat)\necho "model=${AGENT_RUN_MODEL:-none}"\n'
+        'echo "effort=${AGENT_RUN_EFFORT:-none} timeout=${AGENT_RUN_TIMEOUT:-none}"\n'
         'echo "1. **[Relief]** --- narrow it --- **why**: overbroad. STRUCTURAL"\n'
         "grep -q 'shorten time' <<<\"$prompt\" && echo 'saw the brief'\n"
     )
     fake.chmod(0o755)
     (matter / "matter.yaml").write_text(
-        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: test-gpt\n"
+        f"case:\n  name: Smith v. Roe\nagent:\n  roles:\n    second-opinion:\n      cmd: {fake}\n      model: test-gpt\n      effort: low\n      timeout: 1800\n"
     )
     proc = sc(
         "review",
@@ -179,6 +180,7 @@ def test_second_opinion_uses_the_role_command_and_writes_a_report(
     text = rp.read_text()
     assert "check: secondopinion" in text and "model=test-gpt" in text and "saw the brief" in text
     assert "narrow it" in text
+    assert "effort=low timeout=1800" in text
     # unconfigured role is a clear message, not a crash
     (matter / "matter.yaml").write_text("case:\n  name: Smith v. Roe\n")
     proc = sc(

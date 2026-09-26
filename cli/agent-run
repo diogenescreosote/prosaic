@@ -83,11 +83,15 @@ print(r.get("max_turns") or "")
 print(r.get("cmd") or "")
 print(r.get("credential") or "")
 print(r.get("credential_env") or "OPENAI_API_KEY")
+print(r.get("effort") or "")
+print(r.get("timeout") or "")
 PY
 )" || return 0
     m="$(printf '%s\n' "$out" | sed -n 1p)"; t="$(printf '%s\n' "$out" | sed -n 2p)"
     local c cred cenv
     c="$(printf '%s\n' "$out" | sed -n 3p)"; cred="$(printf '%s\n' "$out" | sed -n 4p)"; cenv="$(printf '%s\n' "$out" | sed -n 5p)"
+    local eff tmo
+    eff="$(printf '%s\n' "$out" | sed -n 6p)"; tmo="$(printf '%s\n' "$out" | sed -n 7p)"
     [ -z "$MODEL" ] && [ -n "$m" ] && MODEL="$m"
     [ -z "$MAX_TURNS" ] && [ -n "$t" ] && MAX_TURNS="$t"
     # A role may name its own command (another vendor's CLI or a script);
@@ -98,6 +102,10 @@ PY
     if [ -n "$c" ] && [ -z "${PROSAIC_AGENT_CMD:-}" ]; then
       export PROSAIC_AGENT_CMD="$c"
       [ -n "$MODEL" ] && export AGENT_RUN_MODEL="$MODEL"
+      # Optional per-role knobs a custom command may honor: reasoning
+      # effort (e.g. low/medium/high) and a read timeout in seconds.
+      [ -n "$eff" ] && [ -z "${AGENT_RUN_EFFORT:-}" ] && export AGENT_RUN_EFFORT="$eff"
+      [ -n "$tmo" ] && [ -z "${AGENT_RUN_TIMEOUT:-}" ] && export AGENT_RUN_TIMEOUT="$tmo"
       if [ -n "$cred" ] && [ -z "${!cenv:-}" ] && command -v security >/dev/null 2>&1; then
         local secret
         secret="$(security find-generic-password -s "$cred" -w 2>/dev/null || true)"

@@ -10,10 +10,15 @@
 #         cmd: <prosaic>/sync/second_opinion_openai.sh
 #         credential: prosaic.openai     # Keychain item; agent-run exports it as OPENAI_API_KEY
 #         model: gpt-5                   # exported as AGENT_RUN_MODEL
+#         effort: low                    # optional; exported as AGENT_RUN_EFFORT
+#         timeout: 1800                  # optional read timeout, seconds
 #
 # Environment: OPENAI_API_KEY (required), OPENAI_BASE_URL (default
 # https://api.openai.com/v1; point it at any compatible server, local
-# ones included), AGENT_RUN_MODEL or OPENAI_MODEL (default gpt-5).
+# ones included), AGENT_RUN_MODEL or OPENAI_MODEL (default gpt-5),
+# AGENT_RUN_EFFORT (sent as reasoning_effort; omitted when unset, so the
+# endpoint's default applies), AGENT_RUN_TIMEOUT (seconds, default 1800;
+# a long review of a large bundle can take more than ten minutes).
 # Nothing is stored; the prompt goes to the endpoint and the reply to
 # stdout. Whether a given draft may leave the machine is the matter's
 # decision, not this script's (see docs/review.md).
@@ -27,12 +32,17 @@ python3 - "$BASE" "$MODEL" "$PROMPT_FILE" <<'PY'
 import json, os, sys, urllib.request
 base, model, prompt_file = sys.argv[1], sys.argv[2], sys.argv[3]
 prompt = open(prompt_file, encoding="utf-8", errors="replace").read()
+body = {"model": model, "messages": [{"role": "user", "content": prompt}]}
+effort = os.environ.get("AGENT_RUN_EFFORT", "").strip()
+if effort:
+    body["reasoning_effort"] = effort
+timeout = float(os.environ.get("AGENT_RUN_TIMEOUT") or 1800)
 req = urllib.request.Request(
     f"{base.rstrip('/')}/chat/completions",
-    data=json.dumps({"model": model, "messages": [{"role": "user", "content": prompt}]}).encode(),
+    data=json.dumps(body).encode(),
     headers={"Authorization": f"Bearer {os.environ['OPENAI_API_KEY']}", "Content-Type": "application/json"},
 )
-with urllib.request.urlopen(req, timeout=600) as r:
+with urllib.request.urlopen(req, timeout=timeout) as r:
     data = json.load(r)
 print(data["choices"][0]["message"]["content"])
 # Usage travels on stderr as one tagged JSON line so the caller can price
