@@ -1945,17 +1945,23 @@ def substitute_redaction_log_macro(
     return body.replace("\\redactionlog", "\n".join(lines))
 
 
-def exhibit_label_for_doctype(doctype: str) -> str:
+def exhibit_label_for_doctype(doctype: str, override: Optional[str] = None) -> str:
     """Return the citation word used for attachments in a given doctype.
 
     Pleadings use "Exhibit"; letters use "Attachment". Both \\exhibit{} and
-    \\attachment{} macros resolve to the doctype-appropriate label.
+    \\attachment{} macros resolve to the doctype-appropriate label. A
+    source's ``exhibit_label`` front-matter key overrides the default
+    (e.g. a meet-and-confer letter on pleading paper whose attachment is
+    "Attachment A").
     """
+    if override and str(override).strip():
+        return str(override).strip()
     return "Attachment" if doctype == "letter" else "Exhibit"
 
 
 def substitute_exhibit_refs(body: str, exhibit_map: Dict[str, Exhibit],
-                            doctype: str = "pleading") -> str:
+                            doctype: str = "pleading",
+                            label_override: Optional[str] = None) -> str:
     """Replace \\exhibit{shortname} or \\attachment{shortname} with the
     doctype-appropriate citation (e.g. 'Exhibit A' for pleadings,
     'Attachment A' for letters). If the exhibit has a pages spec
@@ -1967,7 +1973,7 @@ def substitute_exhibit_refs(body: str, exhibit_map: Dict[str, Exhibit],
     its own), so the pin cite would point at nothing a reader can see.
     A citation naming a real range or list (the source's own visible
     numbering, or Bates stamps via \\bates{}) is left alone."""
-    label = exhibit_label_for_doctype(doctype)
+    label = exhibit_label_for_doctype(doctype, label_override)
 
     def repl(match: re.Match[str]) -> str:
         key = match.group(1)
@@ -5116,7 +5122,7 @@ def main() -> None:
                 exhibit_map[ex.shortname] = ex
 
     doctype = meta.get("doctype", "pleading")
-    attachment_label = exhibit_label_for_doctype(doctype)
+    attachment_label = exhibit_label_for_doctype(doctype, meta.get("exhibit_label"))
     cover_sheet = meta.get("cover_sheet")
     cover_sheet_only = bool(meta.get("cover_sheet_only"))
     pleading = None
@@ -5131,7 +5137,8 @@ def main() -> None:
         body = substitute_redaction_macros(body, meta, variant)
         body = substitute_redaction_log_macro(body, meta, variant, input_path)
         body = substitute_posblock_macro(body, meta)
-        body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype)
+        body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype,
+                                       label_override=meta.get("exhibit_label"))
         body = substitute_date_macro(body, meta)
         body = flatten_lettersignblock(body)
         body = autonumber_list_items(body)
@@ -5182,7 +5189,8 @@ def main() -> None:
             forms_block = dict(meta.get("forms") or {})
             form_block = dict(forms_block.get(cover_sheet) or {})
             substituted = {
-                k: (substitute_exhibit_refs(v, exhibit_map, doctype=doctype)
+                k: (substitute_exhibit_refs(v, exhibit_map, doctype=doctype,
+                                           label_override=meta.get("exhibit_label"))
                     if isinstance(v, str) else v)
                 for k, v in form_block.items()
             }

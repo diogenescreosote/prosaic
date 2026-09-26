@@ -844,3 +844,19 @@ def test_possessive_after_closing_emphasis_is_an_apostrophe():
     blocks = md_pleading.parse_markdown_blocks("*Scull*'s footnote.")
     words = md_pleading.spans_to_styled_words(blocks[0].spans, {})
     assert words[1].text == "’s" and words[1].no_space_before
+
+
+def test_exhibit_label_front_matter_overrides_doctype_default():
+    """exhibit_label: "Attachment" on a pleading-paper letter labels its
+    exhibits 'Attachment A', in citations and on the divider."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading
+
+    assert md_pleading.exhibit_label_for_doctype("pleading") == "Exhibit"
+    assert md_pleading.exhibit_label_for_doctype("letter") == "Attachment"
+    assert md_pleading.exhibit_label_for_doctype("pleading", "Attachment") == "Attachment"
+    ex = md_pleading.Exhibit(letter="A", shortname="auth", title="Auth", path=Path("x.pdf"))
+    out = md_pleading.substitute_exhibit_refs(
+        r"See \exhibit{auth}.", {"auth": ex}, doctype="pleading", label_override="Attachment"
+    )
+    assert out == "See Attachment A."
