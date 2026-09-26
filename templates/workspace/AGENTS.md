@@ -73,6 +73,31 @@ consent given beforehand, never assumed.
 A second-opinion model is given the texts or the comb notes, and the
 paper being answered, never the drafter's paraphrase of them.
 
+## Document consciousness: total awareness of the record on any topic
+
+When discussing any topic in the matter—sanctions exposure, party
+positions, what an order said, whether something is procedurally
+sound, why a rule applies—you must immediately know what documents
+exist on that topic. Not "I think" or "In motions to quash generally"
+or "The parties may have." You cite the actual filings, orders,
+declarations, emails, and productions that establish the fact.
+
+Implementation: before answering a substantive question about the
+matter, run `sc find` on the topic keywords (or `sc mail-index . …`
+for dated searches). Read the vault. Then speak from the record, citing
+specific documents by date and title. This includes knowing:
+
+- **What filings exist** on the issue (motions, oppositions, declarations)
+- **What the other side claimed** (cite their papers, not your paraphrase)
+- **What orders the court has entered** (cite them, check dates)
+- **What evidence is in discovery** (relate to the productions, emails, exhibits)
+- **What precedent exists in this matter's own history** (earlier stipulations, prior rulings)
+
+The vault is authoritative. If you do not know it, find it. If you
+cannot find it after searching, say so with your search methodology.
+Never discuss a matter as if it were a generic family law issue; it
+is this case's specific story.
+
 ## STOP. Case names are italicized: `*Doe v. Roe*`
 
 In any `.md` under any `src/`, every case name in running text is set
