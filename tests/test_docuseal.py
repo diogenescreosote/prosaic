@@ -710,9 +710,7 @@ def test_send_accepts_the_renderers_decl_signblock_geometry(mock_api: str, tmp_p
     assert not any(r["path"] == "/submissions/pdf" for r in MockDocuSeal.requests)
 
 
-def test_field_font_size_travels_as_a_submitter_preference(
-    mock_api: str, tmp_path: Path
-) -> None:
+def test_field_font_size_travels_as_a_submitter_preference(mock_api: str, tmp_path: Path) -> None:
     """A sidecar field carrying font_size (body_font_size builds, e.g. a
     14-point CMIA authorization) reaches the API as that submitter's
     field preference by name, not on the document geometry."""
@@ -727,12 +725,28 @@ def test_field_font_size_travels_as_a_submitter_preference(
                 "units": "pt",
                 "source": "build",
                 "fields": [
-                    {"name": "Signature 1", "role": "Signer 1", "type": "signature",
-                     "page": 2, "x": 76.0, "y_top": 700.0, "w": 212.0, "h": 28.0,
-                     "font_size": 15},
-                    {"name": "Date 1", "role": "Signer 1", "type": "date",
-                     "page": 2, "x": 76.0, "y_top": 660.0, "w": 150.0, "h": 15.0,
-                     "font_size": 15},
+                    {
+                        "name": "Signature 1",
+                        "role": "Signer 1",
+                        "type": "signature",
+                        "page": 2,
+                        "x": 76.0,
+                        "y_top": 700.0,
+                        "w": 212.0,
+                        "h": 28.0,
+                        "font_size": 15,
+                    },
+                    {
+                        "name": "Date 1",
+                        "role": "Signer 1",
+                        "type": "date",
+                        "page": 2,
+                        "x": 76.0,
+                        "y_top": 660.0,
+                        "w": 150.0,
+                        "h": 15.0,
+                        "font_size": 15,
+                    },
                 ],
             }
         )
