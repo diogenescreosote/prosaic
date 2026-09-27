@@ -3428,11 +3428,14 @@ class PleadingPDF:
                 right_lines.append((wrapped, FONT_NAME, 0))
 
         hearing_bits: List[str] = []
+        # The judicial officer prints as given ("Hon. Megan Amaral"), with
+        # no "Judge:" label: a commissioner or magistrate is not a judge,
+        # and the honorific alone is right for all three.
         for key, label in [("hearing_date", "Date"), ("hearing_time", "Time"),
-                           ("hearing_dept", "Dept."), ("judge", "Judge")]:
+                           ("hearing_dept", "Dept."), ("judge", "")]:
             if self.meta.get(key):
-                hearing_bits.append(
-                    f"{label}: {typographic_subs(str(self.meta[key]))}")
+                value = typographic_subs(str(self.meta[key]))
+                hearing_bits.append(f"{label}: {value}" if label else value)
         if hearing_bits:
             right_lines.append(("", FONT_NAME, 0))
             for bit in hearing_bits:

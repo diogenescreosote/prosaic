@@ -860,3 +860,22 @@ def test_exhibit_label_front_matter_overrides_doctype_default():
         r"See \exhibit{auth}.", {"auth": ex}, doctype="pleading", label_override="Attachment"
     )
     assert out == "See Attachment A."
+
+
+def test_caption_prints_judicial_officer_without_judge_label(tmp_path):
+    """judge: prints as given ('Hon. ...') with no 'Judge:' label, so a
+    commissioner or magistrate is not mislabeled a judge."""
+    src = tmp_path / "caption.md"
+    out = tmp_path / "caption.pdf"
+    _write_minimal_decl(src, 1)
+    text = src.read_text().replace(
+        'case_number: "24CV00000"',
+        'case_number: "24CV00000"\nhearing_dept: "20"\njudge: "Hon. Pat Example"')
+    src.write_text(text)
+    proc = subprocess.run(
+        [sys.executable, str(MD_PLEADING), str(src), str(out)],
+        capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr[-1000:]
+    page1 = scenario.pdf_text(out).split("\f")[0]
+    assert "Hon. Pat Example" in page1 and "Dept.: 20" in page1
+    assert "Judge:" not in page1
