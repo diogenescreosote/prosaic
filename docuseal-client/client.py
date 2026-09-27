@@ -266,6 +266,7 @@ def sidecar_api_fields(sidecar: dict) -> list[dict]:
             "name": f["name"],
             "type": f["type"],
             "role": f["role"],
+            **({"font_size": int(f["font_size"])} if f.get("font_size") else {}),
             "areas": [
                 {
                     "x": round(f["x"] / pw, 4),
@@ -492,6 +493,20 @@ def cmd_send(args: argparse.Namespace) -> int:
     for fields in per_doc_fields:
         for f in fields:
             f["role"] = role_map.get(f.get("role", "Signer"), submitters[0]["role"])
+
+    # A build that fixes the body size (body_font_size; a CMIA
+    # authorization must be 14 point throughout) records it per field.
+    # The API takes a typed value's size as a per-submitter field
+    # preference, matched by field name, not on the document geometry.
+    for fields in per_doc_fields:
+        for f in fields:
+            size = f.pop("font_size", None)
+            if not size:
+                continue
+            sub = next(s for s in submitters if s["role"] == f["role"])
+            sub.setdefault("fields", []).append(
+                {"name": f["name"], "preferences": {"font_size": size}}
+            )
 
     # Fall back to embedded {{...}} tag counting only when NO document
     # carried a sidecar (the legacy tags mode).

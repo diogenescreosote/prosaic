@@ -3221,7 +3221,11 @@ class PleadingPDF:
                 ln += 1
 
     def draw_text_line(self, line_no: int, text: str, indent: float = 0,
-                       font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
+                       font: str = FONT_NAME, size: Optional[float] = None) -> None:
+        # Resolve the size at call time: a default of FONT_SIZE would be
+        # bound once at import and ignore body_font_size (Civ. Code 56.11
+        # needs the signature block at the body's 14+ points too).
+        size = FONT_SIZE if size is None else size
         self.c.setFont(font, size)
         self.c.drawString(self.left_margin + indent, self.line_y(line_no), text)
 
@@ -3234,12 +3238,14 @@ class PleadingPDF:
             ))
 
     def _draw_caption_text(self, x: float, y: float, text: str,
-                           font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
+                           font: str = FONT_NAME, size: Optional[float] = None) -> None:
+        size = FONT_SIZE if size is None else size
         self.c.setFont(font, size)
         self.c.drawString(x, y, text)
 
     def _draw_right_aligned(self, line_no: int, text: str,
-                            font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
+                            font: str = FONT_NAME, size: Optional[float] = None) -> None:
+        size = FONT_SIZE if size is None else size
         self.c.setFont(font, size)
         x = PAGE_WIDTH - RIGHT_MARGIN - pdfmetrics.stringWidth(text, font, size)
         self.c.drawString(x, self.line_y(line_no), text)
@@ -3738,9 +3744,14 @@ class PleadingPDF:
             "w": round(width, 2),
             "h": round(height, 2),
         })
+        # A document that sets body_font_size (a CMIA authorization must be
+        # 14 point or larger throughout, Civ. Code 56.11) asks the e-sign
+        # service to stamp typed values at the same size.
+        if self.meta.get("body_font_size") is not None:
+            self.esign_fields[-1]["font_size"] = FONT_SIZE
 
     def _tag_blanks(self, line_no: int, text: str, specs: List[Optional[str]],
-                    font: str = FONT_NAME, size: int = FONT_SIZE) -> None:
+                    font: str = FONT_NAME, size: Optional[float] = None) -> None:
         """Place fields over the ``___`` blank runs of a drawn line, in
         order; a None spec skips that blank. Each field is sized to
         its blank and bottoms out on the underscore rule. A 6 pt tag
@@ -3749,6 +3760,7 @@ class PleadingPDF:
         interleave in the text layer and DocuSeal would read garbage
         -- with the field height grown to keep its bottom edge on the
         same rule."""
+        size = FONT_SIZE if size is None else size
         rule_y = self.line_y(line_no) - 2  # underscores sit under the baseline
         level_end_x: List[float] = []
         for m, tag in zip(re.finditer(r"_{3,}", text), specs):
@@ -3962,8 +3974,9 @@ class PleadingPDF:
         caption = block.spans[1].text if len(block.spans) > 1 else ""
         return 8 + (BARCODE_CAPTION_EXTRA_LINE if caption else 0)
 
-    def _styled_width(self, words, font_size: int = FONT_SIZE) -> float:
+    def _styled_width(self, words, font_size: Optional[float] = None) -> float:
         """Width draw_styled_words will occupy (same spacing math)."""
+        font_size = FONT_SIZE if font_size is None else font_size
         space_w = pdfmetrics.stringWidth(" ", FONT_NAME, font_size)
         total = 0.0
         for i, w in enumerate(words):
