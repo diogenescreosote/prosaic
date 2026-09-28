@@ -4457,6 +4457,22 @@ class PleadingPDF:
                     self.start_page()
                     current_line = 1
 
+            # Keep-with-next for a lead-in that introduces a list: a
+            # paragraph ending in a colon ("Attachments:") must not be
+            # stranded at a page bottom while its first item starts the
+            # next page. Break before it when it and the first item cannot
+            # both finish here but fit together on a fresh page.
+            nxt = self.blocks[i + 1] if i + 1 < len(self.blocks) else None
+            if (block.kind == "paragraph" and current_line != 1
+                    and nxt is not None and nxt.kind in list_kinds
+                    and block.text.rstrip().endswith(":")):
+                needed = self._block_grid_lines(block) + self._block_grid_lines(nxt)
+                bottom = self.lines_per_page - self._fn_area_lines
+                if (needed <= self.lines_per_page
+                        and current_line + needed - 1 > bottom):
+                    self.start_page()
+                    current_line = 1
+
             block_lines = _block_to_styled_lines(block, self.exhibit_letters,
                                                   self.text_width, self.footnote_numbers)
             # Tight spacing between consecutive list items of the same kind:

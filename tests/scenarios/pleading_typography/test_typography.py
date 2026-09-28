@@ -939,3 +939,25 @@ def test_inline_list_renders_after_signature_without_a_list_page(tmp_path):
     assert "ATTACHMENT LIST" not in full
     assert full.index("JANE ROE", full.index("Executed")) < full.index("Attachments:")
     assert "Attachment A: The Exhibit" in full.replace("\n", " ")
+
+
+@pytest.mark.parametrize("n_paragraphs", range(8, 16))
+def test_colon_lead_in_stays_with_its_list(tmp_path, n_paragraphs):
+    """Sweep a 'Lead-in:' paragraph across a page break: it must always
+    share a page with the first item of the list it introduces."""
+    src = tmp_path / f"lead_{n_paragraphs}.md"
+    out = tmp_path / f"lead_{n_paragraphs}.pdf"
+    _write_minimal_decl(src, 1)
+    head = src.read_text().split("---\n", 2)
+    para = ("This filler paragraph exists only to push the lead-in toward a "
+            "page boundary; it runs two rendered lines on the grid.")
+    body = "\n\n".join([para] * n_paragraphs)
+    body += "\n\nThe items follow:\n\n- First item\n- Second item\n"
+    src.write_text("---\n" + head[1] + "---\n" + body)
+    proc = subprocess.run([sys.executable, str(MD_PLEADING), str(src), str(out)],
+                          capture_output=True, text=True)
+    assert proc.returncode == 0, proc.stderr[-1000:]
+    pages = scenario.pdf_text(out).split("\f")
+    lead = [k for k, p in enumerate(pages) if "The items follow:" in p]
+    first = [k for k, p in enumerate(pages) if "First item" in p]
+    assert lead and first and lead[0] == first[0]
