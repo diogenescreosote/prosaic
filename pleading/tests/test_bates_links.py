@@ -159,6 +159,9 @@ def test_a_cite_to_a_withheld_exhibit_renders_without_a_link(tmp_path):
     src = tmp_path / "Letter to Smith.md"
     front = FRONT.format(path=prod, pages="1-2,4").replace(
         '    bates_first: "ACME00001"\n', '    bates_first: "ACME00001"\n    sealed: true\n')
+    # This test is about \\bates cites; the letter's generated inline
+    # attachment list would add its own link to the placeholder tab sheet.
+    front = front.replace("doctype: letter\n", "doctype: letter\nexhibit_list: none\n", 1)
     src.write_text(front + "See \\bates{ACME00004}.\n\nSincerely,\n\nJane Roe\n", encoding="utf-8")
     out = tmp_path / "out.pdf"
     proc = subprocess.run(

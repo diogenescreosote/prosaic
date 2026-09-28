@@ -879,3 +879,63 @@ def test_caption_prints_judicial_officer_without_judge_label(tmp_path):
     page1 = scenario.pdf_text(out).split("\f")[0]
     assert "Hon. Pat Example" in page1 and "Dept.: 20" in page1
     assert "Judge:" not in page1
+
+
+def test_exhibit_list_mode_defaults_and_overrides():
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading as m
+
+    assert m.exhibit_list_mode({}) == "page"
+    assert m.exhibit_list_mode({"doctype": "letter"}) == "inline"
+    assert m.exhibit_list_mode({"no_exhibit_list": True}) == "none"
+    assert m.exhibit_list_mode({"exhibit_list": "inline"}) == "inline"
+    assert m.exhibit_list_mode({"doctype": "letter", "exhibit_list": "page"}) == "page"
+    with pytest.raises(SystemExit):
+        m.exhibit_list_mode({"exhibit_list": "sideways"})
+
+
+def test_inline_exhibit_list_is_generated_where_the_macro_sits(capsys):
+    """One list, generated from front matter: at \\exhibitlist when present,
+    else at the end; dropped in page/none modes; a typed list warns."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading as m
+
+    exhibits = [
+        m.Exhibit(shortname="d", title="Declaration of X", path=None, letter="A"),
+        m.Exhibit(shortname="o", title="Order", path=None, letter="B", sealed=True),
+    ]
+    body = "Sincerely,\n\n\\exhibitlist\n\ncc: Counsel"
+    out = m.substitute_exhibit_list_macro(body, exhibits, "Attachment", "inline")
+    assert out.index("Attachments:") < out.index("cc: Counsel")
+    assert "- **Attachment A:** Declaration of X" in out
+    assert "- **Attachment B:** Order [Lodged Conditionally Under Seal]" in out
+    tail = m.substitute_exhibit_list_macro("Body.", exhibits, "Exhibit", "inline")
+    assert tail.rstrip().endswith("- **Exhibit B:** Order [Lodged Conditionally Under Seal]")
+    assert "\\exhibitlist" not in m.substitute_exhibit_list_macro(body, exhibits, "Exhibit", "page")
+    m.substitute_exhibit_list_macro("Attachment A: typed by hand", exhibits, "Attachment", "inline")
+    assert "hand-typed Attachment list" in capsys.readouterr().err
+
+
+def test_inline_list_renders_after_signature_without_a_list_page(tmp_path):
+    from reportlab.pdfgen import canvas as rl_canvas
+
+    exhibit = tmp_path / "exhibit.pdf"
+    c = rl_canvas.Canvas(str(exhibit))
+    c.drawString(72, 700, "exhibit body")
+    c.save()
+    src = tmp_path / "letter.md"
+    out = tmp_path / "letter.pdf"
+    _write_minimal_decl(src, 1)
+    text = src.read_text().replace(
+        'paper_title: "DECLARATION OF JANE ROE"',
+        'paper_title: "LETTER"\nexhibit_label: "Attachment"\nexhibit_list: inline\n'
+        "exhibits:\n  - shortname: ex\n    title: \"The Exhibit\"\n"
+        f"    path: {exhibit}")
+    src.write_text(text)
+    proc = subprocess.run([sys.executable, str(MD_PLEADING), str(src), str(out)],
+                          capture_output=True, text=True, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr[-1000:]
+    full = scenario.pdf_text(out)
+    assert "ATTACHMENT LIST" not in full
+    assert full.index("JANE ROE", full.index("Executed")) < full.index("Attachments:")
+    assert "Attachment A: The Exhibit" in full.replace("\n", " ")

@@ -1959,6 +1959,69 @@ def exhibit_label_for_doctype(doctype: str, override: Optional[str] = None) -> s
     return "Attachment" if doctype == "letter" else "Exhibit"
 
 
+EXHIBIT_LIST_MODES = ("page", "inline", "none")
+EXHIBIT_LIST_MACRO_RE = re.compile(r"^\\exhibitlist[ \t]*$", re.M)
+_HAND_TYPED_LIST_RE = re.compile(
+    r"^[ \t]*(?:[-*][ \t]+)?(?:Attachments?|Exhibits?|Enclosures?)(?:[ \t]+[A-Z])?[ \t]*:",
+    re.M)
+
+
+def exhibit_list_mode(meta: dict) -> str:
+    """Where the list of exhibits/attachments goes: its own ``page`` (the
+    filed-paper convention), ``inline`` after the signature (the letter
+    convention), or ``none``. Front matter ``exhibit_list`` sets it; the
+    older ``no_exhibit_list: true`` still means ``none``. Default by
+    doctype: letters inline, everything else a page."""
+    value = meta.get("exhibit_list")
+    if value is not None:
+        if value is False:
+            return "none"
+        mode = str(value).strip().lower()
+        if mode not in EXHIBIT_LIST_MODES:
+            raise SystemExit(
+                f"exhibit_list: {value!r} is not one of {', '.join(EXHIBIT_LIST_MODES)}")
+        return mode
+    if meta.get("no_exhibit_list"):
+        return "none"
+    return "inline" if meta.get("doctype") == "letter" else "page"
+
+
+def exhibit_list_entries(exhibits: List["Exhibit"], label: str) -> List[Tuple[str, str]]:
+    """The (prefix, title) rows every exhibit list is drawn from, page or
+    inline: ("Attachment A", "Declaration of ..."), with the sealed-
+    lodging annotation where it applies."""
+    return [(f"{label} {ex.letter}",
+             f"{ex.title}{SEALED_EXHIBIT_LIST_ANNOTATION if ex.sealed else ''}")
+            for ex in exhibits]
+
+
+def substitute_exhibit_list_macro(body: str, exhibits: List["Exhibit"], label: str,
+                                  mode: str, source_name: str = "") -> str:
+    """In ``inline`` mode, render the exhibit list into the body as
+    markdown: "Attachments:" and one bullet per exhibit, generated from
+    front matter so it can never drift from what is attached. It goes
+    where ``\\exhibitlist`` sits on its own line, else at the end of the
+    body. In other modes the macro line is dropped. A hand-typed list in
+    a source that also declares exhibits draws a warning."""
+    has_macro = bool(EXHIBIT_LIST_MACRO_RE.search(body))
+    if exhibits and mode != "none":
+        scan = EXHIBIT_LIST_MACRO_RE.sub("", body)
+        if _HAND_TYPED_LIST_RE.search(scan):
+            print(f"  WARNING: {source_name or 'source'} declares exhibits: and also "
+                  f"contains a hand-typed {label} list; the list is generated from "
+                  f"front matter (exhibit_list: {mode}), so delete the typed one.",
+                  file=sys.stderr)
+    if mode != "inline" or not exhibits:
+        return EXHIBIT_LIST_MACRO_RE.sub("", body)
+    lines = [f"{label}s:", ""]
+    lines += [f"- **{prefix}:** {title}" for prefix, title in
+              exhibit_list_entries(exhibits, label)]
+    block = "\n".join(lines)
+    if has_macro:
+        return EXHIBIT_LIST_MACRO_RE.sub(lambda _m: block, body, count=1)
+    return body.rstrip("\n") + "\n\n" + block + "\n"
+
+
 def substitute_exhibit_refs(body: str, exhibit_map: Dict[str, Exhibit],
                             doctype: str = "pleading",
                             label_override: Optional[str] = None) -> str:
@@ -4496,15 +4559,13 @@ class LineGridPDF:
         self.c.drawCentredString(CENTER_X, self.line_y(line), heading)
         line += 2
         space_w = pdfmetrics.stringWidth(" ", FONT_NAME, FONT_SIZE)
-        for ex in exhibits:
-            seal_note = SEALED_EXHIBIT_LIST_ANNOTATION if ex.sealed else ""
-            prefix = f"{label} {ex.letter}:"
+        for entry_prefix, title_text in exhibit_list_entries(exhibits, label):
+            prefix = f"{entry_prefix}:"
             prefix_w = pdfmetrics.stringWidth(prefix, FONT_NAME_BOLD, FONT_SIZE)
             # First-line text width is reduced by the bold prefix + one space;
             # continuation lines hang-indent to align under the start of the title.
             hang_indent = prefix_w + space_w
             first_width = TEXT_WIDTH - hang_indent
-            title_text = f"{ex.title}{seal_note}"
             first_chunk_lines = wrap_text(title_text, first_width, FONT_NAME, FONT_SIZE)
             if not first_chunk_lines:
                 first_chunk_lines = [""]
@@ -5139,6 +5200,7 @@ def main() -> None:
 
     doctype = meta.get("doctype", "pleading")
     attachment_label = exhibit_label_for_doctype(doctype, meta.get("exhibit_label"))
+    list_mode = exhibit_list_mode(meta)
     cover_sheet = meta.get("cover_sheet")
     cover_sheet_only = bool(meta.get("cover_sheet_only"))
     pleading = None
@@ -5155,6 +5217,8 @@ def main() -> None:
         body = substitute_posblock_macro(body, meta)
         body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype,
                                        label_override=meta.get("exhibit_label"))
+        body = substitute_exhibit_list_macro(body, exhibits, attachment_label,
+                                             list_mode, input_path.name)
         body = substitute_date_macro(body, meta)
         body = flatten_lettersignblock(body)
         body = autonumber_list_items(body)
@@ -5181,7 +5245,7 @@ def main() -> None:
             pleading.build()
 
             exhibit_list_pdf: Optional[Path] = None
-            if exhibits and not meta.get("no_exhibit_list"):
+            if exhibits and list_mode == "page":
                 exhibit_list_pdf = temp_dir / "exhibit_list.pdf"
                 list_title = f"{attachment_label} List"
                 LineGridPDF(str(exhibit_list_pdf), footer_title=list_title,
@@ -5243,7 +5307,9 @@ def main() -> None:
                 # same merge used for an ordinary body works unchanged
                 # with the cover sheet standing in for it.
                 exhibit_list_pdf = None
-                if not meta.get("no_exhibit_list"):
+                # No body to carry an inline list, so inline falls back
+                # to the page for a cover-sheet-only output.
+                if list_mode != "none":
                     with tempfile.TemporaryDirectory(
                             prefix="md_pleading_cso_") as td:
                         exhibit_list_pdf = Path(td) / "exhibit_list.pdf"

@@ -1537,11 +1537,23 @@ Exhibit B    Screenshots of Text Messages with Jones
 
 If the list runs longer than one page, it continues onto additional pleading-formatted pages.
 
-Set `no_exhibit_list: true` in front matter to skip this index page entirely
--- useful when a single exhibit is already identified by name in the body
-text and a whole page listing "Exhibit A: ..." is redundant. The exhibit
-tab sheet(s) and the attached exhibit(s) themselves are unaffected; only
-the standalone index page is suppressed.
+Where the list goes is one setting, `exhibit_list`:
+
+- `page` (the default for pleadings): the standalone index page above.
+- `inline` (the default for `doctype: letter`): no index page; instead an
+  "Attachments:" (or "Exhibits:") block of one bullet per exhibit, in the
+  body, where a `\exhibitlist` line sits, or at the end of the body if
+  there is none. Use it for a letter on pleading paper, placing
+  `\exhibitlist` after the signature block and before any `cc:` line.
+- `none`: no list at all.
+
+Both placements draw the same rows from the same `exhibits:` front
+matter, and both use `exhibit_label`, so the list can never drift from
+what is attached. Do not also type a list by hand: a build warns when a
+source that declares `exhibits:` contains a typed "Attachments:" or
+"Exhibit A:" line. The older `no_exhibit_list: true` still means `none`.
+The exhibit tab sheet(s) and the attached exhibit(s) themselves are
+unaffected by any of these.
 
 ### Exhibit tab sheets
 

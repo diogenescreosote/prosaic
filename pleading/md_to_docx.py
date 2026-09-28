@@ -77,6 +77,9 @@ from md_pleading import (
     effective_variant,
     extract_footnote_defs,
     load_external_exhibits,
+    exhibit_list_mode,
+    substitute_exhibit_list_macro,
+    exhibit_label_for_doctype,
     parse_front_matter,
     parse_inline_styles,
     roman,
@@ -171,31 +174,32 @@ def build_citation_exhibit_map(meta: dict, input_path: Path,
     entries are appended after the file's own exhibits, in source order,
     so the lettering matches the PDF for the same document.
     """
-    entries: List[Tuple[str, str | None]] = []
+    entries: List[Tuple[str, str | None, str, bool]] = []
     for item in meta.get("exhibits") or []:
         if not isinstance(item, dict) or not item.get("shortname"):
-            entries.append(("", None))  # placeholder keeps letters positional
+            entries.append(("", None, "", False))  # placeholder keeps letters positional
             continue
         pages = item.get("pages")
         pages = str(pages).strip() if pages is not None else None
-        entries.append((str(item["shortname"]).strip(), pages or None))
+        entries.append((str(item["shortname"]).strip(), pages or None,
+                        str(item.get("title") or ""), bool(item.get("sealed"))))
 
     exhibit_source = meta.get("exhibit_source")
     if exhibit_source:
         source_path = Path(exhibit_source)
         if not source_path.is_absolute():
             source_path = (input_path.parent / source_path).resolve()
-        own = {sn for sn, _ in entries}
+        own = {e[0] for e in entries}
         for ex in load_external_exhibits(source_path, variant):
             if ex.shortname not in own:
-                entries.append((ex.shortname, ex.pages))
+                entries.append((ex.shortname, ex.pages, ex.title, ex.sealed))
 
     mapping: dict = {}
-    for idx, (shortname, pages) in enumerate(entries, start=1):
+    for idx, (shortname, pages, title, sealed) in enumerate(entries, start=1):
         if shortname:
-            mapping[shortname] = Exhibit(shortname=shortname, title="",
+            mapping[shortname] = Exhibit(shortname=shortname, title=title,
                                          path=None, letter=alpha(idx),
-                                         pages=pages)
+                                         pages=pages, sealed=sealed)
     return mapping
 
 
@@ -1220,7 +1224,15 @@ def main() -> None:
     exhibit_map = build_citation_exhibit_map(meta, input_path, variant)
     body = substitute_redaction_macros(body, meta, variant)
     body = substitute_posblock_macro(body, meta)
-    body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype)
+    body = substitute_exhibit_refs(body, exhibit_map, doctype=doctype,
+                                   label_override=meta.get("exhibit_label"))
+    # The same generated list the PDF renders inline (a page-mode list has
+    # no docx counterpart: the docx attaches no exhibits).
+    list_exhibits = sorted(exhibit_map.values(), key=lambda e: (len(e.letter), e.letter))
+    body = substitute_exhibit_list_macro(
+        body, list_exhibits,
+        exhibit_label_for_doctype(doctype, meta.get("exhibit_label")),
+        exhibit_list_mode(meta), input_path.name)
     body = substitute_date_macro(body, meta)
 
     # Shared front-end transforms (identical to the PDF renderer): expand the
