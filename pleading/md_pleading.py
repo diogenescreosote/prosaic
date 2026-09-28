@@ -424,6 +424,8 @@ ESIGN_ROLE_PREFIX = "Signer"
 SIGROW_RULE_FRAC = 0.44              # each rule's width / text width
 SIGROW_RIGHT_START_FRAC = 0.54       # right rule's left edge / text width
 SIGROW_GRID_LINES_BASE = 4           # blank + rule + label + blank
+# A \sigrow label ending in 3+ underscores is a fill-in (text field).
+SIGROW_FILL_IN_RE = re.compile(r"^(.*?)_{3,}\s*$")
 
 # Witness signature grids (\witnessattestation): per witness, a
 # signature rule plus printed-name, residence, and date lines. Part of
@@ -4110,17 +4112,37 @@ class PleadingPDF:
         current_line += 1
         for i in range(max(len(left_labels), len(right_labels))):
             ly = self.line_y(current_line)
-            if i < len(left_labels) and left_labels[i]:
-                self.c.setFont(FONT_NAME, FONT_SIZE)
-                self.c.drawString(self.left_margin, ly,
-                                  typographic_subs(left_labels[i]))
-            if i < len(right_labels) and right_labels[i]:
-                self.c.setFont(FONT_NAME, FONT_SIZE)
-                self.c.drawString(rx, ly, typographic_subs(right_labels[i]))
+            for col_x, labels in ((self.left_margin, left_labels),
+                                  (rx, right_labels)):
+                if i < len(labels) and labels[i]:
+                    self._sigrow_label(labels[i], col_x, ly, rule_w, n)
             current_line += 1
         current_line += 1  # trailing blank
 
         return current_line
+
+    def _sigrow_label(self, label: str, x: float, y: float,
+                      col_w: float, n: int) -> None:
+        """One \\sigrow label line. A label ending in a run of three or
+        more underscores ("Name and title: ___") is a fill-in: the text
+        prints, a rule runs from it to the column's end, and the row's
+        signer gets a text field on that rule, named after the label."""
+        self.c.setFont(FONT_NAME, FONT_SIZE)
+        m = SIGROW_FILL_IN_RE.match(label)
+        if not m:
+            self.c.drawString(x, y, typographic_subs(label))
+            return
+        text = typographic_subs(m.group(1).rstrip())
+        self.c.drawString(x, y, text)
+        start = x + pdfmetrics.stringWidth(text, FONT_NAME, FONT_SIZE) + 4
+        end = x + col_w
+        self.c.setLineWidth(0.5)
+        self.c.setStrokeColor(black)
+        self.c.line(start, y - 2, end, y - 2)
+        name = m.group(1).strip().rstrip(":").strip() or "Text"
+        self._esign_field(start + 2, y - 2,
+                          f"{name} {n};role={ESIGN_ROLE_PREFIX} {n};type=text",
+                          end - start - 2, self.ESIGN_TEXT_FIELD_HEIGHT)
 
     def _fixedwidth_size(self, block: Block) -> float:
         longest = max((len(ln) for ln in block.text.split("\n")), default=1)

@@ -1355,7 +1355,10 @@ is tabbed alignment rather than a pleading grid:
 signature left, date right; the labels take `\\` for a second line,
 e.g. `{Sue Smith, Lender\\Accepted and agreed}`), is atomic across
 page breaks, and carries the signer's e-sign field tags like any
-signature block. *(tested: pleading/tests/test_document_layout.py)*
+signature block. A label line ending in three or more underscores
+(`{Name and title: ___\\For Example Co.}`) is a fill-in: the text
+prints with a rule after it, and the row's signer gets a text field
+on that rule, named after the label. *(tested: pleading/tests/test_document_layout.py)*
 
 ## Signature blocks — one macro, five styles
 

@@ -84,3 +84,21 @@ def test_sigrow_labels_and_per_row_esign_roles(tmp_path):
     assert "{{Signature 1;role=Signer 1;type=signature;width=" in raw
     assert "{{Date 1;role=Signer 1;type=date;width=" in raw
     assert "{{Signature 2;role=Signer 2;type=signature;width=" in raw
+
+
+def test_sigrow_fill_in_label_gets_a_text_field_for_its_signer(tmp_path):
+    """A label ending in underscores ("Name and title: ___") prints its
+    text with a rule and gives that row's signer a text field, so a
+    counterparty types a name instead of the label dangling unfilled."""
+    build(tmp_path,
+          "Terms.\n\n\\sigrow{JOHN ROE}{Date}\n\n"
+          "\\sigrow{Name and title: ___\\\\For Example Co.}{Date}")
+    text = layout_text(tmp_path)
+    assert "Name and title:" in text and "___" not in text
+    assert "For Example Co." in text
+    raw = " ".join(subprocess.run(
+        ["pdftotext", str(tmp_path / "doc.pdf"), "-"],
+        check=True, capture_output=True, text=True,
+    ).stdout.split())
+    assert "{{Name and title 2;role=Signer 2;type=text;width=" in raw
+    assert "role=Signer 1;type=text" not in raw
