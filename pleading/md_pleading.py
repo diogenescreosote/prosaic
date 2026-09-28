@@ -421,8 +421,9 @@ ESIGN_ROLE_PREFIX = "Signer"
 #       side-by-side signature rules with labels beneath -- the
 #       borrower/date row of a promissory note. Labels take \\ for a
 #       second line ("Sue Yarvin, Lender\\Accepted and agreed").
-SIGROW_RULE_FRAC = 0.44              # each rule's width / text width
-SIGROW_RIGHT_START_FRAC = 0.54       # right rule's left edge / text width
+SIGROW_LEFT_RULE_FRAC = 0.62         # signature rule's width / text width
+SIGROW_RIGHT_START_FRAC = 0.68       # date rule's left edge / text width
+SIGROW_RIGHT_RULE_FRAC = 0.32        # date rule's width / text width
 SIGROW_GRID_LINES_BASE = 4           # blank + rule + label + blank
 # A \sigrow label ending in 3+ underscores is a fill-in (text field).
 SIGROW_FILL_IN_RE = re.compile(r"^(.*?)_{3,}\s*$")
@@ -4094,13 +4095,14 @@ class PleadingPDF:
             current_line = 1
 
         current_line += 1  # breathing room above the rules
-        rule_w = self.text_width * SIGROW_RULE_FRAC
+        rule_w = self.text_width * SIGROW_LEFT_RULE_FRAC
+        right_w = self.text_width * SIGROW_RIGHT_RULE_FRAC
         rx = self.left_margin + self.text_width * SIGROW_RIGHT_START_FRAC
         y = self.line_y(current_line)
         self.c.setLineWidth(0.5)
         self.c.setStrokeColor(black)
         self.c.line(self.left_margin, y, self.left_margin + rule_w, y)
-        self.c.line(rx, y, rx + rule_w, y)
+        self.c.line(rx, y, rx + right_w, y)
         n = self._next_esign_role()
         self._esign_field(self.left_margin + 4, y,
                           f"Signature {n};role={ESIGN_ROLE_PREFIX} {n}"
@@ -4108,14 +4110,14 @@ class PleadingPDF:
                           rule_w - 4, self.ESIGN_SIG_FIELD_HEIGHT)
         self._esign_field(rx + 4, y,
                           f"Date {n};role={ESIGN_ROLE_PREFIX} {n};type=date",
-                          rule_w - 4, self.ESIGN_TEXT_FIELD_HEIGHT)
+                          right_w - 4, self.ESIGN_TEXT_FIELD_HEIGHT)
         current_line += 1
         for i in range(max(len(left_labels), len(right_labels))):
             ly = self.line_y(current_line)
-            for col_x, labels in ((self.left_margin, left_labels),
-                                  (rx, right_labels)):
+            for col_x, col_w, labels in ((self.left_margin, rule_w, left_labels),
+                                         (rx, right_w, right_labels)):
                 if i < len(labels) and labels[i]:
-                    self._sigrow_label(labels[i], col_x, ly, rule_w, n)
+                    self._sigrow_label(labels[i], col_x, ly, col_w, n)
             current_line += 1
         current_line += 1  # trailing blank
 

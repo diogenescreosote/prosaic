@@ -613,12 +613,12 @@ def _emit_sigrow_docx(doc: Document, left_raw: str, right_raw: str) -> None:
     right = [s.strip() for s in right_raw.split("\\\\")]
     add_blank(doc)
     para = doc.add_paragraph()
-    para.add_run("_" * 34 + "        " + "_" * 34)
+    para.add_run("_" * 48 + "    " + "_" * 24)
     for i in range(max(len(left), len(right))):
         row = doc.add_paragraph()
         lft = left[i] if i < len(left) else ""
         rgt = right[i] if i < len(right) else ""
-        row.add_run(f"{lft:<44}{rgt}")
+        row.add_run(f"{lft:<56}{rgt}")
     add_blank(doc)
 
 
