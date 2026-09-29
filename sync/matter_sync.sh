@@ -300,7 +300,19 @@ log "TEXT ensure start"
 # The per-message mail index (derived/mail/): a pure function of the
 # stored mbox files, so it is rebuilt after every pull. Without it a
 # message is findable only by its thread's first-message date.
-"$PROSAIC_ROOT/cli/sc" mail-index "$MATTER_DIR" >> "$LOG_FILE" 2>&1 || log "mail-index failed (non-fatal)"
+# OPTIMIZATION: skip if no new Gmail threads were exported (mail-index
+# would process unchanged mbox files unnecessarily).
+if grep -q "^gmail " "$NEW_LIST" 2>/dev/null; then
+  # New Gmail threads found: rebuild index
+  "$PROSAIC_ROOT/cli/sc" mail-index "$MATTER_DIR" >> "$LOG_FILE" 2>&1 || log "mail-index failed (non-fatal)"
+else
+  # No new Gmail threads: skip expensive rebuild unless forced
+  if [ -n "${PROSAIC_FORCE_MAIL_INDEX:-}" ]; then
+    "$PROSAIC_ROOT/cli/sc" mail-index "$MATTER_DIR" >> "$LOG_FILE" 2>&1 || log "mail-index failed (non-fatal)"
+  else
+    log "SKIP mail-index (no new Gmail threads; set PROSAIC_FORCE_MAIL_INDEX=1 to force)"
+  fi
+fi
 
 if "$PROSAIC_ROOT/cli/sc" text ensure "$MATTER_DIR" --jobs 2 > "$STATE_DIR/text_ensure_last.txt" 2>> "$LOG_FILE"; then
   log "TEXT ensure ok: $(head -1 "$STATE_DIR/text_ensure_last.txt")"
