@@ -1188,6 +1188,7 @@ def main() -> None:
 
     raw = input_path.read_text(encoding="utf-8")
     mp.require_case_names_italic(raw, input_path.name)
+    mp.require_unnumbered_headings(raw, input_path.name)
     meta, body = parse_front_matter(raw)
     # Deployment- and matter-level front-matter defaults (ADR-0035):
     # local/config.yaml < matter.yaml < the source's own front matter.

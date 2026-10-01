@@ -171,12 +171,16 @@ def test_heading_numbering_nesting_and_restarts(decl_text):
         pos = idx + len(needle)
 
 
-def test_hand_numbered_heading_stacks(built):
-    """Promise 3: hand-typed numerals stack on the automatic ones rather
-    than replacing them — the drift the auto-numbering rule exists to
-    surface."""
-    text = scenario.pdf_text(built / "out" / "negative_control" / CONTROL)
-    assert "I. I. HAND NUMBERED HEADING" in text
+def test_hand_numbered_heading_is_refused(tmp_path):
+    """Promise 3: a hand-typed numeral no longer stacks on the automatic
+    one ("I. I. ..."); the build refuses it with the line number. The
+    unit and per-renderer checks live in
+    pleading/tests/test_hand_numbered_headings.py."""
+    src = Path(__file__).resolve().parent / "matter" / "src" / "Spaced Dash Control.md"
+    raw = src.read_text().replace("# NEGATIVE CONTROL HEADING", "# I. HAND NUMBERED HEADING")
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading as mp
+    assert mp.find_hand_numbered_headings(raw)
 
 
 # ---------------------------------------------------------------------------

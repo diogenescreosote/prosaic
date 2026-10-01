@@ -16,7 +16,7 @@ case_number: "24CV00000"
 paper_title: "NEGATIVE CONTROL DECLARATION"
 ---
 
-# I. HAND NUMBERED HEADING
+# NEGATIVE CONTROL HEADING
 
 The parties met --- twice --- before any papers were filed, and the
 spaced range 1 -- 2 is equally wrong (TKNEG1).

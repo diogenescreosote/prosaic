@@ -872,6 +872,60 @@ def require_case_names_italic(raw: str, source_name: str) -> None:
     )
 
 
+# A heading that already carries an outline enumerator ("I.", "A.",
+# "1.") gets a second one from number_headings(), which prints as
+# "A. I. Argument". It recurred in drafts because nothing stopped it, so
+# the renderer refuses it whenever auto-numbering is on.
+_HAND_NUMBERED_HEADING_RE = re.compile(
+    r"^(#{1,3})\s+((?:[IVXLC]+|[A-Z]|\d+)\.)\s+\S")
+
+
+def find_hand_numbered_headings(raw: str) -> List[Tuple[int, str]]:
+    """(line number, heading line) for each heading that starts with
+    its own outline enumerator. Empty when the source sets
+    ``heading_numbers: false``."""
+    meta, _body = parse_front_matter(raw)
+    if not meta.get("heading_numbers", True):
+        return []
+    hits: List[Tuple[int, str]] = []
+    in_front = raw.startswith("---")
+    fence = False
+    for lineno, line in enumerate(raw.splitlines(), start=1):
+        if in_front:
+            if lineno > 1 and line.strip() == "---":
+                in_front = False
+            continue
+        if line.lstrip().startswith("```"):
+            fence = not fence
+            continue
+        if fence:
+            continue
+        if _HAND_NUMBERED_HEADING_RE.match(line):
+            hits.append((lineno, line.strip()))
+    return hits
+
+
+def require_unnumbered_headings(raw: str, source_name: str) -> None:
+    """Fail the build if a heading carries its own outline number while
+    the renderer is numbering headings."""
+    hits = find_hand_numbered_headings(raw)
+    if not hits:
+        return
+    lines = "\n".join(f"  line {n}: {text!r}" for n, text in hits)
+    raise SystemExit(
+        f"{source_name}: hand-numbered heading ({len(hits)} place(s)).\n"
+        f"{lines}\n\n"
+        f"Headings are numbered by the renderer (# -> I., ## -> A., ### -> 1.); "
+        f"a typed number prints twice (\"A. I. Argument\"). Write "
+        f"\"## The privilege applies\", not \"## I. The privilege applies\". "
+        f"If the document needs its own enumeration, set "
+        f"heading_numbers: false in the front matter and number every heading "
+        f"by hand. A title that should carry no number at all (\"MEMORANDUM OF "
+        f"POINTS AND AUTHORITIES\") is not a heading: use "
+        f"\\center{{**...**}}."
+    )
+
+
 # ---------------------------------------------------------------------------
 # Inline style parsing (*italic*, **bold**, <u>underline</u>, [^footnote])
 # ---------------------------------------------------------------------------
@@ -5153,6 +5207,7 @@ def main() -> None:
 
     warn_spaced_dashes(raw, input_path)
     require_case_names_italic(raw, input_path.name)
+    require_unnumbered_headings(raw, input_path.name)
 
     meta, body = parse_front_matter(raw)
     # Deployment- and matter-level front-matter defaults (ADR-0035):
