@@ -884,7 +884,10 @@ def find_hand_numbered_headings(raw: str) -> List[Tuple[int, str]]:
     """(line number, heading line) for each heading that starts with
     its own outline enumerator. Empty when the source sets
     ``heading_numbers: false``."""
-    meta, _body = parse_front_matter(raw)
+    try:
+        meta, _body = parse_front_matter(raw)
+    except ValueError:
+        meta = {}  # no front matter: the renderer reports that itself
     if not meta.get("heading_numbers", True):
         return []
     hits: List[Tuple[int, str]] = []

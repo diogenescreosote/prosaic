@@ -78,3 +78,7 @@ def test_every_renderer_refuses(tmp_path, script):
                           capture_output=True, text=True, cwd=tmp_path)
     assert proc.returncode != 0
     assert "hand-numbered heading" in proc.stderr
+
+
+def test_source_without_front_matter_does_not_crash():
+    assert mp.find_hand_numbered_headings("## I. Notes\n") == [(1, "## I. Notes")]
