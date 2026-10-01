@@ -28,7 +28,7 @@ court_name: SUPERIOR COURT OF CALIFORNIA
 court_county: COUNTY OF EXAMPLE
 petitioner: JANE ROE
 respondent: JOHN DOE
-case_number: 24FL00000
+case_number: 24CV00000
 paper_title: MEMORANDUM
 ---
 """
