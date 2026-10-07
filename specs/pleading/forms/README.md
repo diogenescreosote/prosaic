@@ -49,6 +49,13 @@ of programming.
    — the document that requires them (specs/pleading/generator.md,
    promise 11). *(tested: form_filling scenario)*
 
+8. **Pages that are not filed are not emitted.** A blank whose trailing
+   pages are its own instructions ("this page need not be filed")
+   declares `filed_pages:` in its descriptor, and every fill —
+   standalone or as a cover sheet — writes only those pages unless an
+   explicit page spec asks for more. *(tested:
+   test_ra010_files_two_pages_and_keeps_the_instructions_on_request)*
+
 ## Non-obvious constraints
 
 - **Field names lie; only verification is trusted.** JC field names

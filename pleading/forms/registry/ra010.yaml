@@ -1,0 +1,724 @@
+# RA-010 — Notice of Remote Appearance (Judicial Council of California)
+#
+# Mandatory in a civil case (CCP § 367.75; Cal. Rules of Court, rule
+# 3.672) unless the court's website describes an online procedure for
+# giving notice. Three pages: page 1 is the caption and the substance
+# (who appears remotely, at what, by what means, and --- for an
+# evidentiary hearing or trial --- what else the party asks to have done
+# remotely); page 2 carries the confidentiality undertaking, the
+# signature, and a Declaration of Notice grid; page 3 is instructions
+# that the form itself says "need not be filed". `filed_pages: "1-2"`
+# keeps page 3 out of every fill (pass `--pages 1-3` to keep it).
+#
+# Overlay technology (ADR-0046): values draw at widget rects, output
+# flattens. Every mapping below was verified empirically on the shipped
+# blank (fill each field with a distinctive value, rasterize, look).
+# Things worth knowing about this 2022 blank:
+#
+# 1. ITEM 2's a/b BOXES SHARE THE LEAF NAME Ch1[0] (parents Lia/Lib)
+#    and differ in on-state: "/1" for 2a, "/2" for 2b.
+# 2. THE DECLARATION-OF-NOTICE GRID RECYCLES LEAF NAMES: rows 3, 5, 7
+#    and 8 all use T162-T165, rows 4 and 6 both use CheckBox24/Field2/
+#    T166-T169. Only the List parent distinguishes them --- and row 5's
+#    parent is literally named `List5\.1`, backslash and all.
+# 3. THE FACE NUMBERS THE LAST TWO GRID BLOCKS "7." AND "7."; the
+#    right-hand one is the eighth block. Descriptor keys call it
+#    notice8_* so the keys stay unique; the paper still prints "7."
+# 4. Page 2's short caption widgets are read-only on the blank (they
+#    mirror page 1 in a live viewer); an overlay draws them like any
+#    other field.
+
+form: ra010
+title: Notice of Remote Appearance
+domain: ca/civil
+revision: "2022-01"           # footer: "RA-010 [New January 1, 2022]"
+source_url: https://courts.ca.gov/documents/ra010.pdf
+blank: ra010.pdf
+technology: overlay
+
+# Page 3 is the form's own instructions ("This page does not need to be
+# filed."). A fill emits the filed pages only.
+filed_pages: "1-2"
+
+# One signer: the person giving notice signs both the notice (item 5
+# block) and the Declaration of Notice.
+esign_parties: [filer]
+
+# Print/Save/Clear and the privacy banner sit on page 3; stripped so
+# they never bake in even when page 3 is kept on request.
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+# The privacy banner's static gray underlay on page 3 (Warning widget
+# rect [36.0, 14.9, 247.3, 38.1]) --- painted out for a fill that keeps
+# page 3; on the default filed pages it is simply not emitted.
+whiteouts:
+  - page: 3
+    rect: [35, 13.5, 249, 39.5]
+
+fields:
+  # -- Page 1 caption: granular attorney/party block -------------------------
+  atty_name:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].Name[0]"
+    page: 1
+    doc: "NAME"
+    auto: filer_name_bare
+  atty_bar_no:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].AttyBarNo[0]"
+    page: 1
+    doc: "STATE BAR NUMBER (a self-represented filer has none; drawn only when filer_bar_number is set)"
+    auto: filer_bar_number
+  atty_firm:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].AttyFirm[0]"
+    page: 1
+    doc: "FIRM NAME"
+    auto: filer_firm
+  atty_street:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].Street[0]"
+    page: 1
+    doc: "STREET ADDRESS"
+    auto: filer_street
+  atty_city:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].City[0]"
+    page: 1
+    doc: "CITY"
+    auto: filer_city
+  atty_state:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].State[0]"
+    page: 1
+    doc: "STATE"
+    auto: filer_state
+  atty_zip:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].Zip[0]"
+    page: 1
+    doc: "ZIP CODE"
+    auto: filer_zip
+  phone:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+  fax:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO."
+    auto: fax
+  email:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "EMAIL ADDRESS"
+    auto: email
+  attorney_for:
+    map: "RA-010[0].Page1[0].Header_sf[0].AttyPartyInfo[0].AttyFor[0]"
+    page: 1
+    doc: "ATTORNEY FOR (name) --- or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Page 1 caption: court, parties, case ----------------------------------
+  court_county:
+    map: "RA-010[0].Page1[0].Header_sf[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: "County name only --- the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: "RA-010[0].Page1[0].Header_sf[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "Court STREET ADDRESS"
+    auto: court_street_address
+  court_mailing_address:
+    map: "RA-010[0].Page1[0].Header_sf[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "Court MAILING ADDRESS"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "RA-010[0].Page1[0].Header_sf[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "Court CITY AND ZIP CODE"
+    auto: court_city_zip
+  court_branch:
+    map: "RA-010[0].Page1[0].Header_sf[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME"
+    auto: court_branch
+  plaintiff:
+    map: "RA-010[0].Page1[0].Header_sf[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF/PETITIONER caption name (bound to the petitioner meta key)"
+    auto: petitioner
+  defendant:
+    map: "RA-010[0].Page1[0].Header_sf[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT/RESPONDENT caption name (bound to the respondent meta key)"
+    auto: respondent
+  other_case_name:
+    map: "RA-010[0].Page1[0].Header_sf[0].TitlePartyName[0].Party3[0]"
+    page: 1
+    doc: "OTHER CASE NAME --- only when the caption needs one (a consolidated or related matter); usually blank"
+    default: ""
+  case_number:
+    map: "RA-010[0].Page1[0].Header_sf[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+
+  # -- Page 2 short caption ----------------------------------------------------
+  plaintiff_p2:
+    map: "RA-010[0].Page2[0].PxCaption[0].TitlePartyName[0].Party1[0]"
+    page: 2
+    doc: "PLAINTIFF (page 2 copy)"
+    auto: petitioner
+  defendant_p2:
+    map: "RA-010[0].Page2[0].PxCaption[0].TitlePartyName[0].Party2[0]"
+    page: 2
+    doc: "DEFENDANT (page 2 copy)"
+    auto: respondent
+  case_number_p2:
+    map: "RA-010[0].Page2[0].PxCaption[0].CaseNumber[0].CaseNumber[0]"
+    page: 2
+    doc: "CASE NUMBER (page 2 copy)"
+    auto: case_number
+
+  # -- Item 1: who will appear remotely ---------------------------------------
+  appearing_plaintiff_name:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].TextField1[0]"
+    page: 1
+    doc: "Item 1 'Plaintiff/Petitioner (name)' --- pair with checkbox appearing_plaintiff"
+    default: ""
+    size_group: item1
+  appearing_plaintiff_attorney_name:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].TextField2[0]"
+    page: 1
+    doc: "Item 1 'Attorney for Plaintiff/Petitioner (name)' --- pair with appearing_plaintiff_attorney"
+    default: ""
+    size_group: item1
+  appearing_defendant_name:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].TextField3[0]"
+    page: 1
+    doc: "Item 1 'Defendant/Respondent (name)' --- pair with appearing_defendant"
+    default: ""
+    size_group: item1
+  appearing_defendant_attorney_name:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].TextField4[0]"
+    page: 1
+    doc: "Item 1 'Attorney for Defendant/Respondent (name)' --- pair with appearing_defendant_attorney"
+    default: ""
+    size_group: item1
+  appearing_other_name_role:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].TextField5[0]"
+    page: 1
+    doc: >-
+      Item 1 'Other (name and role in case)' --- the line beside the
+      box. The place for a nonparty WITNESS who will testify remotely,
+      e.g. "Mavis Example, nonparty witness (records custodian of
+      Example Bank)". Pair with appearing_other.
+    default: ""
+    size_group: item1
+  appearing_other_continued:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].TextField6[0]"
+    page: 1
+    doc: >-
+      Item 1 'Other' continued --- the multiline area under the Other
+      line, for further remote witnesses or a longer description of
+      roles. One person per line reads best.
+    default: ""
+    fit: shrink_wrap
+
+  # -- Item 2: scope (a: throughout the case; b: one proceeding) ----------------
+  proceeding_type:
+    map: "RA-010[0].Page1[0].List2[0].Lib[0].FillText23[0]"
+    page: 1
+    doc: "Item 2b 'Type of proceeding' (e.g. 'Evidentiary hearing on motion to compel'); only with scope_proceeding"
+    default: ""
+  proceeding_date:
+    map: "RA-010[0].Page1[0].List2[0].Lib[0].FillText24[0]"
+    page: 1
+    doc: "Item 2b 'Set on (date)' --- the date the proceeding is set for"
+    default: ""
+    size_group: item2b
+  proceeding_time:
+    map: "RA-010[0].Page1[0].List2[0].Lib[0].FillText25[0]"
+    page: 1
+    doc: "Item 2b 'at (time)'"
+    default: ""
+    size_group: item2b
+  proceeding_dept:
+    map: "RA-010[0].Page1[0].List2[0].Lib[0].FillText26[0]"
+    page: 1
+    doc: "Item 2b 'in (department)'"
+    default: ""
+    size_group: item2b
+  proceeding_judicial_officer:
+    map: "RA-010[0].Page1[0].List2[0].Lib[0].FillText27[0]"
+    page: 1
+    doc: "Item 2b 'Before (name of judicial officer, if known)'"
+    default: ""
+
+  # -- Item 4: evidentiary hearing or trial only --------------------------------
+  remote_aspects:
+    map: "RA-010[0].Page1[0].List4[0].item4[0].TextField11[0]"
+    page: 1
+    doc: >-
+      Item 4 --- what ADDITIONAL aspects of an evidentiary hearing or
+      trial the party asks to have conducted remotely, and why (e.g.
+      remote testimony of a named nonparty witness). Pair with checkbox
+      remote_aspects_requested. The form says to attach an MC-025 if
+      more space is needed; text that does not fit spills to one
+      automatically ("See Attachment 4.").
+    default: ""
+    fit: overflow_attachment
+    attachment_label: Attachment 4
+    align: left
+    valign: top
+
+  # -- Page 2: item 5 signature block ------------------------------------------
+  sig_date:
+    map: "RA-010[0].Page2[0].Sign1[0].Date1[0]"
+    page: 2
+    doc: "Date beside the notice signature --- LEAVE BLANK for signing time"
+    default: ""
+    esign: {type: date, party: filer}
+  print_name:
+    map: "RA-010[0].Page2[0].Sign1[0].Print1[0]"
+    page: 2
+    doc: "(TYPE OR PRINT NAME) under the notice signature; pre-filled from the filer"
+    auto: filer_name_bare
+  signature:
+    page: 2
+    # No widget for the stroke: the blank draws only the rule at
+    # x 324.1--576.0, y 654.7 (read from its vector geometry). The rect
+    # rests on that rule and clears the item-5 line above.
+    rect: [345, 656, 576, 676]
+    doc: "(SIGNATURE) of the notice --- reserved; never machine-filled"
+    default: ""
+    esign: {type: signature, party: filer}
+
+  # -- Page 2: Declaration of Notice grid ------------------------------------------
+  # Block 1 (left): Plaintiff/Petitioner
+  notice1_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List1[0].Lia[0].T154[0]"
+    page: 2
+    doc: "Declaration block 1 (Plaintiff/Petitioner) a. Name"
+    default: ""
+    size_group: notice
+  notice1_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List1[0].Lib[0].T155[0]"
+    page: 2
+    doc: "Block 1 b. Date of notice --- when notice was actually given (a fact, not a signing date)"
+    default: ""
+    size_group: notice
+  notice1_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List1[0].Lic[0].T156[0]"
+    page: 2
+    doc: "Block 1 c. Method of notice --- one of Mail / Overnight delivery / Electronic notice / Phone / In person"
+    default: ""
+    size_group: notice
+  notice1_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List1[0].Lid[0].T157[0]"
+    page: 2
+    doc: "Block 1 d. Address (mailing, in-person, or email) or phone number the notice went to"
+    default: ""
+    size_group: notice_address
+  # Block 2 (right): Attorney for
+  notice2_attorney_for:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List2[0].Field1[0]"
+    page: 2
+    doc: "Block 2 'Attorney for:' --- whom the attorney represents (e.g. 'Plaintiff')"
+    default: ""
+    size_group: notice
+  notice2_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List2[0].Lia[0].T158[0]"
+    page: 2
+    doc: "Block 2 a. Name"
+    default: ""
+    size_group: notice
+  notice2_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List2[0].Lib[0].T159[0]"
+    page: 2
+    doc: "Block 2 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice2_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List2[0].Lic[0].T160[0]"
+    page: 2
+    doc: "Block 2 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice2_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List2[0].Lid[0].T161[0]"
+    page: 2
+    doc: "Block 2 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+  # Block 3 (left): Defendant/Respondent
+  notice3_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List3[0].Lia[0].T162[0]"
+    page: 2
+    doc: "Block 3 (Defendant/Respondent) a. Name"
+    default: ""
+    size_group: notice
+  notice3_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List3[0].Lib[0].T163[0]"
+    page: 2
+    doc: "Block 3 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice3_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List3[0].Lic[0].T164[0]"
+    page: 2
+    doc: "Block 3 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice3_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List3[0].Lid[0].T165[0]"
+    page: 2
+    doc: "Block 3 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+  # Block 4 (right): Attorney for
+  notice4_attorney_for:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List4[0].Field2[0]"
+    page: 2
+    doc: "Block 4 'Attorney for:'"
+    default: ""
+    size_group: notice
+  notice4_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List4[0].Lia[0].T166[0]"
+    page: 2
+    doc: "Block 4 a. Name"
+    default: ""
+    size_group: notice
+  notice4_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List4[0].Lib[0].T167[0]"
+    page: 2
+    doc: "Block 4 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice4_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List4[0].Lic[0].T168[0]"
+    page: 2
+    doc: "Block 4 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice4_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List4[0].Lid[0].T169[0]"
+    page: 2
+    doc: "Block 4 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+  # Block 5 (left): Other (specify)
+  notice5_other_specify:
+    map: 'RA-010[0].Page2[0].NoticetoOtherParties[0].List5\.1[0].Field5[0]'
+    page: 2
+    doc: "Block 5 'Other (specify)' --- the person's role (e.g. 'Real party in interest')"
+    default: ""
+    size_group: notice
+  notice5_name:
+    map: 'RA-010[0].Page2[0].NoticetoOtherParties[0].List5\.1[0].Lia[0].T162[0]'
+    page: 2
+    doc: "Block 5 a. Name"
+    default: ""
+    size_group: notice
+  notice5_date:
+    map: 'RA-010[0].Page2[0].NoticetoOtherParties[0].List5\.1[0].Lib[0].T163[0]'
+    page: 2
+    doc: "Block 5 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice5_method:
+    map: 'RA-010[0].Page2[0].NoticetoOtherParties[0].List5\.1[0].Lic[0].T164[0]'
+    page: 2
+    doc: "Block 5 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice5_address:
+    map: 'RA-010[0].Page2[0].NoticetoOtherParties[0].List5\.1[0].Lid[0].T165[0]'
+    page: 2
+    doc: "Block 5 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+  # Block 6 (right): Attorney for
+  notice6_attorney_for:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List6[0].Field2[0]"
+    page: 2
+    doc: "Block 6 'Attorney for:'"
+    default: ""
+    size_group: notice
+  notice6_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List6[0].Lia[0].T166[0]"
+    page: 2
+    doc: "Block 6 a. Name"
+    default: ""
+    size_group: notice
+  notice6_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List6[0].Lib[0].T167[0]"
+    page: 2
+    doc: "Block 6 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice6_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List6[0].Lic[0].T168[0]"
+    page: 2
+    doc: "Block 6 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice6_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List6[0].Lid[0].T169[0]"
+    page: 2
+    doc: "Block 6 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+  # Block 7 (left): Other (specify)
+  notice7_other_specify:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List7[0].Field5[0]"
+    page: 2
+    doc: "Block 7 'Other (specify)'"
+    default: ""
+    size_group: notice
+  notice7_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List7[0].Lia[0].T162[0]"
+    page: 2
+    doc: "Block 7 a. Name"
+    default: ""
+    size_group: notice
+  notice7_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List7[0].Lib[0].T163[0]"
+    page: 2
+    doc: "Block 7 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice7_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List7[0].Lic[0].T164[0]"
+    page: 2
+    doc: "Block 7 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice7_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List7[0].Lid[0].T165[0]"
+    page: 2
+    doc: "Block 7 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+  # Block 8 (right; the face misnumbers it "7."): Other (specify)
+  notice8_other_specify:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List8[0].Field5[0]"
+    page: 2
+    doc: "Block 8 'Other (specify)' --- the bottom-right block, printed '7.' on the face"
+    default: ""
+    size_group: notice
+  notice8_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List8[0].Lia[0].T162[0]"
+    page: 2
+    doc: "Block 8 a. Name"
+    default: ""
+    size_group: notice
+  notice8_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List8[0].Lib[0].T163[0]"
+    page: 2
+    doc: "Block 8 b. Date of notice"
+    default: ""
+    size_group: notice
+  notice8_method:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List8[0].Lic[0].T164[0]"
+    page: 2
+    doc: "Block 8 c. Method of notice"
+    default: ""
+    size_group: notice
+  notice8_address:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List8[0].Lid[0].T165[0]"
+    page: 2
+    doc: "Block 8 d. Address or phone number"
+    default: ""
+    size_group: notice_address
+
+  # -- Page 2: Declaration of Notice signature block -------------------------------
+  decl_sig_date:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].Sign2[0].Date2[0]"
+    page: 2
+    doc: "Date beside the Declaration of Notice signature --- LEAVE BLANK for signing time"
+    default: ""
+    esign: {type: date, party: filer}
+  decl_print_name:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].Sign2[0].Print2[0]"
+    page: 2
+    doc: "(TYPE OR PRINT NAME) under the declaration signature; pre-filled from the filer"
+    auto: filer_name_bare
+  decl_signature:
+    page: 2
+    # Widgetless, like the item-5 signature: rule x 324.1--576.0 at
+    # y 73.0; the rect rests on it below the perjury recital.
+    rect: [345, 74, 576, 94]
+    doc: "(SIGNATURE) of the Declaration of Notice --- reserved; never machine-filled"
+    default: ""
+    esign: {type: signature, party: filer}
+
+checkboxes:
+  # -- Item 1 ---------------------------------------------------------------
+  appearing_plaintiff:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].CheckBox1[0]"
+    on_value: "/1"
+    doc: "Item 1 --- Plaintiff/Petitioner will appear remotely"
+  appearing_plaintiff_attorney:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].CheckBox2[0]"
+    on_value: "/1"
+    doc: "Item 1 --- Attorney for Plaintiff/Petitioner will appear remotely"
+  appearing_defendant:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].CheckBox3[0]"
+    on_value: "/1"
+    doc: "Item 1 --- Defendant/Respondent will appear remotely"
+  appearing_defendant_attorney:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].CheckBox4[0]"
+    on_value: "/1"
+    doc: "Item 1 --- Attorney for Defendant/Respondent will appear remotely"
+  appearing_other:
+    map: "RA-010[0].Page1[0].List1[0].item1[0].CheckBox5[0]"
+    on_value: "/1"
+    doc: "Item 1 --- Other (name and role in case): e.g. a nonparty witness testifying remotely"
+  # -- Item 2 (check one) ----------------------------------------------------
+  scope_throughout_case:
+    map: "RA-010[0].Page1[0].List2[0].Lia[0].Ch1[0]"
+    on_value: "/1"
+    doc: "Item 2a --- remote appearance throughout the case (file once)"
+  scope_proceeding:
+    map: "RA-010[0].Page1[0].List2[0].Lib[0].Ch1[0]"
+    on_value: "/2"
+    doc: >-
+      Item 2b --- remote appearance at the proceeding described
+      (proceeding_type/date/time/dept/judicial_officer), including any
+      continued dates. On-state "/2" (shares leaf Ch1 with 2a).
+  # -- Item 3 ----------------------------------------------------------------
+  method_videoconference:
+    map: "RA-010[0].Page1[0].List3[0].item3[0].Ch2[0]"
+    on_value: "/1"
+    doc: "Item 3 --- by Videoconference"
+  method_audio_only:
+    map: "RA-010[0].Page1[0].List3[0].item3[0].Ch3[0]"
+    on_value: "/1"
+    doc: "Item 3 --- by Audio only (including telephone)"
+  # -- Item 4 ----------------------------------------------------------------
+  remote_aspects_requested:
+    map: "RA-010[0].Page1[0].List4[0].item4[0].CheckBox8[0]"
+    on_value: "/1"
+    doc: "Item 4 --- evidentiary hearing or trial: the party requests additional aspects be conducted remotely (describe in remote_aspects)"
+  # -- Item 5 ----------------------------------------------------------------
+  confidentiality_agreement:
+    map: "RA-010[0].Page2[0].List5[0].item5[0].CheckBox12[0]"
+    on_value: "/1"
+    doc: >-
+      Item 5 --- "I agree to keep the proceeding confidential to the
+      same extent as would be required if I were appearing in person."
+      Check for any confidential proceeding; the signer's own
+      undertaking, so set only on the signer's instruction.
+  # -- Declaration of Notice ---------------------------------------------------
+  notice1_plaintiff:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List1[0].CheckBox20[0]"
+    on_value: "/1"
+    doc: "Declaration block 1 --- notice given to Plaintiff/Petitioner"
+  notice2_attorney:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List2[0].CheckBox21[0]"
+    on_value: "/1"
+    doc: "Declaration block 2 --- notice given to an Attorney for (notice2_attorney_for)"
+  notice3_defendant:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List3[0].CheckBox22[0]"
+    on_value: "/1"
+    doc: "Declaration block 3 --- notice given to Defendant/Respondent"
+  notice4_attorney:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List4[0].CheckBox24[0]"
+    on_value: "/1"
+    doc: "Declaration block 4 --- notice given to an Attorney for (notice4_attorney_for)"
+  notice5_other:
+    map: 'RA-010[0].Page2[0].NoticetoOtherParties[0].List5\.1[0].CheckBox29[0]'
+    on_value: "/1"
+    doc: "Declaration block 5 --- notice given to Other (notice5_other_specify)"
+  notice6_attorney:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List6[0].CheckBox24[0]"
+    on_value: "/1"
+    doc: "Declaration block 6 --- notice given to an Attorney for (notice6_attorney_for)"
+  notice7_other:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List7[0].CheckBox29[0]"
+    on_value: "/1"
+    doc: "Declaration block 7 --- notice given to Other (notice7_other_specify)"
+  notice8_other:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].List8[0].CheckBox29[0]"
+    on_value: "/1"
+    doc: "Declaration block 8 (printed '7.' at bottom right) --- notice given to Other (notice8_other_specify)"
+  more_people_attachment:
+    map: "RA-010[0].Page2[0].NoticetoOtherParties[0].Mc025[0].CheckBox19[0]"
+    on_value: "/1"
+    doc: >-
+      "If more people were given notice, check here, attach form MC-025,
+      titled as Attachment Notice" --- the MC-025 is a separate
+      document the filer prepares; checking this box does not create it.
+
+agent_guide: |
+  RA-010 is the MANDATORY notice that a party, attorney or witness
+  intends to appear remotely in a civil case (CCP § 367.75; Cal. Rules
+  of Court, rule 3.672), unless the court's website describes an online
+  procedure for giving notice instead. Check the court's website first.
+  Not for juvenile dependency proceedings.
+
+  DEADLINES (rule 3.672(g)-(h); the form's page 3 summarizes them as
+  of 2022 --- the rule was amended effective August 4, 2023, so read
+  the current rule, not page 3):
+    - Proceeding without testimony, noticed 3+ court days out: at least
+      2 court days before. Shorter notice: with the moving papers (the
+      moving party), or by 2 p.m. the court day before (anyone else).
+    - EVIDENTIARY HEARING OR TRIAL noticed 15+ court days out (and
+      every small claims trial): file RA-010 and give notice at least
+      10 COURT DAYS before (rule 3.672(h)(2)(C)).
+    - Evidentiary hearing or trial on less than 15 court days' notice:
+      as for a short-notice proceeding above, or file RA-010 and give
+      notice received at least 5 court days before (rule
+      3.672(h)(2)(D)).
+  For an evidentiary hearing or trial this notice IS the motion for a
+  remote appearance under CCP § 367.75(d) (rule 3.672(h)(2)(B)). An
+  opposing party objects on RA-015, served and filed at least 5 court
+  days before (15+ days' notice) or by noon the court day before
+  (shorter notice) (rule 3.672(h)(3)). The court may still require
+  anyone to appear in person, and the court decides; RA-020 is the
+  optional order form.
+
+  ITEM 1 --- who appears remotely: check each that applies and name
+  them. A NONPARTY WITNESS who will testify remotely goes under "Other
+  (name and role in case)" (appearing_other + appearing_other_name_role;
+  more names in appearing_other_continued).
+  ITEM 2 --- check ONE: scope_throughout_case (file once) or
+  scope_proceeding plus proceeding_type/date/time/dept/
+  judicial_officer.
+  ITEM 3 --- method_videoconference and/or method_audio_only, per what
+  the court's website allows in that department.
+  ITEM 4 --- evidentiary hearing or trial only: remote_aspects_requested
+  + remote_aspects (what else should happen remotely, and why). Long
+  text spills to an MC-025 "Attachment 4" automatically.
+  ITEM 5 --- confidentiality_agreement, the signer's own undertaking.
+
+      forms:
+        ra010:
+          appearing_other: true
+          appearing_other_name_role: "Mavis Example, nonparty witness"
+          scope_proceeding: true
+          proceeding_type: "Evidentiary hearing on motion for protective order re discovery"
+          proceeding_date: "November 18, 2026"
+          proceeding_time: "9:00 a.m."
+          proceeding_dept: "12"
+          method_videoconference: true
+          remote_aspects_requested: true
+          remote_aspects: >-
+            Testimony of nonparty witness Mavis Example by
+            videoconference; she resides out of state.
+
+  DECLARATION OF NOTICE (page 2): notice must reach every party and
+  person entitled to notice; prove it either by a proof of service
+  (POS-040, or POS-050 for electronic service) or by completing this
+  grid. One block per person: check the role box, then a. name, b. date
+  of notice, c. method (Mail / Overnight delivery / Electronic notice /
+  Phone / In person), d. the address or phone number used. Blocks 2, 4
+  and 6 are "Attorney for:" (say whom in noticeN_attorney_for); 5, 7, 8
+  are "Other (specify)". Block 8 is the bottom-right one, which the
+  face misnumbers "7.". More people: more_people_attachment and a
+  separate MC-025 titled "Attachment Notice".
+
+  The caption fills from standard front matter on both pages (the
+  page-2 caption is PLAINTIFF / DEFENDANT / CASE NUMBER only). The
+  print-name lines pre-fill from the filer. ALWAYS left blank: both
+  dates beside the signatures and both signatures (e-sign fields for
+  `sc docuseal send`). Page 3 is instructions and is dropped from the
+  fill (`filed_pages`); pass `--pages 1-3` to keep it for reference.

@@ -10,6 +10,7 @@ failure mode that otherwise produces silently empty filings.
 
 from __future__ import annotations
 
+import json
 import sys
 from pathlib import Path
 
@@ -560,3 +561,89 @@ def test_esign_fields_export_geometry_for_the_sidecar():
         assert f["page"] >= 1 and f["h"] > 0 and f["w"] > 0
     # party position -> role number: mc040's first party is Signer 1
     assert any(f["role"] == "Signer 1" for f in fields)
+
+
+# ---------------------------------------------------------------------------
+# RA-010 / RA-020: remote appearance (specs/pleading/forms/ra010.md, ra020.md)
+# ---------------------------------------------------------------------------
+
+RA010_GRID = {
+    # The declaration-of-notice blocks recycle leaf names (rows 3/5/7/8
+    # share T162-T165; rows 4/6 share CheckBox24/Field2/T166-T169), so
+    # each block gets its own sentinel and must land in its own box.
+    f"notice{n}_{part}": f"N{n}{part.upper()}"
+    for n in range(1, 9)
+    for part in ("name", "date", "method", "address")
+}
+
+
+@pytest.mark.skipif("ra010" not in FORMS, reason="ra010 descriptor not present")
+def test_ra010_files_two_pages_and_keeps_the_instructions_on_request(tmp_path):
+    """Page 3 is the form's own instructions ("need not be filed"):
+    `filed_pages` drops it from every fill, an explicit page spec still
+    reaches it, and the e-sign sidecar follows the pages written."""
+    out = tmp_path / "ra010.pdf"
+    form_fill.fill("ra010", out, meta=dict(FIXTURE_META))
+    assert len(PdfReader(str(out)).pages) == 2
+    assert "Instructions for Giving Notice" not in probe.all_text(out)
+    sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
+    assert {f["page"] for f in sidecar["fields"]} == {2}
+    assert sorted(f["type"] for f in sidecar["fields"]) == [
+        "date", "date", "signature", "signature"]
+
+    full = tmp_path / "ra010_full.pdf"
+    form_fill.fill("ra010", full, meta=dict(FIXTURE_META), pages="1-3")
+    assert len(PdfReader(str(full)).pages) == 3
+    assert "Instructions for Giving Notice" in probe.all_text(full)
+
+
+@pytest.mark.skipif("ra010" not in FORMS, reason="ra010 descriptor not present")
+def test_ra010_grid_blocks_land_in_their_own_boxes_and_signing_stays_blank(tmp_path):
+    out = tmp_path / "ra010_rich.pdf"
+    data = {
+        **RA010_GRID,
+        "notice8_other": True,
+        "notice5_other": True,
+        "scope_proceeding": True,
+        "appearing_other": True,
+        "appearing_other_name_role": "Mavis Example, nonparty witness",
+        "proceeding_type": "Evidentiary hearing",
+    }
+    form_fill.fill("ra010", out, meta=dict(FIXTURE_META), data=data)
+    assert probe.has_no_form_layer(out)
+    for name, value in RA010_GRID.items():
+        assert probe.field_text(out, "ra010", name) == value, name
+    assert probe.checkbox_marked(out, "ra010", "notice8_other")
+    assert probe.checkbox_marked(out, "ra010", "notice5_other")
+    assert not probe.checkbox_marked(out, "ra010", "notice7_other")
+    # 2a and 2b share the leaf name Ch1; only 2b was asked for.
+    assert probe.checkbox_marked(out, "ra010", "scope_proceeding")
+    assert not probe.checkbox_marked(out, "ra010", "scope_throughout_case")
+    text = probe.all_text(out)
+    assert "24CV00000" in probe.page_text(out, 2), "page-2 caption"
+    assert "Mavis Example, nonparty witness" in text
+    for blank in ("sig_date", "decl_sig_date"):
+        assert not probe.field_text(out, "ra010", blank).strip(), blank
+    assert probe.field_text(out, "ra010", "print_name") == "Jane Roe"
+
+
+@pytest.mark.skipif("ra020" not in FORMS, reason="ra020 descriptor not present")
+def test_ra020_judicial_signature_block_is_never_filled(tmp_path):
+    out = tmp_path / "ra020.pdf"
+    data = {
+        "proceeding_type": "Evidentiary hearing",
+        "remote_permitted": True,
+        "remote_names": "Mavis Example\nSam Sample",
+        "remote_roles": "Nonparty witness\nNonparty witness",
+        "tech_video_only": True,
+    }
+    form_fill.fill("ra020", out, meta=dict(FIXTURE_META), data=data)
+    assert probe.has_no_form_layer(out)
+    assert len(PdfReader(str(out)).pages) == 1
+    assert not probe.field_text(out, "ra020", "judge_date").strip()
+    assert not probe.field_text(out, "ra020", "judge_name").strip()
+    assert not out.with_name(out.name + ".fields.json").exists(), (
+        "RA-020 declares no e-sign party: the judicial signature is the court's")
+    assert probe.checkbox_marked(out, "ra020", "remote_permitted")
+    assert not probe.checkbox_marked(out, "ra020", "in_person_required")
+    assert "Sam Sample" in probe.field_text(out, "ra020", "remote_names")

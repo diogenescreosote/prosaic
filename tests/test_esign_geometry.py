@@ -111,6 +111,15 @@ def fill(form_id: str, tmp_path: Path, pages: str | None = None, stem: str | Non
         ("subp025", {"notice_date": "date", "notice_signature": "signature"}),
         ("fw001", {"sig_date": "date", "signature": "signature"}),
         ("mc030", {"date": "date", "signature": "signature"}),
+        (
+            "ra010",
+            {
+                "sig_date": "date",
+                "signature": "signature",
+                "decl_sig_date": "date",
+                "decl_signature": "signature",
+            },
+        ),
     ],
 )
 def test_form_fill_writes_a_build_sidecar_on_the_rules(

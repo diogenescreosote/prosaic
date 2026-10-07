@@ -1,0 +1,301 @@
+# RA-020 — Order Regarding Remote Appearance (Judicial Council of
+# California)
+#
+# One page, approved for OPTIONAL use (CCP § 367.75; Cal. Rules of
+# Court, rule 3.672). The court's order on a notice of remote
+# appearance (RA-010) and any opposition (RA-015): which proceeding,
+# who must appear in person, who may appear remotely and by what
+# technology, and any other orders. A party may lodge it filled as a
+# proposed order; the judicial officer signs and dates it by hand.
+#
+# Overlay technology (ADR-0046): values draw at widget rects, output
+# flattens; the Print/Save/Clear buttons and the privacy banner are
+# stripped before the bake. Every mapping below was verified
+# empirically on the shipped blank (fill, rasterize, look).
+#
+# The Name / Role in Case grids in items 2 and 3a are each ONE pair of
+# multiline widgets (a Name column and a Role column), not rows. One
+# person per line, the same line count in both columns, and a shared
+# size_group keep each name level with its role.
+
+form: ra020
+title: Order Regarding Remote Appearance
+domain: ca/civil
+revision: "2022-01"           # footer: "RA-020 [New January 1, 2022]"
+source_url: https://courts.ca.gov/documents/ra020.pdf
+blank: ra020.pdf
+technology: overlay
+
+# No esign_parties: the only signature is the judicial officer's, which
+# is wet ink (or the court's own e-signature) and never ours to place.
+
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+# Static gray under-rectangle where the stripped privacy banner sat ---
+# page content the flatten cannot remove. The Warning widget's rect is
+# [36.1, 8.9, 247.4, 32.0]; this is that with a margin, clear of the
+# footer's form-number line above it (found by rendering).
+whiteouts:
+  - page: 1
+    rect: [35, 7.5, 249, 33.5]
+
+fields:
+  # -- Caption: granular attorney/party block (the party lodging the order) --
+  atty_name:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Name[0]"
+    page: 1
+    doc: "NAME"
+    auto: filer_name_bare
+  atty_bar_no:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].AttyBarNo[0]"
+    page: 1
+    doc: "STATE BAR NUMBER (drawn only when filer_bar_number is set)"
+    auto: filer_bar_number
+  atty_firm:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].AttyFirm[0]"
+    page: 1
+    doc: "FIRM NAME"
+    auto: filer_firm
+  atty_street:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Street[0]"
+    page: 1
+    doc: "STREET ADDRESS"
+    auto: filer_street
+  atty_city:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].City[0]"
+    page: 1
+    doc: "CITY"
+    auto: filer_city
+  atty_state:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].State[0]"
+    page: 1
+    doc: "STATE"
+    auto: filer_state
+  atty_zip:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Zip[0]"
+    page: 1
+    doc: "ZIP CODE"
+    auto: filer_zip
+  phone:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Phone[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+  fax:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Fax[0]"
+    page: 1
+    doc: "FAX NO."
+    auto: fax
+  email:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].Email[0]"
+    page: 1
+    doc: "EMAIL ADDRESS"
+    auto: email
+  attorney_for:
+    map: "RA-020[0].Page1[0].P1Caption[0].AttyPartyInfo[0].AttyFor[0]"
+    page: 1
+    doc: "ATTORNEY FOR (name) --- or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Caption: court, parties, case ------------------------------------------
+  court_county:
+    map: "RA-020[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCounty[0]"
+    page: 1
+    doc: "County name only --- the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: "RA-020[0].Page1[0].P1Caption[0].CourtInfo[0].CrtStreet[0]"
+    page: 1
+    doc: "Court STREET ADDRESS"
+    auto: court_street_address
+  court_mailing_address:
+    map: "RA-020[0].Page1[0].P1Caption[0].CourtInfo[0].CrtMailingAdd[0]"
+    page: 1
+    doc: "Court MAILING ADDRESS"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "RA-020[0].Page1[0].P1Caption[0].CourtInfo[0].CrtCityZip[0]"
+    page: 1
+    doc: "Court CITY AND ZIP CODE"
+    auto: court_city_zip
+  court_branch:
+    map: "RA-020[0].Page1[0].P1Caption[0].CourtInfo[0].CrtBranch[0]"
+    page: 1
+    doc: "BRANCH NAME"
+    auto: court_branch
+  plaintiff:
+    map: "RA-020[0].Page1[0].P1Caption[0].TitlePartyName[0].Party1[0]"
+    page: 1
+    doc: "PLAINTIFF caption name (bound to the petitioner meta key)"
+    auto: petitioner
+  defendant:
+    map: "RA-020[0].Page1[0].P1Caption[0].TitlePartyName[0].Party2[0]"
+    page: 1
+    doc: "DEFENDANT caption name (bound to the respondent meta key)"
+    auto: respondent
+  other_case_name:
+    map: "RA-020[0].Page1[0].P1Caption[0].TitlePartyName[0].Party3[0]"
+    page: 1
+    doc: "OTHER CASE NAME --- usually blank"
+    default: ""
+  case_number:
+    map: "RA-020[0].Page1[0].P1Caption[0].CaseNumber[0].CaseNumber[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+
+  # -- Item 1: the proceeding the order covers ----------------------------------
+  proceeding_type:
+    map: "RA-020[0].Page1[0].Court[0].List1[0].item1[0].FillText1[0]"
+    page: 1
+    doc: "Item 1 'Type of proceeding' --- match the RA-010 it answers"
+    default: ""
+  proceeding_date:
+    map: "RA-020[0].Page1[0].Court[0].List1[0].item1[0].FillText2[0]"
+    page: 1
+    doc: "Item 1 'Set on (date)'"
+    default: ""
+    size_group: item1
+  proceeding_time:
+    map: "RA-020[0].Page1[0].Court[0].List1[0].item1[0].FillText3[0]"
+    page: 1
+    doc: "Item 1 'at (time)'"
+    default: ""
+    size_group: item1
+  proceeding_dept:
+    map: "RA-020[0].Page1[0].Court[0].List1[0].item1[0].FillText4[0]"
+    page: 1
+    doc: "Item 1 'in (department)'"
+    default: ""
+    size_group: item1
+
+  # -- Item 2: persons required in person ---------------------------------------
+  in_person_names:
+    map: "RA-020[0].Page1[0].Court[0].List2[0].item2[0].TextField5[0]"
+    page: 1
+    doc: >-
+      Item 2 'Name' column --- one person per line, in the same order as
+      in_person_roles. Pair with checkbox in_person_required.
+    default: ""
+    fit: shrink
+    align: left
+    valign: top
+    size_group: in_person
+  in_person_roles:
+    map: "RA-020[0].Page1[0].Court[0].List2[0].item2[0].TextField6[0]"
+    page: 1
+    doc: "Item 2 'Role in Case' column --- one role per line, level with in_person_names"
+    default: ""
+    fit: shrink
+    align: left
+    valign: top
+    size_group: in_person
+
+  # -- Item 3: persons permitted remotely ----------------------------------------
+  remote_names:
+    map: "RA-020[0].Page1[0].Court[0].List3[0].Lia[0].TextField7[0]"
+    page: 1
+    doc: >-
+      Item 3a 'Name' column --- one person per line, in the same order
+      as remote_roles. Pair with checkbox remote_permitted.
+    default: ""
+    fit: shrink
+    align: left
+    valign: top
+    size_group: remote
+  remote_roles:
+    map: "RA-020[0].Page1[0].Court[0].List3[0].Lia[0].TextField8[0]"
+    page: 1
+    doc: "Item 3a 'Role in Case' column --- one role per line, level with remote_names"
+    default: ""
+    fit: shrink
+    align: left
+    valign: top
+    size_group: remote
+
+  # -- Item 4: other orders ---------------------------------------------------------
+  other_orders:
+    map: "RA-020[0].Page1[0].Court[0].List4[0].item4[0].TextField10[0]"
+    page: 1
+    doc: >-
+      Item 4 'Other Orders' --- free text (e.g. exhibit exchange before
+      remote testimony, a test connection). Pair with checkbox
+      other_orders_made. Text that does not fit spills to an MC-025
+      "Attachment 4".
+    default: ""
+    fit: overflow_attachment
+    attachment_label: Attachment 4
+    align: left
+    valign: top
+
+  # -- Judicial signature block: NEVER filled -----------------------------------------
+  judge_date:
+    map: "RA-020[0].Page1[0].Court[0].Sign[0].SigDate[0]"
+    page: 1
+    doc: "Date: --- the judicial officer's; ALWAYS LEFT BLANK"
+    default: ""
+  judge_name:
+    map: "RA-020[0].Page1[0].Court[0].Sign[0].SigName[0]"
+    page: 1
+    doc: "JUDGE OR JUDICIAL OFFICER signature line --- ALWAYS LEFT BLANK; wet-ink judicial signature, never e-signed"
+    default: ""
+
+checkboxes:
+  in_person_required:
+    map: "RA-020[0].Page1[0].Court[0].List2[0].item2[0].CheckBox1[0]"
+    on_value: "/1"
+    doc: "Item 2 --- Participant to appear in person (list them in in_person_names/in_person_roles)"
+  remote_permitted:
+    map: "RA-020[0].Page1[0].Court[0].List3[0].CheckBox2[0]"
+    on_value: "/1"
+    doc: "Item 3 --- Participant may appear through remote technology (list them in remote_names/remote_roles)"
+  tech_video_only:
+    map: "RA-020[0].Page1[0].Court[0].List3[0].Lib[0].SubLib[0].Li1[0].CheckBox6[0]"
+    on_value: "/1"
+    doc: "Item 3b(i) --- videoconference only; otherwise in person"
+  tech_audio_only:
+    map: "RA-020[0].Page1[0].Court[0].List3[0].Lib[0].SubLib[0].Li2[0].CheckBox7[0]"
+    on_value: "/1"
+    doc: "Item 3b(ii) --- audio only (including telephone)"
+  tech_video_or_audio:
+    map: "RA-020[0].Page1[0].Court[0].List3[0].Lib[0].SubLib[0].Li3[0].CheckBox8[0]"
+    on_value: "/1"
+    doc: "Item 3b(iii) --- videoconference or audio"
+  other_orders_made:
+    map: "RA-020[0].Page1[0].Court[0].List4[0].item4[0].CheckBox9[0]"
+    on_value: "/1"
+    doc: "Item 4 --- Other Orders (text in other_orders)"
+
+agent_guide: |
+  RA-020 is the court's ORDER on remote appearance, approved for
+  optional use (CCP § 367.75; Cal. Rules of Court, rule 3.672). A party
+  who gave notice on RA-010 may lodge it filled as a proposed order; the
+  court may use it, its own minute order, or nothing at all. It never
+  substitutes for the RA-010 notice.
+
+  Item 1 names the proceeding (match the RA-010's item 2b). Item 2 lists
+  anyone the court requires IN PERSON; item 3a lists those permitted to
+  appear or testify REMOTELY, and 3b which technology (check one of
+  i/ii/iii) --- if that technology is not used, the person must appear
+  in person. Item 4 is any other order.
+
+      forms:
+        ra020:
+          proceeding_type: "Evidentiary hearing on motion for protective order re discovery"
+          proceeding_date: "November 18, 2026"
+          proceeding_time: "9:00 a.m."
+          proceeding_dept: "12"
+          remote_permitted: true
+          remote_names: "Mavis Example"
+          remote_roles: "Nonparty witness"
+          tech_video_only: true
+
+  The Name and Role columns are single boxes: one person per line, the
+  same number of lines in each, kept short enough not to wrap (a
+  wrapped name drifts out of line with its role).
+
+  ALWAYS LEFT BLANK: judge_date and judge_name (the JUDGE OR JUDICIAL
+  OFFICER line). The judicial signature is the court's; nothing here
+  e-signs or fills it, and the descriptor declares no e-sign party.
+  Whether to check in_person_required / remote_permitted is the court's
+  decision --- a proposed order states what the party asks for.

@@ -143,9 +143,9 @@ fills the Judicial Council forms, the same way every time
 ([docs/writing-style.md](docs/writing-style.md)). A filing packet is the
 pleading, its exhibits with slip sheets, the cover forms, consumer and
 employee notices and proofs of service, in public and sealed versions
-([docs/forms.md](docs/forms.md)). Thirteen forms are supported today
+([docs/forms.md](docs/forms.md)). Fifteen forms are supported today
 (CIV-110, EFS-020, EFS-050, FW-001, MC-025, MC-030, MC-040, MC-050,
-SUBP-001, SUBP-002, SUBP-010, SUBP-015, SUBP-025), with family-law forms
+RA-010, RA-020, SUBP-001, SUBP-002, SUBP-010, SUBP-015, SUBP-025), with family-law forms
 as an add-on. Documents go out for e-signature through DocuSeal and come
 back signed with their audit log, or to a remote online notary through
 Proof, and can be fingerprinted and time-stamped so their integrity can

@@ -1,6 +1,6 @@
 ---
 name: fill-form
-description: Fill a California Judicial Council form (CIV-110, EFS-020, MC-025, MC-030, SUBP-010, SUBP-025) from its YAML descriptor. Use when a filing needs an official form completed, or when adding or changing a form descriptor.
+description: Fill a California Judicial Council form (CIV-110, EFS-020, MC-025, MC-030, RA-010, RA-020, SUBP-010, SUBP-025) from its YAML descriptor. Use when a filing needs an official form completed, or when adding or changing a form descriptor.
 ---
 
 # Fill a Judicial Council form

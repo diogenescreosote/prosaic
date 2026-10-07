@@ -135,6 +135,9 @@ revision: "2020-01"          # the JC revision this map was VERIFIED against
 source_url: https://courts.ca.gov/documents/subp010.pdf
 blank: subp010.pdf           # under pleading/forms/
 technology: overlay          # required, and the only value (ADR-0046)
+filed_pages: "1-2"           # optional: pages a fill emits by default, when
+                             # the blank ends in instructions that are not
+                             # filed (RA-010's page 3); --pages overrides
 chrome_fields: [Save, Print, ResetForm]   # non-button chrome to strip
                                           # before the bake (optional)
 
@@ -242,7 +245,7 @@ things from the build:
   the build's to write, never a person's: `md_pleading` writes it for
   every `\signblock`, and `sc form fill` writes it for any form whose
   descriptor carries `esign:` fields (SUBP-025, FW-001, MC-030, MC-040,
-  EFS-050 do), each stamped `"source": "build"`. `sc docuseal send`
+  EFS-050, RA-010 do), each stamped `"source": "build"`. `sc docuseal send`
   refuses a sidecar without that stamp unless `--allow-hand-fields` is
   passed, and refuses any sidecar — stamped or not — whose box covers
   printed text or straddles the rule it should rest on. A source that
@@ -309,6 +312,8 @@ Current registry: `mc030` (declaration), `mc025` (attachment),
 `subp010` (deposition subpoena for production of business records),
 `subp015` (deposition subpoena for personal appearance),
 `subp025` (notice to consumer or employee and objection),
+`ra010` (notice of remote appearance; instructions page dropped by
+`filed_pages`), `ra020` (order regarding remote appearance),
 `mc040` (notice of change of address — the `technology: overlay`
 pilot).
 

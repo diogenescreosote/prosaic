@@ -973,8 +973,15 @@ def fill(
     goes straight to ``sc docuseal send``. The case it exists for is a
     proof of service: page 2 of a subpoena is its own document once
     service has happened, and shipping the blank page 1 beside it would
-    put an unissued-looking subpoena into circulation."""
+    put an unissued-looking subpoena into circulation.
+
+    With no ``pages``, a descriptor's ``filed_pages`` (same syntax)
+    decides: a blank whose trailing pages are its own instructions
+    ("this page need not be filed") emits only the pages that are
+    filed, on every path --- standalone fill and cover sheet alike."""
     desc = load_descriptor(form_id)
+    if pages is None:
+        pages = desc.get("filed_pages")
     blank = blank_path(desc)
     if not blank.exists():
         raise FileNotFoundError(f"Blank form missing: {blank}")

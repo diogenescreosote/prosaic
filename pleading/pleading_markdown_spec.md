@@ -629,6 +629,18 @@ page count into that field of the per-form block
 (`forms: <form_id>:`) before filling, unless the source already
 supplies a value explicitly.
 
+**Instruction pages that are not filed.** Some blanks end in pages of
+instructions the form itself says need not be filed (RA-010's page 3).
+A descriptor names the pages a fill emits with a top-level key:
+
+```yaml
+filed_pages: "1-2"
+```
+
+Every fill of that form, standalone or as a `cover_sheet:`, then
+writes only those pages (same syntax as `sc form fill --pages`, which
+overrides it), and the e-sign sidecar is renumbered to match.
+
 Date-typed fields are left blank for completion at filing (a
 placeholder like `hearing_date: "[TO BE SET]"` does not belong in a
 date-typed field), as are judicial-officer and signature/date lines.
