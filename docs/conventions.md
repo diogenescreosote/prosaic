@@ -117,6 +117,15 @@ document look identical in a file listing, and the one that gets
 attached to an email is whichever the human grabbed. The suffix makes
 the wrong grab visible.
 
+A paper that is served and held, never filed --- a discovery
+instrument, or the proof of serving one --- may carry `_SIGNED` alone,
+the signing engine's default (`specs/signing.md`). What it may never
+carry is the build's bare name: an e-signature return fetched into the
+folder that held the unsigned build overwrites it under the same name,
+and a reader then takes the signed proof for an unsigned draft. Where
+each stage of a proof of service lives: [matter-layout.md](matter-layout.md),
+"Where proofs of service live."
+
 Corollary for `_AS_SERVED` and similar markers: they describe
 provenance, not release state, and stack after the status suffix when
 both apply.

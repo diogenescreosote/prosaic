@@ -89,9 +89,10 @@ party's fields correctly.
 `SIGNED: <path>` line per document (path relative to the working
 directory) and `AUDIT: <path>` for the certificate. Read those lines
 to know exactly what to hand back, route, or re-file — never re-derive
-the paths. Choose `--out` (e.g. `--out staging/<date>_signed`) so the
-`SIGNED:` paths point where you want the files; a bare `fetch` writes
-into the current directory.
+the paths. A signed file keeps the name it was sent under, so `--out`
+the folder holding the unsigned build replaces that build in place and
+the signed copy then reads as a build: fetch into a fresh folder (e.g.
+`--out staging/<date>_signed`) and suffix `_SIGNED` before it is listed.
 
 - `send` writes `<pdf>.docuseal.json` beside the document — commit it
   (`config` or `docket` per the matter's conventions) so the

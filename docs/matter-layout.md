@@ -25,7 +25,12 @@ smith-v-smith/
 │   └── <topic>/...        # correspondence/, court_filings/, exhibits/, …
 ├── pleadings/             # filed/court documents:
 │                          #   YYYY-MM-DD_description.pdf (OCR copies under derived/ocr/)
-├── discovery/             # records produced under subpoena/discovery
+├── discovery/             # discovery instruments as served (subpoenas, notices,
+│                          #   requests), their signed proofs of service, and
+│                          #   records produced under them
+├── staging/               # signed sets on their way out: YYYY-MM-DD_topic/
+│                          #   with a README.md inventory (signed-unfiled papers,
+│                          #   signed proofs, e-signature returns + audit logs)
 ├── lawyer_drafts/         # drafts exchanged with counsel
 ├── unfiled/               # lodged-but-returned / otherwise unfiled
 ├── memos/                 # analysis & strategy memos (work product)
@@ -61,6 +66,24 @@ literate snake_case name, OCR supplement, text sidecar, and INDEX row,
 and its original bytes are preserved in `processed_files/`. An empty
 inbox means everything is processed ("inbox zero" is a meaningful,
 checkable state).
+
+## Where proofs of service live
+
+A proof of service passes through up to four places, and a search for
+one covers all of them --- never conclude a proof is missing from one
+directory:
+
+| Stage | Where |
+|---|---|
+| Source | `src/<dir>/`, beside the served document's source (`<served_stem>.efs050.md` for electronic service; a pleading-paper proof of personal service by any name). A form-only proof filled from data, such as a subpoena's page 2, keeps its data under `staging/<date>_<topic>/data/` |
+| Build | `out/<envelope>/` --- unsigned and regenerable, never the record. A filled form may also leave an unsigned cache copy under `assets/decl_cover_sheets/`; that is a cache, not a proof |
+| Signed | `staging/<YYYY-MM-DD>_<topic>/`, with the e-signature audit log and a `README.md` that lists each proof, what it proves and whether it is signed. The signed copy carries `_SIGNED` (or `_SIGNED_UNFILED`), never the build's bare name |
+| Triaged | **filed** with the court: `pleadings/` with its MANIFEST row. **Served and held** (discovery instruments, notices): `discovery/`, beside the instrument it proves, original bytes in `processed_files/`. A third party's proof (a process server's) arrives through triage and lands the same way |
+
+Proofs the other side serves on you are received material: they
+arrive through the mail connector (`assets/gmail/`) and, once
+triaged, sit in `pleadings/` as `as-served` when they accompany a
+filing.
 
 ## Naming
 

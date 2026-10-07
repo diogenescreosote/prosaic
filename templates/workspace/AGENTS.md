@@ -178,6 +178,19 @@ are wrong in a way nothing downstream can detect.
 If you need a filed version and the manifest says `not-in-hand` or shows
 a substitute, say so and stop. Do not substitute the nearest file.
 
+## Proofs of service: four places, search them all
+
+A proof of service is a source beside the served document in `src/`,
+an unsigned build in `out/`, a signed copy in `staging/<date>_<topic>/`
+(listed in that folder's `README.md`, beside the e-signature audit
+log), and, once triaged, a record in `discovery/` (served and held) or
+`pleadings/` (filed). Signed proofs sit in `staging/` until triage
+moves them, often for weeks. **Before saying a proof is missing or
+unsigned, search all four** (`rg --files | rg -i 'proof|pos_|efs050'`)
+and open the PDF: a DocuSeal return can carry the build's own name, so
+a file named like a build may be the signed original. Full table:
+`<prosaic>/docs/matter-layout.md`, "Where proofs of service live."
+
 ## Redaction: declare, build, prove, show
 
 Never hand-place redaction boxes, and never report a redaction as done

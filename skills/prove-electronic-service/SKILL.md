@@ -100,8 +100,12 @@ front matter, and a forms block. What each field wants:
    pre-fill `sig_date`. Whether the signed proof is then **filed** or
    **held** depends on the served document: a proof for a document
    being filed is filed with or right after it; a proof for a
-   served-not-filed document (safe-harbor motions, discovery) is held
-   in the matter's records until needed.
+   served-not-filed document (safe-harbor motions, discovery) is held.
+   The signed copy goes to `staging/<date>_<topic>/` as `_SIGNED`, listed
+   in that folder's README, until triage moves it beside the instrument
+   in `discovery/` (or into `pleadings/` once filed). Search every one of
+   those places before calling a proof missing:
+   `docs/matter-layout.md`, "Where proofs of service live."
 6. Matter-side record: a `docket` commit with a `Served:` footer
    naming the date and recipients, sourced to the human's statement
    or the sending record.
