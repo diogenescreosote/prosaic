@@ -1899,6 +1899,22 @@ def dependency_info(input_path: Path, requested_variant: Optional[str] = None,
                 and str(ex.path.resolve()) not in _dep_seen:
             child = dependency_info(ex.path, requested_variant, _dep_seen=_dep_seen)
             deps.extend(d for d in child["deps"] if d not in deps)
+    # A filled form's descriptor and blank are this document's inputs:
+    # a re-verified map or a new blank revision redraws the cover sheet.
+    form_ids = [meta.get("cover_sheet")] if meta.get("cover_sheet") else []
+    if meta.get("consumer_notices"):
+        form_ids.append(CONSUMER_NOTICE_FORM)
+    if form_ids:
+        import form_fill
+        for form_id in form_ids:
+            try:
+                desc_file = form_fill._registry_path(str(form_id))
+                blank = form_fill.blank_path(form_fill.load_descriptor(str(form_id)))
+            except Exception:
+                continue  # an unknown form is the build's error to raise
+            for p in (desc_file, blank):
+                if p is not None and p.exists() and str(p) not in deps:
+                    deps.append(str(p))
     exhibit_source = meta.get("exhibit_source")
     return {
         "deps": deps,

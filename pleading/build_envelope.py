@@ -197,13 +197,18 @@ def _toolchain_deps() -> List[Path]:
     A source untouched since yesterday is still stale when the
     toolchain changed underneath it — the day the e-sign field
     geometry shipped, `make note` said "up to date" about a PDF
-    carrying the old tags. Module mtimes make the DAG honest."""
+    carrying the old tags. Module mtimes make the DAG honest. The form
+    engine counts too: a placement or font change in it redraws every
+    cover sheet, and a build that calls those PDFs current ships the
+    old ink."""
     gen = PLEADING_GEN.parent
     return [
         Path(__file__),
         gen / "md_pleading.py",
         gen / "md_to_docx.py",
         gen / "md_to_txt.py",
+        gen / "form_fill.py",
+        gen / "jc_common.py",
     ]
 
 
@@ -234,15 +239,42 @@ BUILD_MANIFEST_NAME = ".build_manifest.json"
 BUILD_MANIFEST_VERSION = 1
 
 
+def _defaults_fingerprint() -> Optional[str]:
+    """A digest of the front-matter defaults (ADR-0035) this build runs
+    under: the deployment's ``local/config.yaml`` block shadowed by the
+    matter's ``matter.yaml`` block. They reach every source as surely as
+    its own front matter (a filer address, ``form_fill_font``), so a
+    change to them is a change to every artifact; but the files carry
+    much else, so the digest is of the defaults, not the files' mtimes.
+    ``None`` when there are none."""
+    pleading_dir = str(PLEADING_GEN.parent)
+    if pleading_dir not in sys.path:
+        sys.path.insert(0, pleading_dir)
+    import hashlib
+
+    import jc_common
+
+    defaults = jc_common.front_matter_defaults(Path.cwd())
+    if not defaults:
+        return None
+    blob = json.dumps(defaults, sort_keys=True, default=str).encode("utf-8")
+    return hashlib.sha256(blob).hexdigest()[:16]
+
+
 def _render_options(final: bool, variant: Optional[str], sign: Optional[str],
                     date: Optional[str]) -> dict:
-    """The invocation options that change a rendered artifact."""
-    return {
+    """The invocation options that change a rendered artifact, plus the
+    front-matter defaults digest when there are defaults."""
+    options = {
         "final": bool(final),
         "variant": variant,
         "sign": sign,
         "date": date,
     }
+    defaults = _defaults_fingerprint()
+    if defaults:
+        options["front_matter_defaults"] = defaults
+    return options
 
 
 def _dep_fingerprint(deps: List[Path]) -> List[dict]:

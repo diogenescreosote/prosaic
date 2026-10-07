@@ -88,17 +88,23 @@ sent to a court.
    scenario)*
 8. **Rebuilds are deterministic, dependency-aware, and mode-aware.**
    A build regenerates a source when the source, any selected exhibit,
-   or any exhibit-letter mapping file has changed since the output was
+   any exhibit-letter mapping file, the renderer or form engine, or a
+   filled form's descriptor or blank has changed since the output was
    written, or when the render options that shape the artifact
-   (final/draft, variant, signer, date) differ from the ones recorded
-   for it in `out/<envelope>/.build_manifest.json` — a draft PDF is
-   never "up to date" for a `--final` request (ADR-0039). Otherwise it
-   skips; `--check-stale` fails loudly when outputs lag dependencies or
-   options; a forced rebuild is always available. The manifest is
-   build state, not evidence: deleting it costs one clean rebuild.
-   *(tested: up-to-date skip, exhibit/exhibit_source/variant-companion
-   staleness, and check-stale checks in the pleading_exhibits scenario;
-   option drift in test_single_document_build.py)*
+   (final/draft, variant, signer, date, and a digest of the
+   front-matter defaults from `local/config.yaml` and `matter.yaml`)
+   differ from the ones recorded for it in
+   `out/<envelope>/.build_manifest.json` — a draft PDF is never "up to
+   date" for a `--final` request (ADR-0039), and a matter-wide default
+   such as `form_fill_font` reaches every output on the next build.
+   Otherwise it skips; `--check-stale` fails loudly when outputs lag
+   dependencies or options; a forced rebuild is always available. The
+   manifest is build state, not evidence: deleting it costs one clean
+   rebuild. *(tested: up-to-date skip, exhibit/exhibit_source/
+   variant-companion staleness, and check-stale checks in the
+   pleading_exhibits scenario; option and defaults drift in
+   test_single_document_build.py;
+   test_cover_sheet_descriptor_and_blank_are_build_dependencies)*
 9. **Sent envelopes are protected.** Marking an envelope with the
    date it was sent or filed makes routine rebuilds skip it and
    explicit rebuilds require force — the on-disk output of a mailed

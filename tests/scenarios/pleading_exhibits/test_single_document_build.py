@@ -49,10 +49,37 @@ def test_envelope_build_writes_mode_aware_manifest(tmp_path):
     data = json.loads(
         (m / "out" / "clean_packet" / ".build_manifest.json").read_text())
     entry = data["documents"]["Clean Memo.md"]
-    assert entry["options"] == {
+    # A deployment's own local/config.yaml defaults add a digest key;
+    # the invocation options are what this test pins.
+    options = {k: v for k, v in entry["options"].items()
+               if k != "front_matter_defaults"}
+    assert options == {
         "final": False, "variant": None, "sign": None, "date": None,
     }
     assert any(d["path"].endswith("md_pleading.py") for d in entry["deps"])
+    assert any(d["path"].endswith("form_fill.py") for d in entry["deps"])
+
+
+def test_front_matter_defaults_change_rebuilds(tmp_path):
+    """A matter-wide default (form_fill_font, a filer address) changes
+    every artifact without touching a source: the build must not call
+    the old output current. Editing the rest of matter.yaml must not."""
+    m = util.load_matter(tmp_path)
+    _add_clean_envelope(m)
+    matter_yaml = m / "matter.yaml"
+    base = matter_yaml.read_text() if matter_yaml.exists() else ""
+    assert util.run_build(m, "clean_packet").returncode == 0
+
+    matter_yaml.write_text(base + "\nfront_matter_defaults:\n  form_fill_font: courier\n")
+    changed = util.run_build(m, "clean_packet")
+    assert changed.returncode == 0, changed.stderr[-2000:]
+    assert "render options changed (front_matter_defaults)" in changed.stdout
+
+    matter_yaml.write_text(matter_yaml.read_text() + "\n# an unrelated note\n")
+    again = util.run_build(m, "clean_packet")
+    assert again.returncode == 0
+    assert "is up to date" in again.stdout
+    assert "rebuilding" not in again.stdout
 
 
 def test_mode_change_rebuilds_despite_fresh_mtimes(tmp_path):

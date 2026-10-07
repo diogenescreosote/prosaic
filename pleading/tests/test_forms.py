@@ -326,6 +326,21 @@ class TestCoverSheetCachePath:
         assert cache.stat().st_mtime > now - 50
 
 
+def test_cover_sheet_descriptor_and_blank_are_build_dependencies(tmp_path):
+    """A re-verified descriptor or a new blank redraws the cover sheet,
+    so the envelope build must count both as the source's inputs."""
+    import md_pleading
+
+    src = tmp_path / "src"
+    src.mkdir()
+    md = src / "decl.md"
+    md.write_text("---\ndoctype: document\npaper_title: DECLARATION\ncover_sheet: mc030\n---\n\nBody.\n")
+    deps = md_pleading.dependency_info(md)["deps"]
+    desc = form_fill.load_descriptor("mc030")
+    assert str(form_fill._registry_path("mc030")) in deps
+    assert str(form_fill.blank_path(desc)) in deps
+
+
 # ---------------------------------------------------------------------------
 # Fill font: form_fill_font / descriptor font: / --font
 # ---------------------------------------------------------------------------
