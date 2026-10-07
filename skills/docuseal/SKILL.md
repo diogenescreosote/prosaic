@@ -85,14 +85,13 @@ first-appearance order map onto the roster in order), so a bundle
 signed by one person just works, and a two-signer bundle attaches each
 party's fields correctly.
 
-**The signed files name themselves.** `fetch` prints one
-`SIGNED: <path>` line per document (path relative to the working
-directory) and `AUDIT: <path>` for the certificate. Read those lines
-to know exactly what to hand back, route, or re-file — never re-derive
-the paths. A signed file keeps the name it was sent under, so `--out`
-the folder holding the unsigned build replaces that build in place and
-the signed copy then reads as a build: fetch into a fresh folder (e.g.
-`--out staging/<date>_signed`) and suffix `_SIGNED` before it is listed.
+**The signed files name themselves.** `fetch` writes each document as
+`<stem>_SIGNED.pdf` (`note.pdf` → `note_SIGNED.pdf`), so fetching beside
+the unsigned build is safe, and prints `SIGNED: <path>` per document and
+`AUDIT: <path>` for the certificate: act on those lines, never re-derive
+the paths. It never overwrites: a clash prints `refusing to overwrite:
+<path>`, exits 1, writes nothing, and usually means the submission was
+already fetched; find that copy (`specs/docuseal.md`).
 
 - `send` writes `<pdf>.docuseal.json` beside the document — commit it
   (`config` or `docket` per the matter's conventions) so the

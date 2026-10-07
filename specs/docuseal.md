@@ -66,6 +66,19 @@ does prosaic's side.
   refuses (exit 2, nothing written) while the submission is
   incomplete — a half-signed document must never land looking like
   an original. *(tested: tests/test_docuseal.py)*
+- **A fetched document is named `<stem>_SIGNED.pdf`**, never the
+  name it was sent under (`foo.pdf` → `foo_SIGNED.pdf`; a directory
+  part in the service's name is dropped), so fetching into the folder
+  that holds the unsigned build leaves the build in place and the
+  signed copy cannot be read as one. Each is announced on stdout as
+  `SIGNED: <path>`, the audit certificate as `AUDIT:  <path>`.
+  *(tested: tests/test_docuseal.py)*
+- **Fetch never overwrites.** Every destination is checked before
+  anything is downloaded; if a signed name or the audit log already
+  exists, fetch names it (`refusing to overwrite: <path>`), exits 1
+  and writes nothing. Files are created exclusively, so one that
+  appears mid-fetch is not replaced either. *(tested:
+  tests/test_docuseal.py)*
 
 - **The matter learns on the sync schedule.** `sc docuseal poll
   [matter]` — and the `docuseal` connector, which is a thin relay to

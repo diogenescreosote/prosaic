@@ -192,7 +192,7 @@ def test_status_exit_codes_distinguish_done_from_pending(mock_api: str, tmp_path
 def test_fetch_brings_back_documents_and_audit_log(mock_api: str, tmp_path: Path) -> None:
     proc = run_docuseal("fetch", "123", "--out", "signed", url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
-    assert (tmp_path / "signed" / "signed.pdf").read_bytes() == PDF_BYTES
+    assert (tmp_path / "signed" / "signed_SIGNED.pdf").read_bytes() == PDF_BYTES
     assert (tmp_path / "signed" / "submission-123-audit-log.pdf").exists()
 
 
@@ -654,8 +654,68 @@ def test_fetch_prints_signed_paths(mock_api: str, tmp_path: Path) -> None:
     without re-deriving where they landed."""
     proc = run_docuseal("fetch", "123", "--out", "signed", url=mock_api, cwd=tmp_path)
     assert proc.returncode == 0, proc.stderr
-    assert "SIGNED: signed/signed.pdf" in proc.stdout
+    assert "SIGNED: signed/signed_SIGNED.pdf" in proc.stdout
     assert "AUDIT:  signed/submission-123-audit-log.pdf" in proc.stdout
+
+
+def test_fetch_beside_the_build_leaves_the_build_alone(mock_api: str, tmp_path: Path) -> None:
+    """Fetching into the folder that holds the unsigned build (same
+    name as the sent document) writes <stem>_SIGNED.pdf beside it; the
+    build's bytes are untouched."""
+    out = tmp_path / "staging"
+    out.mkdir()
+    build = out / "signed.pdf"
+    build.write_bytes(b"%PDF-1.4 unsigned build")
+    proc = run_docuseal("fetch", "123", "--out", "staging", url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    assert build.read_bytes() == b"%PDF-1.4 unsigned build"
+    assert (out / "signed_SIGNED.pdf").read_bytes() == PDF_BYTES
+    assert "SIGNED: staging/signed_SIGNED.pdf" in proc.stdout
+
+
+@pytest.mark.parametrize("existing", ["signed_SIGNED.pdf", "submission-123-audit-log.pdf"])
+def test_fetch_refuses_to_overwrite_and_writes_nothing(
+    mock_api: str, tmp_path: Path, existing: str
+) -> None:
+    """Fetch never replaces a file. If any destination (a signed
+    document or the audit log) already exists, it exits non-zero,
+    names the file, and writes nothing at all, not even the
+    destinations that were free."""
+    out = tmp_path / "signed"
+    out.mkdir()
+    (out / existing).write_bytes(b"already here")
+    proc = run_docuseal("fetch", "123", "--out", "signed", url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 1
+    assert f"refusing to overwrite: signed/{existing}" in proc.stderr
+    assert "SIGNED:" not in proc.stdout
+    assert (out / existing).read_bytes() == b"already here"
+    assert sorted(p.name for p in out.iterdir()) == [existing]
+    assert not any(r["path"].startswith("/files/") for r in MockDocuSeal.requests), (
+        "nothing may be downloaded once a clash is known"
+    )
+
+
+@pytest.mark.parametrize(
+    ("returned", "local"),
+    [
+        ("Promissory Note.pdf", "Promissory Note_SIGNED.pdf"),
+        ("note", "note_SIGNED.pdf"),
+        ("note.PDF", "note_SIGNED.pdf"),
+        ("note.pdf.pdf", "note_SIGNED.pdf"),
+        ("../elsewhere/note.pdf", "note_SIGNED.pdf"),
+    ],
+)
+def test_signed_name(returned: str, local: str) -> None:
+    """The local name of a signed return: the suffix goes before the
+    extension, a missing extension is supplied, and a directory part
+    from the service never steers the write."""
+    import importlib.util
+
+    spec = importlib.util.spec_from_file_location("docuseal_client", DOCUSEAL)
+    assert spec is not None and spec.loader is not None
+    mod = importlib.util.module_from_spec(spec)
+    spec.loader.exec_module(mod)
+    assert mod.signed_name(returned) == local
 
 
 def test_send_accepts_the_renderers_decl_signblock_geometry(mock_api: str, tmp_path: Path) -> None:

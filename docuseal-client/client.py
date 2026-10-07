@@ -12,7 +12,8 @@ or logs.
 Subcommands
     send <pdf> --to "Name <email>" [--to ...]   create a submission, email signers
     status <submission_id>                      per-signer state
-    fetch <submission_id> [--out DIR]           signed PDFs + audit log, when done
+    fetch <submission_id> [--out DIR]           signed PDFs (<name>_SIGNED.pdf) + audit
+                                                log, when done; never overwrites
 
 Signature field placement uses DocuSeal's text tags: a document whose
 text contains {{Signature;role=Signer 1}} (or plain {{Signature}})
@@ -169,10 +170,40 @@ def sdk_call(fn, *args):
         raise SystemExit(f"DocuSeal API ({api_base()}): {e}") from None
 
 
-def download(url: str, dest: Path) -> None:
+def download(url: str, dest: Path, *, exclusive: bool = False) -> None:
+    """Fetch `url` into `dest`. With `exclusive`, an existing `dest` is
+    never replaced: the file is created with O_EXCL, so even a file
+    that appeared after the caller checked is left alone."""
     req = urllib.request.Request(url, headers={"X-Auth-Token": api_key()})
     with urllib.request.urlopen(req, timeout=120) as resp:
-        dest.write_bytes(resp.read())
+        data = resp.read()
+    if not exclusive:
+        dest.write_bytes(data)
+        return
+    try:
+        with dest.open("xb") as fh:
+            fh.write(data)
+    except FileExistsError:
+        raise SystemExit(f"refusing to overwrite existing file: {dest}") from None
+
+
+# A fetched document is the signed return of something already in the
+# matter, often fetched into the folder that holds the unsigned build
+# under the same name. It lands as <stem>_SIGNED.pdf so it can neither
+# replace the build nor be mistaken for it (docs/conventions.md).
+SIGNED_SUFFIX = "_SIGNED"
+PDF_EXT = ".pdf"
+
+
+def signed_name(name: str) -> str:
+    """The local filename for a signed document DocuSeal calls `name`:
+    'foo.pdf' -> 'foo_SIGNED.pdf'. Any directory part is dropped (the
+    name comes from the service), and a name returned without the
+    extension gains it."""
+    base = Path(name).name
+    while base.lower().endswith(PDF_EXT):
+        base = base[: -len(PDF_EXT)]
+    return f"{base}{SIGNED_SUFFIX}{PDF_EXT}"
 
 
 def parse_signer(spec: str) -> dict:
@@ -618,22 +649,35 @@ def cmd_fetch(args: argparse.Namespace) -> int:
         except ValueError:
             return str(pth)
 
-    got = 0
-    signed_paths: list[Path] = []
-    for doc in doc_list:
-        dest = out / doc["name"]
-        download(doc["url"], dest)
-        signed_paths.append(dest)
-        got += 1
+    # Every destination is decided, and checked, before anything is
+    # downloaded: fetch never overwrites a file, and a refusal leaves
+    # the folder exactly as it was rather than half-fetched.
+    plan: list[tuple[str, Path]] = [
+        (doc["url"], out / signed_name(doc["name"])) for doc in doc_list
+    ]
+    signed_paths = [dest for _, dest in plan]
     audit_url = sub.get("audit_log_url")
     audit_dest = None
     if audit_url:
         audit_dest = out / f"submission-{args.submission_id}-audit-log.pdf"
-        download(audit_url, audit_dest)
-        got += 1
-    if not got:
+        plan.append((audit_url, audit_dest))
+    if not plan:
         print("completed submission exposed no documents", file=sys.stderr)
         return 1
+    dests = [dest for _, dest in plan]
+    clashes = [d for d in dests if d.exists() or d.is_symlink()]
+    clashes += [d for i, d in enumerate(dests) if d in dests[:i]]
+    if clashes:
+        for d in clashes:
+            print(f"refusing to overwrite: {rel(d)}", file=sys.stderr)
+        print(
+            "fetch never replaces a file; nothing fetched. Move the "
+            "existing file aside or fetch with --out into an empty folder.",
+            file=sys.stderr,
+        )
+        return 1
+    for url, dest in plan:
+        download(url, dest, exclusive=True)
     # The signed documents, each on its own line, path first, so a
     # human or a script can act on them without re-deriving where they
     # landed. Audit certificate last, labelled.
@@ -775,7 +819,11 @@ def main() -> None:
     sp.add_argument("matter_dir", nargs="?", default=".")
     sp.set_defaults(func=cmd_poll)
 
-    sp = sub.add_parser("fetch", help="signed PDFs + audit log for a completed submission")
+    sp = sub.add_parser(
+        "fetch",
+        help="signed PDFs (as <name>_SIGNED.pdf) + audit log for a completed "
+        "submission; refuses rather than overwrite any file",
+    )
     sp.add_argument("submission_id")
     sp.add_argument("--out", help="destination directory (default: .)")
     sp.set_defaults(func=cmd_fetch)

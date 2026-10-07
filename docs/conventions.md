@@ -120,9 +120,10 @@ the wrong grab visible.
 A paper that is served and held, never filed --- a discovery
 instrument, or the proof of serving one --- may carry `_SIGNED` alone,
 the signing engine's default (`specs/signing.md`). What it may never
-carry is the build's bare name: an e-signature return fetched into the
-folder that held the unsigned build overwrites it under the same name,
-and a reader then takes the signed proof for an unsigned draft. Where
+carry is the build's bare name: an e-signature return under the
+build's name, written over the unsigned build, is read as an unsigned
+draft. `sc docuseal fetch` therefore names every return
+`<stem>_SIGNED.pdf` and never overwrites a file (`specs/docuseal.md`). Where
 each stage of a proof of service lives: [matter-layout.md](matter-layout.md),
 "Where proofs of service live."
 
