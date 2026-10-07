@@ -30,21 +30,12 @@ target beside the PDF, so say that in the document when it matters.
 
 The renderer numbers every heading itself: `#` → `I.`, `##` → `A.`,
 `###` → `1.`, restarting under each parent. **Never type a number into
-a heading.** `## I. The privilege applies` prints as "A. I. The
-privilege applies", and the build now refuses it, listing each line.
-
-- Write `## The privilege applies`; let the renderer supply the letter.
-- Pick the level by the outline you want printed, not by the number
-  you want to see: top-level argument sections in an MPA are `#`
-  (I., II.), their subsections `##` (A., B.).
-- **A document title is not a heading.** "MEMORANDUM OF POINTS AND
-  AUTHORITIES" between a notice and its argument would print as "I."
-  and push every real section down a level. Set it with
-  `\center{**MEMORANDUM OF POINTS AND AUTHORITIES**}`.
-- Cross-references follow the printed outline ("Part II, above"),
-  so read the render before citing a section of your own document.
-- A document that needs its own enumeration ("Article I.") sets
-  `heading_numbers: false` and numbers every heading by hand.
+a heading** (`## I. The privilege applies` prints "A. I. ..." and the
+build refuses it). Pick the level by the printed outline you want; a
+document title is not a heading (`\center{**...**}`); cite your own
+sections by the printed outline. Detail and the `heading_numbers:
+false` escape: `pleading/pleading_markdown_spec.md`, "Automatic section
+numbering."
 
 ## Atomicity classes (enforced by the renderer)
 
@@ -124,8 +115,6 @@ Statutes / Rules of Court / local rules (validity — enforceable)
 structure). Don't use style guides to answer validity questions or
 statutes to answer typography questions.
 
-This skill is deliberately small; jurisdiction profiles and heavier
-paralegal automation bolt on here as they're built. Estate-specific
-execution discipline: [estate-plan](../estate-plan/SKILL.md).
-References: `pleading/pleading_markdown_spec.md` (signature blocks,
-notarial certificates), ADR-0027.
+Estate execution: [estate-plan](../estate-plan/SKILL.md). References:
+`pleading/pleading_markdown_spec.md` (signature blocks, notarial
+certificates), ADR-0027.

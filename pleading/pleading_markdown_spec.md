@@ -1307,6 +1307,23 @@ renders approximately as:
 - `A. FACTUAL BACKGROUND`
 - `1. The January 9 Email`
 
+**Never type a number into a heading.** `## I. The privilege applies`
+would print as "A. I. The privilege applies"; the build refuses a
+hand-numbered heading and lists each line. Write
+`## The privilege applies` and let the renderer supply the letter.
+
+- Pick the level by the outline you want printed, not by the number
+  you want to see: top-level argument sections in a memorandum are `#`
+  (I., II.), their subsections `##` (A., B.).
+- **A document title is not a heading.** "MEMORANDUM OF POINTS AND
+  AUTHORITIES" between a notice and its argument would print as "I."
+  and push every real section down a level. Set it with
+  `\center{**MEMORANDUM OF POINTS AND AUTHORITIES**}`.
+- Cross-references follow the printed outline ("Part II, above"), so
+  read the render before citing a section of your own document.
+- A document that needs its own enumeration ("Article I.") sets
+  `heading_numbers: false` and numbers every heading by hand.
+
 ## Exhibit references in the body
 
 Within the Markdown body, the syntax:
