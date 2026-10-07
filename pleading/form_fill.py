@@ -123,6 +123,16 @@ REGISTRY_DIR = PLEADING_DIR / "forms" / "registry"
 BLANKS_DIR = PLEADING_DIR / "forms"
 
 DEFAULT_FONT = "Helvetica"
+# The fill font a deployment, matter or source may choose for overlay
+# text (``form_fill_font:`` front matter, a descriptor's top-level
+# ``font:``, ``sc form fill --font``). Only the PDF base-14 families:
+# every viewer carries them, so nothing is embedded and the measured
+# width is the rendered width. Checkbox marks stay Helvetica-Bold.
+FILL_FONTS = {
+    "helvetica": "Helvetica",
+    "courier": "Courier",
+    "times": "Times-Roman",
+}
 DEFAULT_FONT_SIZE = 9.0
 DEFAULT_MIN_FONT_SIZE = 6.0
 LEADING_RATIO = 1.15
@@ -629,6 +639,21 @@ def resolve_layout(rect: list[float], spec: dict, geom: Optional[PageGeometry]) 
     return Layout("labeled", "forced by descriptor")
 
 
+def resolve_fill_font(name: Optional[str]) -> str:
+    """The PDF font name for a fill-font choice: a :data:`FILL_FONTS`
+    key (any case) or one of their PDF names. ``None`` or empty gives
+    :data:`DEFAULT_FONT`. Anything else raises --- a misspelled font
+    must not quietly fall back and fit a filing to the wrong widths."""
+    if not name:
+        return DEFAULT_FONT
+    key = str(name).strip()
+    if key.lower() in FILL_FONTS:
+        return FILL_FONTS[key.lower()]
+    if key in FILL_FONTS.values():
+        return key
+    raise ValueError(f"fill font must be one of {sorted(FILL_FONTS)}, not {name!r}")
+
+
 @dataclass
 class FitResult:
     text: str
@@ -964,9 +989,17 @@ def fill(
     strict: bool = False,
     verbose: bool = False,
     pages: Optional[str] = None,
+    font: Optional[str] = None,
 ) -> FillResult:
     """Fill a form per its descriptor. See module docstring. ``verbose``
     prints each single-line field's layout decision to stderr.
+
+    ``font`` chooses the overlay text font (:data:`FILL_FONTS`);
+    without it the meta's ``form_fill_font``, then the descriptor's
+    top-level ``font:``, then :data:`DEFAULT_FONT` decide. A field's own
+    ``font:`` still wins for that field. Fitting measures with the font
+    that will be drawn, so a wider face shrinks, wraps or overflows
+    where the default would not.
 
     ``pages`` keeps only a subset of the filled form ("2", "2-3",
     "1,3"), renumbering the e-sign sidecar to match so the output still
@@ -989,6 +1022,7 @@ def fill(
     # Box-level front-matter defaults reach direct fills too; a meta
     # that came through md_pleading already carries them (idempotent).
     meta = {**jc_common.front_matter_defaults(), **(meta or {})}
+    fill_font = resolve_fill_font(font or meta.get("form_fill_font") or desc.get("font"))
     texts, checks, explicit_checks, problems = resolve_values(desc, meta, data)
     result = FillResult(output_path=output_path, warnings=problems)
     if problems and strict:
@@ -1021,6 +1055,8 @@ def fill(
             keep = {k: v for k, v in overrides.items() if k in ("font_size", "leading_ratio")}
             merged[fname] = {**merged[fname], **keep}
         fields = merged
+    if fill_font != DEFAULT_FONT:
+        fields = {n: s if s.get("font") else {**s, "font": fill_font} for n, s in fields.items()}
     for name, spec in fields.items():
         value = texts.get(name, "")
         if not value:
@@ -1216,7 +1252,7 @@ def fill(
 
     # Materialize overflow attachments (MC-025), appended in order.
     if result.overflows:
-        _append_mc025_attachments(output_path, meta or {}, result)
+        _append_mc025_attachments(output_path, meta or {}, result, fill_font)
 
     # E-sign geometry sidecar (<pdf>.fields.json), the same shape the
     # pleading build writes, so a standalone fill can go straight to
@@ -1313,12 +1349,15 @@ def _chunk_for_mc025(text: str, rect: list[float], spec: dict) -> list[str]:
     return ["\n".join(lines[i : i + per_page]) for i in range(0, len(lines), per_page)]
 
 
-def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) -> None:
+def _append_mc025_attachments(
+    main_pdf: Path, meta: dict, result: FillResult, font: str = DEFAULT_FONT
+) -> None:
     """Append filled MC-025 page(s) per overflow to the output PDF.
 
     Text longer than one attachment page spans several MC-025s with
     "page N of M" filled — never silent truncation (spec:
-    specs/pleading/forms/mc025.md)."""
+    specs/pleading/forms/mc025.md). The attachments use the parent
+    fill's ``font``, and are chunked by measuring with it."""
     import tempfile
 
     readers = [PdfReader(str(main_pdf))]
@@ -1332,6 +1371,8 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
                     f"overflow '{ov['label']}': mc025 unavailable ({exc}); attachment NOT generated"
                 )
                 continue
+            if not body_spec.get("font"):
+                body_spec = {**body_spec, "font": font}
             chunks = _chunk_for_mc025(ov["text"], rect, body_spec)
             number = ov["label"].replace("Attachment", "").strip(" ()")
             for pageno, chunk in enumerate(chunks, 1):
@@ -1340,7 +1381,7 @@ def _append_mc025_attachments(main_pdf: Path, meta: dict, result: FillResult) ->
                 if len(chunks) > 1:
                     data["page_number"] = str(pageno)
                     data["page_total"] = str(len(chunks))
-                fill("mc025", att, meta=meta, data=data)
+                fill("mc025", att, meta=meta, data=data, font=font)
                 readers.append(PdfReader(str(att)))
         writer = PdfWriter()
         writer.clone_document_from_reader(readers[0])
@@ -1607,6 +1648,14 @@ def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
     cache = cover_sheet_cache_path(form_id, input_md)
     blank = blank_path(desc)
     descriptor_file = _registry_path(form_id) or (REGISTRY_DIR / f"{form_id}.yaml")
+    # Front-matter defaults (ADR-0035) feed the fill as surely as the
+    # source does --- a matter-wide form_fill_font or filer address ---
+    # so a newer matter.yaml or deployment config makes the cache stale.
+    defaults_files = [
+        p
+        for p in (REPO_ROOT / "local" / "config.yaml", find_case_dir(input_md) / "matter.yaml")
+        if p.exists()
+    ]
     fresh = (
         cache.exists()
         and cache.stat().st_mtime >= input_md.stat().st_mtime
@@ -1615,6 +1664,7 @@ def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
         # A placement fix in the engine changes what a fill draws, so an
         # older engine's cache is stale too.
         and cache.stat().st_mtime >= Path(__file__).stat().st_mtime
+        and all(cache.stat().st_mtime >= p.stat().st_mtime for p in defaults_files)
     )
     if not fresh:
         res = fill(form_id, cache, meta=meta)
@@ -1779,8 +1829,14 @@ def main() -> int:
         '("2", "2-3", "1,3"); the e-sign sidecar is '
         "renumbered to match",
     )
+    sp.add_argument(
+        "--font",
+        choices=sorted(FILL_FONTS),
+        help="overlay text font (default: the meta's form_fill_font, else "
+        "the descriptor's font, else helvetica)",
+    )
 
-    sp = sub.add_parser("info", help="show a form's agent guide + field schema")
+    sp = sub.add_parser("info",help="show a form's agent guide + field schema")
     sp.add_argument("form_id")
 
     sp = sub.add_parser("fields", help="introspect a blank PDF; emit descriptor skeleton")
@@ -1862,6 +1918,7 @@ def main() -> int:
             data=data,
             verbose=bool(getattr(args, "verbose", False)),
             pages=getattr(args, "pages", None),
+            font=getattr(args, "font", None),
         )
         for w in res.warnings:
             print(f"warning: {w}", file=sys.stderr)

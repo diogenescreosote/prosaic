@@ -16,7 +16,10 @@
 # The Name / Role in Case grids in items 2 and 3a are each ONE pair of
 # multiline widgets (a Name column and a Role column), not rows. One
 # person per line, the same line count in both columns, and a shared
-# size_group keep each name level with its role.
+# size_group keep each name level with its role. Each widget is
+# centered under its printed heading ("Name" and "Role in Case" both
+# sit at their widget's horizontal center, measured on the blank), so
+# align: center puts every line under its heading.
 
 form: ra020
 title: Order Regarding Remote Appearance
@@ -178,7 +181,7 @@ fields:
       in_person_roles. Pair with checkbox in_person_required.
     default: ""
     fit: shrink
-    align: left
+    align: center
     valign: top
     size_group: in_person
   in_person_roles:
@@ -187,7 +190,7 @@ fields:
     doc: "Item 2 'Role in Case' column --- one role per line, level with in_person_names"
     default: ""
     fit: shrink
-    align: left
+    align: center
     valign: top
     size_group: in_person
 
@@ -200,7 +203,7 @@ fields:
       as remote_roles. Pair with checkbox remote_permitted.
     default: ""
     fit: shrink
-    align: left
+    align: center
     valign: top
     size_group: remote
   remote_roles:
@@ -209,7 +212,7 @@ fields:
     doc: "Item 3a 'Role in Case' column --- one role per line, level with remote_names"
     default: ""
     fit: shrink
-    align: left
+    align: center
     valign: top
     size_group: remote
 

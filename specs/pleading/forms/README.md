@@ -55,6 +55,15 @@ of programming.
    standalone or as a cover sheet — writes only those pages unless an
    explicit page spec asks for more. *(tested:
    test_ra010_files_two_pages_and_keeps_the_instructions_on_request)*
+9. **The fill font is a choice, and fitting honors it.** Values draw
+   in Helvetica unless `form_fill_font` (front matter, or a matter's
+   `front_matter_defaults`), a descriptor's `font:`, or an explicit
+   `--font` picks another base-14 face (Courier, Times). The default
+   never changes under anyone who did not ask. Every fit decision ---
+   shrink, wrap, overflow to MC-025, and the attachment's own chunking
+   --- measures the face actually drawn, so a wider face cannot clip
+   silently; an unknown face fails the fill. *(tested: the fill-font
+   tests in pleading/tests/test_forms.py)*
 
 ## Non-obvious constraints
 

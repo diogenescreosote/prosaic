@@ -306,6 +306,121 @@ class TestCoverSheetCachePath:
         form_fill.ensure_cached("mc030", dict(FIXTURE_META), src)
         assert cache.stat().st_mtime > engine - 50
 
+    def test_ensure_cached_refills_when_matter_yaml_is_newer(self, tmp_path):
+        """A matter-wide front-matter default (form_fill_font, a filer
+        address) changes what the fill draws without touching the
+        source, so a newer matter.yaml makes the cache stale."""
+        import os
+        import time
+
+        case_dir = tmp_path / "smith_v_roe"
+        src = self._make_source(case_dir, "packet_a", "proposed_order.md")
+        cache = form_fill.ensure_cached("mc030", dict(FIXTURE_META), src)
+        now = time.time()
+        os.utime(src, (now - 100, now - 100))
+        os.utime(cache, (now - 50, now - 50))
+        form_fill.ensure_cached("mc030", dict(FIXTURE_META), src)
+        assert cache.stat().st_mtime == pytest.approx(now - 50), "fresh cache refilled"
+        (case_dir / "matter.yaml").write_text("front_matter_defaults: {}\n")
+        form_fill.ensure_cached("mc030", dict(FIXTURE_META), src)
+        assert cache.stat().st_mtime > now - 50
+
+
+# ---------------------------------------------------------------------------
+# Fill font: form_fill_font / descriptor font: / --font
+# ---------------------------------------------------------------------------
+
+def _drawn_fonts(pdf: Path, needle: str) -> set[str]:
+    """Fonts of every text span containing ``needle`` on any page."""
+    import fitz
+
+    fonts: set[str] = set()
+    with fitz.open(str(pdf)) as doc:
+        for page in doc:
+            for block in page.get_text("dict")["blocks"]:
+                for line in block.get("lines", []):
+                    for span in line["spans"]:
+                        if needle in span["text"]:
+                            fonts.add(span["font"])
+    return fonts
+
+
+def test_resolve_fill_font_aliases_and_refusal():
+    assert form_fill.resolve_fill_font(None) == form_fill.DEFAULT_FONT == "Helvetica"
+    assert form_fill.resolve_fill_font("") == "Helvetica"
+    assert form_fill.resolve_fill_font("courier") == "Courier"
+    assert form_fill.resolve_fill_font("COURIER") == "Courier"
+    assert form_fill.resolve_fill_font("Courier") == "Courier"
+    assert form_fill.resolve_fill_font("times") == "Times-Roman"
+    with pytest.raises(ValueError, match="fill font"):
+        form_fill.resolve_fill_font("Comic Sans")
+
+
+def test_default_fill_font_is_unchanged(tmp_path):
+    out = tmp_path / "mc030.pdf"
+    form_fill.fill("mc030", out, meta=dict(FIXTURE_META))
+    assert _drawn_fonts(out, "24CV00000") == {"Helvetica"}
+
+
+def test_form_fill_font_meta_draws_every_field_in_courier(tmp_path):
+    out = tmp_path / "mc030.pdf"
+    form_fill.fill("mc030", out, meta={**FIXTURE_META, "form_fill_font": "courier"},
+                   data={"body": "Short body text."})
+    assert _drawn_fonts(out, "24CV00000") == {"Courier"}
+    assert _drawn_fonts(out, "Short body text.") == {"Courier"}
+
+
+def test_explicit_font_beats_meta_and_field_font_beats_both(tmp_path, monkeypatch):
+    out = tmp_path / "mc030.pdf"
+    form_fill.fill("mc030", out, meta={**FIXTURE_META, "form_fill_font": "courier"},
+                   font="times")
+    assert _drawn_fonts(out, "24CV00000") == {"Times-Roman"}
+
+    real = form_fill.load_descriptor
+
+    def pinned(form_id):
+        desc = real(form_id)
+        if form_id == "mc030":
+            fields = dict(desc["fields"])
+            fields["case_number"] = {**fields["case_number"], "font": "Helvetica-Bold"}
+            desc = {**desc, "fields": fields, "font": "times"}
+        return desc
+
+    monkeypatch.setattr(form_fill, "load_descriptor", pinned)
+    out2 = tmp_path / "mc030_pinned.pdf"
+    form_fill.fill("mc030", out2, meta={**FIXTURE_META, "form_fill_font": "courier"})
+    assert _drawn_fonts(out2, "24CV00000") == {"Helvetica-Bold"}
+    # The descriptor's top-level font: yields to the meta's choice ...
+    assert _drawn_fonts(out2, "Jane Roe") == {"Courier"}
+    # ... and decides when nothing else does.
+    out3 = tmp_path / "mc030_desc.pdf"
+    form_fill.fill("mc030", out3, meta=dict(FIXTURE_META))
+    assert _drawn_fonts(out3, "Jane Roe") == {"Times-Roman"}
+
+
+def test_fit_measures_with_the_chosen_font():
+    """Courier is wider than Helvetica: a value that fits at full size
+    in the default face must shrink in Courier, because fitting measures
+    the font that will be drawn."""
+    rect = [0, 0, 120, 12]
+    text = "Mavis Example, nonparty"
+    spec = {"fit": "shrink", "font_size": 9}
+    helv = form_fill.fit_text(text, rect, spec)
+    cour = form_fill.fit_text(text, rect, {**spec, "font": "Courier"})
+    assert helv.fits and helv.font_size == 9
+    assert cour.fits and cour.font_size < 9
+
+
+@pytest.mark.skipif("mc025" not in FORMS, reason="mc025 descriptor not present")
+def test_overflow_attachment_follows_the_fill_font(tmp_path):
+    out = tmp_path / "mc030_overflow.pdf"
+    huge = "Overflowing declaration text for the attachment. " * 80
+    res = form_fill.fill("mc030", out, meta={**FIXTURE_META, "form_fill_font": "courier"},
+                         data={"body": huge})
+    assert res.overflows
+    assert _drawn_fonts(out, "See Attachment 1.") == {"Courier"}
+    assert _drawn_fonts(out, "Overflowing declaration") == {"Courier"}
+
 
 @pytest.mark.skipif("civ110" not in FORMS, reason="civ110 descriptor not present")
 def test_civ110_dismissal_and_pleading_type_checkboxes_render_checked(tmp_path):
@@ -647,3 +762,49 @@ def test_ra020_judicial_signature_block_is_never_filled(tmp_path):
     assert probe.checkbox_marked(out, "ra020", "remote_permitted")
     assert not probe.checkbox_marked(out, "ra020", "in_person_required")
     assert "Sam Sample" in probe.field_text(out, "ra020", "remote_names")
+
+
+@pytest.mark.skipif("ra020" not in FORMS, reason="ra020 descriptor not present")
+@pytest.mark.parametrize("font", [None, "courier"])
+def test_ra020_columns_center_under_their_headings_and_stay_level(tmp_path, font):
+    """Items 2 and 3a print "Name" and "Role in Case" headings over each
+    column; every filled line centers under its heading, and each name
+    sits on its role's baseline (specs/pleading/forms/ra020.md, promise 2)."""
+    import fitz
+
+    out = tmp_path / "ra020.pdf"
+    names = ["Mary Major", "Mavis Example", "A Much Longer Witness Name"]
+    roles = ["Party", "Nonparty witness", "Expert"]
+    data = {
+        "in_person_names": names[0],
+        "in_person_roles": roles[0],
+        "remote_names": "\n".join(names[1:]),
+        "remote_roles": "\n".join(roles[1:]),
+    }
+    form_fill.fill("ra020", out, meta=dict(FIXTURE_META), data=data, font=font)
+    with fitz.open(str(out)) as doc:
+        lines = [
+            (" ".join(s["text"] for s in ln["spans"]).strip(), fitz.Rect(ln["bbox"]))
+            for b in doc[0].get_text("dict")["blocks"] for ln in b.get("lines", [])
+        ]
+    blank_words = fitz.open(str(form_fill.blank_path(form_fill.load_descriptor("ra020"))))[0]
+    words = blank_words.get_text("words")
+
+    def heading_centers(word):
+        return sorted(((w[0] + w[2]) / 2, w[1]) for w in words if w[4] == word)
+
+    name_x = heading_centers("Name")[0][0]
+    role_l = [w for w in words if w[4] == "Role"][0]
+    case_r = [w for w in words if w[4] == "Case"][0]
+    role_x = (role_l[0] + case_r[2]) / 2
+
+    def found(text):
+        hits = [r for t, r in lines if t == text]
+        assert len(hits) == 1, f"{text!r} drawn {len(hits)} times"
+        return hits[0]
+
+    for name, role in zip(names, roles):
+        n_rect, r_rect = found(name), found(role)
+        assert abs((n_rect.x0 + n_rect.x1) / 2 - name_x) < 1.5, name
+        assert abs((r_rect.x0 + r_rect.x1) / 2 - role_x) < 1.5, role
+        assert abs(n_rect.y1 - r_rect.y1) < 0.5, f"{name} not level with {role}"

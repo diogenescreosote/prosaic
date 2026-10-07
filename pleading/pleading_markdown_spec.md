@@ -596,9 +596,10 @@ time the generator:
    metadata and the form's registry descriptor.
 3. Caches the filled form at
    `<case_dir>/assets/decl_cover_sheets/<source_dir>/<source_stem>.<form_id>.pdf`,
-   regenerated whenever the source `.md`, the bundled blank form, or
-   the descriptor is newer than the cache. `<source_dir>` is the
-   source's path relative to the case's `src/`, mirrored under
+   regenerated whenever the source `.md`, the bundled blank form, the
+   descriptor, the engine, or a front-matter defaults file
+   (`matter.yaml`, `local/config.yaml`) is newer than the cache.
+   `<source_dir>` is the source's path relative to the case's `src/`, mirrored under
    `decl_cover_sheets/` (a source directly in `src/` caches at the top
    of `decl_cover_sheets/`, with no extra subfolder). This keys the
    cache by the source's full path rather than its bare filename, so
@@ -640,6 +641,24 @@ filed_pages: "1-2"
 Every fill of that form, standalone or as a `cover_sheet:`, then
 writes only those pages (same syntax as `sc form fill --pages`, which
 overrides it), and the e-sign sidecar is renumbered to match.
+
+**Fill font.** Values are drawn in Helvetica, the face the Judicial
+Council forms print in, unless something chooses otherwise. The
+front-matter key `form_fill_font: helvetica | courier | times` chooses
+the font for every form a source fills (cover sheet, companion notices,
+overflow MC-025 attachments); set it under `front_matter_defaults:` in
+`matter.yaml` to fill every form in a matter that way, or in
+`local/config.yaml` for a whole deployment. Precedence, low to high: a
+descriptor's top-level `font:`, `form_fill_font`, then
+`sc form fill --font` (or `fill(..., font=)`); a field's own `font:`
+still wins for that field. Only PDF base-14 faces are offered, so
+nothing is embedded. Fitting measures the chosen face: Courier is
+wider, so a value that fit in Helvetica may shrink, wrap, or spill to an
+attachment instead --- look at the rendered form after switching. An
+unknown font name fails the fill. A cached cover sheet is refilled when
+`matter.yaml` or `local/config.yaml` is newer than it.
+*(tested: pleading/tests/test_forms.py fill-font tests,
+test_ensure_cached_refills_when_matter_yaml_is_newer)*
 
 Date-typed fields are left blank for completion at filing (a
 placeholder like `hearing_date: "[TO BE SET]"` does not belong in a

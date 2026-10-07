@@ -92,6 +92,9 @@ forms:
   - forms                    # per-form field block, keyed by form id
   - form_style               # per-form, per-field style overrides (font_size, leading_ratio),
                              # keyed by form id then field name -- values only, not spec
+  - form_fill_font           # helvetica (default) | courier | times: the font every
+                             # filled form draws its values in; matter-wide via
+                             # matter.yaml front_matter_defaults
   - consumer_notices         # SUBP-025 recipients, one notice each
   - efs020_party_name        # cover_sheet: efs020 -- overrides item 1 (default: filer_name)
   - efs020_title             # cover_sheet: efs020 -- overrides item 2 (default: paper_title)

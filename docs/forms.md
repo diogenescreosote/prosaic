@@ -11,6 +11,7 @@ means writing YAML, not Python.
 sc form list                 # registered forms
 sc form info subp010         # a form's agent guide + field schema
 sc form fill mc030 --meta caption.yaml --data values.yaml -o out.pdf
+sc form fill mc030 ... --font courier   # draw the values in Courier
 sc form fields blank.pdf     # introspect a new blank → descriptor skeleton
 sc form preview mc040 -o preview.pdf   # geometry check: colored boxes over every fillable/e-sign area
 sc form check                # fill + preview every registered form; exit 1 on any failure
@@ -140,6 +141,8 @@ filed_pages: "1-2"           # optional: pages a fill emits by default, when
                              # filed (RA-010's page 3); --pages overrides
 chrome_fields: [Save, Print, ResetForm]   # non-button chrome to strip
                                           # before the bake (optional)
+font: helvetica              # optional fill-font default for this form:
+                             # helvetica | courier | times (see "Fill font")
 
 # Abstract signer roles, in signing order; fields reference them via
 # esign: {type: ..., party: ...}
@@ -170,6 +173,13 @@ fields:
     font_size: 9
     min_font_size: 6
     valign: bottom
+  name_column:
+    map: "..."
+    align: center            # every line centered under a printed column
+                             # heading (RA-020's Name / Role in Case)
+    valign: top
+    size_group: grid         # level with its sibling column
+    # font: Helvetica-Bold   # a field may pin its own face; wins over all
   date:
     map: "..."
     doc: "LEAVE BLANK — hand-dated at signature"
@@ -219,6 +229,23 @@ anchors at the top left. `layout: labeled | line | box`, `align: left |
 center | right` and `valign: top | middle | bottom` on a field pin the
 exceptions; `sc form fill <id> ... --verbose` prints every decision and
 the geometry behind it, so decide overrides by looking at a fill.
+`align:` applies to every line of a block, so a multiline column under
+a printed heading takes `align: center` and each entry centers under
+the heading; the sibling column shares a `size_group` and `valign: top`
+so entries stay on one baseline row across columns.
+
+**Fill font.** Values draw in Helvetica, the face the forms print in,
+unless something chooses otherwise: the front-matter key
+`form_fill_font: helvetica | courier | times` (set it under
+`front_matter_defaults:` in `matter.yaml` for a whole matter, or in
+`local/config.yaml` for a deployment), a descriptor's top-level
+`font:`, or `sc form fill --font`. Precedence, low to high: descriptor
+`font:` → `form_fill_font` → `--font`; a field's own `font:` wins for
+that field. These are PDF base-14 faces, so nothing is embedded.
+Overflow MC-025 attachments follow the same font, and checkbox marks
+stay a bold Helvetica X. Fitting measures the chosen face, and Courier
+is wider: after switching, look at every form again for values that now
+shrink, wrap, or spill to an attachment.
 
 Fields may carry an e-sign tag — `esign: {type: date, party: filer}` —
 marking areas reserved for signing rather than machine fill. The type

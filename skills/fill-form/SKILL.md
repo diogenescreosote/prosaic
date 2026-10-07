@@ -19,6 +19,11 @@ code path (ADR-0006).
 4. Overflow: text that does not fit spills to an MC-025 attachment
    automatically (ADR-0007) — never truncate a filing to make it fit,
    and never shrink text below legibility.
+5. Font: values draw in Helvetica unless `form_fill_font: courier`
+   (or `times`) is set in front matter or a matter's
+   `front_matter_defaults`, or `--font` is passed. Courier is wider:
+   after switching, re-look at every form for new shrink, wrap or
+   overflow. Column fields under printed headings take `align: center`.
 
 ## The verification discipline (non-negotiable)
 
