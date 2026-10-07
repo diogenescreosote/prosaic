@@ -188,7 +188,10 @@ log), and, once triaged, a record in `discovery/` (served and held) or
 moves them, often for weeks. **Before saying a proof is missing or
 unsigned, search all four** (`rg --files | rg -i 'proof|pos_|efs050'`)
 and open the PDF: a DocuSeal return can carry the build's own name, so
-a file named like a build may be the signed original. Full table:
+a file named like a build may be the signed original. Signed or not is
+read off the page (the signature on its face; `pdfinfo` Producer), never
+off a filename or a README. A signed return never keeps the unsigned
+build's name: it gets `_SIGNED`. Full table:
 `<prosaic>/docs/matter-layout.md`, "Where proofs of service live."
 
 ## Redaction: declare, build, prove, show

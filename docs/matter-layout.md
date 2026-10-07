@@ -80,6 +80,10 @@ directory:
 | Signed | `staging/<YYYY-MM-DD>_<topic>/`, with the e-signature audit log and a `README.md` that lists each proof, what it proves and whether it is signed. The signed copy carries `_SIGNED` (or `_SIGNED_UNFILED`), never the build's bare name |
 | Triaged | **filed** with the court: `pleadings/` with its MANIFEST row. **Served and held** (discovery instruments, notices): `discovery/`, beside the instrument it proves, original bytes in `processed_files/`. A third party's proof (a process server's) arrives through triage and lands the same way |
 
+Whether a proof is signed is read off the page --- the signature on
+its face, the PDF's Producer --- never off its filename or a folder
+README, both of which go stale.
+
 Proofs the other side serves on you are received material: they
 arrive through the mail connector (`assets/gmail/`) and, once
 triaged, sit in `pleadings/` as `as-served` when they accompany a
