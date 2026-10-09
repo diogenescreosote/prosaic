@@ -134,6 +134,7 @@ NOT full Markdown:
 | `\fixedwidth{text}` | verbatim monospace (Courier) |
 | `` `text` `` | verbatim monospace — a synonym for `\fixedwidth{text}` |
 | `\filelink{path}` or `\filelink{path}{text}` | monospace, underlined, carrying a relative-file link annotation (/GoToR) that opens `path` when the PDF is viewed beside its companions |
+| `\doclink{path}{text}` | the display text in the body face, dark blue and underlined, carrying the same relative-file link annotation (/GoToR) as `\filelink`; for working documents whose cross-references open companion files beside the PDF |
 | `[^id]` | footnote reference marker |
 
 `\fixedwidth{...}` is the construct for file paths, hashes, Bates

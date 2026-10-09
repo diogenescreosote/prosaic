@@ -300,6 +300,10 @@ FILELINK_COLOR_RGB = (110 / 255, 140 / 255, 175 / 255)
 # attached exhibit. Deliberately louder than \filelink: the target is in
 # the same PDF and the click always works.
 BATES_LINK_COLOR_RGB = (0 / 255, 0 / 255, 238 / 255)
+# \doclink text: dark blue with an underline, set in the body face. For a
+# working document whose cross-references open companion files: the link
+# is the point of the span, so it reads as a link, not as a file path.
+DOCLINK_COLOR_RGB = (0 / 255, 0 / 255, 139 / 255)
 FIXEDWIDTH_MAX_SIZE = 12
 FIXEDWIDTH_MIN_SIZE = 6
 FIXEDWIDTH_ADVANCE_EM = 0.6
@@ -451,6 +455,8 @@ class TextSpan:
     mono: bool = False
     # \filelink{path}{text?}: relative file target for a link annotation.
     file_link: Optional[str] = None
+    # \doclink{path}{text}: relative file target, rendered in the body face.
+    doc_link: Optional[str] = None
     # \bates{TOKEN} or \bates{TOKEN--NNNNN}: the raw Bates reference; the
     # link resolves to the exhibit page carrying the first token.
     bates_ref: Optional[str] = None
@@ -684,6 +690,7 @@ _VERBATIM_SPAN_RE = re.compile(
     r"(\\fixedwidth\{[^{}\n]*\}"
     r"|`[^`\n]+`"
     r"|\\filelink\{[^{}\n]*\}(?:\{[^{}\n]*\})?"
+    r"|\\doclink\{[^{}\n]*\}\{[^{}\n]*\}"
     r"|\\bates\{[^{}\n]*\}"
     r"|^\\fixedwidth\{$.*?^\}$)",
     re.M | re.S,
@@ -944,6 +951,7 @@ _INLINE_RE = re.compile(
     r"|\\filelink\{([^{}\n]*)\}(?:\{([^{}\n]*)\})?"  # 9/10: \filelink{path}{text?}
     r"|\[\^([^\]]+?)\]"       # 11: [^footnote-id]  (reference marker)
     r"|\\bates\{([^{}\n]*)\}"     # 12: \bates{TOKEN} / \bates{TOKEN--NNNNN}
+    r"|\\doclink\{([^{}\n]*)\}\{([^{}\n]*)\}"  # 13/14: \doclink{path}{text}
     r")"
 )
 
@@ -999,6 +1007,10 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
                                   italic=italic, underline=True,
                                   highlight=highlight, mono=True,
                                   bates_ref=raw_ref))
+        elif m.group(13) is not None:
+            spans.append(TextSpan(m.group(14), bold=bold, italic=italic,
+                                  underline=True, highlight=highlight,
+                                  doc_link=m.group(13)))
         last = m.end()
     if last < len(text):
         spans.append(TextSpan(text[last:], bold=bold, italic=italic,
@@ -1022,6 +1034,8 @@ def bates_first_token(ref: str) -> str:
 def _span_link_target(span: TextSpan) -> Optional[str]:
     if span.file_link:
         return f"file:{span.file_link}"
+    if span.doc_link:
+        return f"doc:{span.doc_link}"
     if span.bates_ref:
         return f"bates:{bates_first_token(span.bates_ref)}"
     return None
@@ -1123,6 +1137,8 @@ def _link_color(link_target: Optional[str]) -> Optional[Tuple[float, float, floa
         return None
     if link_target.startswith("file:"):
         return FILELINK_COLOR_RGB
+    if link_target.startswith("doc:"):
+        return DOCLINK_COLOR_RGB
     if link_target.startswith("bates:"):
         return BATES_LINK_COLOR_RGB
     return None
@@ -5147,9 +5163,9 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
         if link_rects:
             for lr in link_rects:
                 rect = (lr.x, lr.y, lr.x + lr.width, lr.y + lr.height)
-                if lr.dest.startswith("file:"):
+                if lr.dest.startswith(("file:", "doc:")):
                     _add_file_link_annotation(writer, lr.page_index, rect,
-                                              lr.dest[len("file:"):])
+                                              lr.dest.split(":", 1)[1])
                     continue
                 if lr.dest.startswith("bates:"):
                     token = lr.dest[len("bates:"):]

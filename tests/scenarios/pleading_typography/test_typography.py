@@ -800,6 +800,28 @@ def test_filelink_renders_display_text_and_gotor_annotation(decl_text, decl_pdf)
     assert "records/TKFL1_target.pdf" in targets, targets
 
 
+def test_doclink_is_body_face_dark_blue_relative_file_link():
+    """\\doclink{path}{text} is a relative-file link like \\filelink, but
+    set in the body face (not mono) and inked dark blue, for working
+    documents whose cross-references open companion files."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading
+
+    spans = md_pleading.parse_inline_styles(
+        "See \\doclink{A_first--exhibit.pdf}{Exhibit A} now.")
+    link = [sp for sp in spans if sp.doc_link]
+    assert len(link) == 1
+    sp = link[0]
+    assert sp.text == "Exhibit A" and not sp.mono and sp.underline
+    assert sp.doc_link == "A_first--exhibit.pdf"  # path kept verbatim
+    target = md_pleading._span_link_target(sp)
+    assert target == "doc:A_first--exhibit.pdf"
+    assert md_pleading._link_color(target) == md_pleading.DOCLINK_COLOR_RGB
+    # The path must survive whole-body typographic transforms.
+    assert md_pleading._VERBATIM_SPAN_RE.search(
+        "x \\doclink{A_first--exhibit.pdf}{Exhibit A} y")
+
+
 def test_bullet_absorbs_indented_continuation_lines():
     """A hard-wrapped bullet is one block, not a bullet plus a paragraph."""
     body = (
