@@ -820,6 +820,17 @@ def test_doclink_is_body_face_dark_blue_relative_file_link():
     # The path must survive whole-body typographic transforms.
     assert md_pleading._VERBATIM_SPAN_RE.search(
         "x \\doclink{A_first--exhibit.pdf}{Exhibit A} y")
+    # A "#" target jumps within the document (an exhibit tab), same ink.
+    (sp2,) = [x for x in md_pleading.parse_inline_styles(
+        "\\doclink{#exhibit_A}{Exhibit A}") if x.doc_link]
+    t2 = md_pleading._span_link_target(sp2)
+    assert t2 == "docint:exhibit_A"
+    assert md_pleading._link_color(t2) == md_pleading.DOCLINK_COLOR_RGB
+    # Auto-tagging of "Exhibit A" must not override an explicit link.
+    w = [md_pleading.StyledWord("Exhibit", link_target=t2),
+         md_pleading.StyledWord("A", link_target=t2)]
+    md_pleading.tag_exhibit_links(w, {"A"})
+    assert all(x.link_target == t2 for x in w)
 
 
 def test_bullet_absorbs_indented_continuation_lines():

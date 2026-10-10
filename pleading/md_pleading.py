@@ -1035,6 +1035,9 @@ def _span_link_target(span: TextSpan) -> Optional[str]:
     if span.file_link:
         return f"file:{span.file_link}"
     if span.doc_link:
+        if span.doc_link.startswith("#"):
+            # In-document target (an exhibit tab, e.g. "#exhibit_A").
+            return f"docint:{span.doc_link[1:]}"
         return f"doc:{span.doc_link}"
     if span.bates_ref:
         return f"bates:{bates_first_token(span.bates_ref)}"
@@ -1076,6 +1079,8 @@ def spans_to_styled_words(spans: List[TextSpan],
 def tag_exhibit_links(words: List[StyledWord], exhibit_letters: set) -> None:
     """Find 'Exhibit X' or 'Attachment X' word pairs and set link_target on them."""
     for i, word in enumerate(words):
+        if word.link_target:
+            continue  # already an explicit link (\doclink, \filelink, \bates)
         word_text = word.text.lstrip("([{\"'")
         if word_text in ("Exhibit", "Attachment") and i + 1 < len(words):
             next_text = words[i + 1].text.rstrip(".,;:)")
@@ -1137,7 +1142,7 @@ def _link_color(link_target: Optional[str]) -> Optional[Tuple[float, float, floa
         return None
     if link_target.startswith("file:"):
         return FILELINK_COLOR_RGB
-    if link_target.startswith("doc:"):
+    if link_target.startswith(("doc:", "docint:")):
         return DOCLINK_COLOR_RGB
     if link_target.startswith("bates:"):
         return BATES_LINK_COLOR_RGB
@@ -5177,7 +5182,8 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
                         continue
                     _add_link_annotation(writer, lr.page_index, rect, target_idx)
                     continue
-                target_idx = tab_page_map.get(lr.dest)
+                dest = lr.dest[len("docint:"):] if lr.dest.startswith("docint:") else lr.dest
+                target_idx = tab_page_map.get(dest)
                 if target_idx is not None:
                     _add_link_annotation(
                         writer, lr.page_index, rect,
