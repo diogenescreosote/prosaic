@@ -252,7 +252,7 @@ fields:
     doc: "POS item 2: server's residence or business address --- LEAVE for the (non-party) server"
     default: ""
     fit: shrink_wrap
-    esign: {type: text, party: server}
+    esign: {type: text, party: server, unless: pos_service_note}
   pos_service_note:
     page: 2
     # Hand-authored rect (no widget): the blank line under item 2's
@@ -279,13 +279,13 @@ fields:
     page: 2
     doc: "POS item 4.a: date of mailing --- LEAVE for the server"
     default: ""
-    esign: {type: date, party: server}
+    esign: {type: date, party: server, unless: pos_service_note}
   pos_mail_place:
     map: "MC-040[0].Page2[0].List4[0].Lib[0].TextField2[0]"
     page: 2
     doc: "POS item 4.b: city and state of mailing --- LEAVE for the server"
     default: ""
-    esign: {type: text, party: server}
+    esign: {type: text, party: server, unless: pos_service_note}
   pos_served1_name:
     map: "MC-040[0].Page2[0].List5[0].Lia[0].FillText1[0]"
     page: 2
@@ -331,20 +331,20 @@ fields:
     page: 2
     doc: "POS signature date --- LEAVE for the server"
     default: ""
-    esign: {type: date, party: server}
+    esign: {type: date, party: server, unless: pos_service_note}
   pos_print_name:
     map: "MC-040[0].Page2[0].sign[0].printname[0]"
     page: 2
     doc: "POS (TYPE OR PRINT NAME OF DECLARANT) --- LEAVE for the server"
     default: ""
-    esign: {type: name, party: server}
+    esign: {type: name, party: server, unless: pos_service_note}
   pos_signature:
     page: 2
     # Hand-authored rect (no widget); verified with `sc form preview`.
     rect: [300, 127, 576, 158]
     doc: "POS SIGNATURE line --- reserved for the server's signature; never machine-filled"
     default: ""
-    esign: {type: signature, party: server}
+    esign: {type: signature, party: server, unless: pos_service_note}
 
 checkboxes:
   # Item 1: who is giving notice. Note the two 'Representative' widgets

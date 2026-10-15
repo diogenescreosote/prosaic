@@ -1449,6 +1449,15 @@ def esign_fields(form_id: str, meta: Optional[dict] = None) -> list[dict]:
         when = es.get("when")
         if when and not (meta or {}).get(str(when)):
             continue
+        # `unless: <key>` is the converse: the area is dropped when the
+        # key is set, in front matter or among this form's own values.
+        # A mail proof-of-service declarant is never asked to sign when
+        # the filer has said service was made some other way.
+        unless = es.get("unless")
+        if unless:
+            form_vals = ((meta or {}).get("forms") or {}).get(form_id) or {}
+            if (meta or {}).get(str(unless)) or form_vals.get(str(unless)):
+                continue
         party = str(es.get("party") or "")
         role_n = parties.index(party) + 1 if party in parties else 1
         out.append(
@@ -1535,6 +1544,8 @@ def geometry_preview(form_id: str, output_path: Path) -> FillResult:
             label = etype.upper() + (f" · {party}" if party else "")
             if es.get("when"):
                 label += f" · when {es['when']}"
+            if es.get("unless"):
+                label += f" · unless {es['unless']}"
         boxes.setdefault(page_no, []).append(
             {"rect": rect, "color": color, "label": label, "esign": bool(es)}
         )

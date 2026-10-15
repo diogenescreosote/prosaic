@@ -256,7 +256,11 @@ and Dropbox Sign field types, so a descriptor's e-sign map can drive
 abstract roles declared in `esign_parties:`, in signing order. An area
 that only some filers sign takes `when: <front-matter key>`
 (`esign: {type: signature, party: attorney, when: filer_bar_number}`)
-and is left out of the sidecar when that key is empty.
+and is left out of the sidecar when that key is empty. The converse,
+`unless: <key>`, drops the area when the key is set, either in front matter
+or among the form's own values: MC-040's mail proof-of-service declarant
+fields carry `unless: pos_service_note`, so a notice served electronically
+never asks anyone to sign the mail declaration.
 
 ## Two signing paths, and the date trap
 

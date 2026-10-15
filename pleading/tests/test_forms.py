@@ -693,6 +693,22 @@ def test_esign_fields_export_geometry_for_the_sidecar():
     assert any(f["role"] == "Signer 1" for f in fields)
 
 
+def test_esign_unless_drops_mail_pos_fields_when_service_note_is_set():
+    """MC-040's page-2 mail-declarant fields carry `unless:
+    pos_service_note`: present for a mailed notice, absent once the
+    filer says service was made another way."""
+    import form_fill
+    mailed = form_fill.esign_fields("mc040", {"forms": {"mc040": {}}})
+    noted = form_fill.esign_fields(
+        "mc040",
+        {"forms": {"mc040": {"pos_service_note": "Served electronically."}}},
+    )
+    assert any(f["name"] == "pos_signature" for f in mailed)
+    assert not any(f["name"].startswith("pos_") for f in noted)
+    assert {f["name"] for f in noted} >= {"signature", "sig_date"}
+    assert {f["role"] for f in noted} == {"Signer 1"}
+
+
 # ---------------------------------------------------------------------------
 # RA-010 / RA-020: remote appearance (specs/pleading/forms/ra010.md, ra020.md)
 # ---------------------------------------------------------------------------
