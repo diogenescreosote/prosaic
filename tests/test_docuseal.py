@@ -183,6 +183,22 @@ def test_signing_order_maps_to_numbered_roles(mock_api: str, tmp_path: Path) -> 
     assert roles == ["Signer 1", "Signer 2"]
 
 
+def test_any_order_lets_signers_sign_in_any_order(mock_api: str, tmp_path: Path) -> None:
+    pdf = tmp_path / "stip.pdf"
+    pdf.write_bytes(PDF_BYTES)
+    args = ["send", "stip.pdf", "--to", "a@example.com", "--to", "b@example.com"]
+    proc = run_docuseal(*args, url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    req = [r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf"][-1]
+    assert "order" not in req["payload"], "default stays DocuSeal's preserved order"
+
+    (tmp_path / "stip.pdf.docuseal.json").unlink()
+    proc = run_docuseal(*args, "--any-order", url=mock_api, cwd=tmp_path)
+    assert proc.returncode == 0, proc.stderr
+    req = [r for r in MockDocuSeal.requests if r["path"] == "/submissions/pdf"][-1]
+    assert req["payload"]["order"] == "random"
+
+
 def test_status_exit_codes_distinguish_done_from_pending(mock_api: str, tmp_path: Path) -> None:
     assert run_docuseal("status", "123", url=mock_api, cwd=tmp_path).returncode == 0
     MockDocuSeal.submission_status = "pending"

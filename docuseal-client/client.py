@@ -565,6 +565,11 @@ def cmd_send(args: argparse.Namespace) -> int:
         "submitters": submitters,
         "send_email": not args.no_email,
     }
+    if args.any_order:
+        # DocuSeal's default is "preserved": each signer waits for the one
+        # before. "random" lets every signer sign as soon as they have the
+        # link. The roster still decides which fields each signer gets.
+        payload["order"] = "random"
     if args.subject or args.message:
         payload["message"] = {"subject": args.subject, "body": args.message}
     submission = sdk_call(ds.create_submission_from_pdf, payload)
@@ -795,6 +800,12 @@ def main() -> None:
     sp.add_argument("--message", help="email body")
     sp.add_argument(
         "--no-email", action="store_true", help="create the submission but let me deliver the links"
+    )
+    sp.add_argument(
+        "--any-order",
+        action="store_true",
+        help="let signers sign in any order (DocuSeal order=random) instead of "
+        "waiting for each other; the roster still assigns the fields",
     )
     sp.add_argument(
         "--allow-draft", action="store_true", help="send even though the PDF carries a DRAFT banner"
