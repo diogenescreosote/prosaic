@@ -514,6 +514,11 @@ let _browser = null;
 let _page = null;
 
 async function ensureBrowser() {
+  // A timed-out or crashed page leaves a closed session behind; every
+  // later call on it fails. Relaunch rather than reuse a dead browser.
+  if (_browser && (!_browser.connected || !_page || _page.isClosed())) {
+    await closeBrowser();
+  }
   if (!_browser) {
     const puppeteer = require('puppeteer');
     _browser = await puppeteer.launch({ headless: 'new', args: ['--no-sandbox'] });
@@ -523,9 +528,16 @@ async function ensureBrowser() {
 }
 
 async function closeBrowser() {
-  if (_browser) await _browser.close();
+  const browser = _browser;
   _browser = null;
   _page = null;
+  if (browser) {
+    try {
+      await browser.close();
+    } catch (_) {
+      // Already gone; nothing to close.
+    }
+  }
 }
 
 /** Bump any element whose rendered font size falls below `minPx` up to
@@ -534,12 +546,14 @@ async function closeBrowser() {
  * the tiny size came from an inline style, a class, or inheritance. */
 async function enforceMinFontSize(page, minPx) {
   await page.evaluate((min) => {
+    // Read every size first, then write: interleaving the two forces a
+    // style recalculation per element, quadratic on a long thread.
+    const small = [];
     for (const el of document.body.querySelectorAll('*')) {
       const size = parseFloat(getComputedStyle(el).fontSize);
-      if (size && size < min) {
-        el.style.setProperty('font-size', `${min}px`, 'important');
-      }
+      if (size && size < min) small.push(el);
     }
+    for (const el of small) el.style.setProperty('font-size', `${min}px`, 'important');
   }, minPx);
 }
 
@@ -562,14 +576,20 @@ async function markKeepWholeMessages(page, maxPx) {
 
 async function htmlToPdf(htmlPath, pdfPath) {
   const page = await ensureBrowser();
-  // Lay out at the printed width in print media, so measured heights
-  // match the PDF's.
-  await page.setViewport({ width: PRINT_WIDTH_PX, height: PRINT_HEIGHT_PX });
-  await page.emulateMediaType('print');
-  await page.goto(`file://${htmlPath}`, { waitUntil: 'networkidle2', timeout: 15000 });
-  await enforceMinFontSize(page, MIN_FONT_PX);
-  await markKeepWholeMessages(page, PRINT_HEIGHT_PX * KEEP_WHOLE_MAX_PAGE_FRACTION);
-  await page.pdf({ path: pdfPath, ...PDF_OPTIONS });
+  try {
+    // Lay out at the printed width in print media, so measured heights
+    // match the PDF's.
+    await page.setViewport({ width: PRINT_WIDTH_PX, height: PRINT_HEIGHT_PX });
+    await page.emulateMediaType('print');
+    await page.goto(`file://${htmlPath}`, { waitUntil: 'networkidle2', timeout: 15000 });
+    await enforceMinFontSize(page, MIN_FONT_PX);
+    await markKeepWholeMessages(page, PRINT_HEIGHT_PX * KEEP_WHOLE_MAX_PAGE_FRACTION);
+    await page.pdf({ path: pdfPath, ...PDF_OPTIONS });
+  } catch (err) {
+    // One failed thread must not poison the rest of a batch.
+    await closeBrowser();
+    throw err;
+  }
 }
 
 /** Render one stored thread to a PDF. Returns the path written. */
