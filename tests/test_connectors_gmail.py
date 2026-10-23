@@ -1188,3 +1188,68 @@ def test_backfill_selection_skips_gone_threads_and_finds_missing_pdfs() -> None:
     )
     assert out["pending"] == ["a"], "gone threads are not retried; captured ones are done"
     assert out["needPdf"] == ["b"], "only a thread with a non-empty mbox and no PDF is rendered"
+
+
+# --- printing -------------------------------------------------------------
+
+
+PRINT_PROBE = """
+const render = require('./render');
+(async () => {
+  let ok = true;
+  try { require('puppeteer'); } catch (e) { ok = false; }
+  if (!ok) { console.log(JSON.stringify({skip: 'puppeteer not installed'})); return; }
+  const pdfPath = path.join(dir, 'thread.pdf');
+  try {
+    await render.renderMboxToPdf(mboxPath, pdfPath, {account: 'Jane Roe <jane.roe@examplefirm.com>'});
+  } catch (e) {
+    console.log(JSON.stringify({skip: 'no browser: ' + e.message.split('\\n')[0]}));
+    return;
+  } finally {
+    await render.closeBrowser();
+  }
+  console.log(JSON.stringify({pdf: pdfPath}));
+})();
+"""
+
+
+def _print_thread(messages: list[tuple[str, str]]) -> Path:
+    out = _json(write_mbox_js(messages) + PRINT_PROBE)
+    if "skip" in out:
+        pytest.skip(out["skip"])
+    return Path(out["pdf"])
+
+
+def test_a_long_message_starts_on_the_first_page() -> None:
+    """A message taller than a page used to be pushed whole onto page 2,
+    leaving page 1 with nothing but the Gmail header."""
+    fitz = pytest.importorskip("fitz")
+    paragraphs = tuple(
+        f"Paragraph {n}: " + "the inspection findings are set out in full here. " * 12
+        for n in range(1, 31)
+    )
+    lines: list[str] = []
+    for p in paragraphs:
+        lines += [p, ""]
+    pdf = _print_thread([("m1", plain_message(body_lines=tuple(lines)))])
+    with fitz.open(pdf) as doc:
+        assert doc.page_count >= 2
+        first = doc[0].get_text()
+    assert "Paragraph 1:" in first, "the message body did not start on page 1"
+
+
+def test_a_short_message_is_not_split_across_pages() -> None:
+    """Short messages stay whole: the header and its text print together."""
+    fitz = pytest.importorskip("fitz")
+    long_lines: list[str] = []
+    for n in range(1, 28):
+        long_lines += [f"Filler {n}: " + "a line of earlier discussion. " * 10, ""]
+    short = plain_message(
+        message_id="thread-1-c@example.com",
+        body_lines=("SHORTSTART", "Confirmed for the fourteenth.", "SHORTEND"),
+    )
+    pdf = _print_thread([("m1", plain_message(body_lines=tuple(long_lines))), ("m2", short)])
+    with fitz.open(pdf) as doc:
+        pages = [p.get_text() for p in doc]
+    start = next(i for i, t in enumerate(pages) if "SHORTSTART" in t)
+    assert "SHORTEND" in pages[start], "a short message was split across a page break"

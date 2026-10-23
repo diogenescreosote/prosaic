@@ -78,6 +78,21 @@ const PDF_OPTIONS = {
   margin: { top: '0.3in', bottom: '0.3in', left: '0.4in', right: '0.4in' },
 };
 
+//: The printable area of one PDF_OPTIONS page, in CSS px (96 per inch).
+//: Layout is measured at this width so the heights below are the heights
+//: the PDF will have.
+const PRINT_WIDTH_PX = Math.floor((8.5 - 0.4 - 0.4) * 96);
+const PRINT_HEIGHT_PX = Math.floor((11 - 0.3 - 0.3) * 96);
+
+//: A message no taller than this fraction of a page is kept whole,
+//: moving to the next page rather than splitting. A taller one starts
+//: where it falls and flows across the break. Keeping every message
+//: whole (the old rule) pushed any message longer than the space left
+//: on a page onto a fresh one, so a long single-message thread printed
+//: a first page holding nothing but the Gmail header. The fraction caps
+//: the white space a kept-whole message can leave behind.
+const KEEP_WHOLE_MAX_PAGE_FRACTION = 1 / 3;
+
 //: Real Gmail threads carry the sender's own inline HTML styling
 //: verbatim — pasted Outlook signatures, nested forward blocks, and
 //: mobile-composed replies routinely embed 6-7px font sizes that are
@@ -432,11 +447,11 @@ function renderThreadHtml(messages, options = {}) {
     msgHtml += `<hr>
 <table width="100%" cellpadding="0" cellspacing="0" border="0" class="message">
 <tbody>
-<tr>
+<tr class="msghead">
   <td><font size="-1"><b>${esc(senderName)} </b>&lt;${esc(senderEmail)}&gt;</font></td>
   <td align="right"><font size="-1">${fmtDate(dateStr)}</font></td>
 </tr>
-<tr><td colspan="2" style="padding-bottom: 4px;">
+<tr class="msghead"><td colspan="2" style="padding-bottom: 4px;">
   <font size="-1" class="recipient"><div>To: ${esc(to)}</div>${
       cc ? `<div>Cc: ${esc(cc)}</div>` : ''
     }</font>
@@ -469,7 +484,7 @@ a:visited{color:#6611CC}
 img{border:0px}
 pre{white-space:pre;white-space:-moz-pre-wrap;white-space:-o-pre-wrap;white-space:pre-wrap;word-wrap:break-word;max-width:800px;overflow:auto}
 .logo{left:-7px;position:relative}
-@media print{.message{page-break-inside:avoid}}
+@media print{.message.keep-whole{break-inside:avoid}.message tr.msghead{break-inside:avoid;break-after:avoid}}
 </style>
 </head><body>
 <div class="bodycontainer">
@@ -528,10 +543,32 @@ async function enforceMinFontSize(page, minPx) {
   }, minPx);
 }
 
+/** Mark the messages short enough to keep on one page (`keep-whole`).
+ * Run after every other layout change: it reads final heights. Returns
+ * the number of messages marked. */
+async function markKeepWholeMessages(page, maxPx) {
+  return page.evaluate((max) => {
+    let marked = 0;
+    for (const el of document.querySelectorAll('table.message')) {
+      el.classList.remove('keep-whole');
+      if (el.getBoundingClientRect().height <= max) {
+        el.classList.add('keep-whole');
+        marked += 1;
+      }
+    }
+    return marked;
+  }, maxPx);
+}
+
 async function htmlToPdf(htmlPath, pdfPath) {
   const page = await ensureBrowser();
+  // Lay out at the printed width in print media, so measured heights
+  // match the PDF's.
+  await page.setViewport({ width: PRINT_WIDTH_PX, height: PRINT_HEIGHT_PX });
+  await page.emulateMediaType('print');
   await page.goto(`file://${htmlPath}`, { waitUntil: 'networkidle2', timeout: 15000 });
   await enforceMinFontSize(page, MIN_FONT_PX);
+  await markKeepWholeMessages(page, PRINT_HEIGHT_PX * KEEP_WHOLE_MAX_PAGE_FRACTION);
   await page.pdf({ path: pdfPath, ...PDF_OPTIONS });
 }
 
