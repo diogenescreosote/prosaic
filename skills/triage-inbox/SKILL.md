@@ -81,6 +81,18 @@ human review." That is a fine outcome. Silently reading less is not.
    disagrees with `KNOWLEDGE.md`, say so in the row and in the
    `record` update. A contradiction resolved silently in favor of the
    older belief is the second-most expensive thing you can do here.
+4a. **Orders: the operative words, verbatim.** For any order, judgment,
+   stipulation or injunction, the note quotes every operative
+   clause **word for word**: each grant, prohibition, **exception**,
+   condition, deadline and duration, with its item number. Do not
+   paraphrase an exception. "Access only during court-ordered access or
+   inspections" and "court-ordered inspections" are different rules, and
+   the paraphrase is where the difference gets lost. Then, for every term that
+   points elsewhere ("court-ordered", "the person in ①", "the attached
+   form", "prior orders remain in effect"), **list what it reaches in this
+   matter by name**: which existing orders, which people, which
+   activities. A form attachment (a schedule on its own form)
+   narrows nothing in the main order unless its own words say so.
 5. **Literate rename** into the right `assets/` subdirectory: the
    filename says what the document is, dated absolutely.
 6. **INDEX.md row in the same change.** `assets/INDEX.md` is the

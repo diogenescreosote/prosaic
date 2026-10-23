@@ -178,6 +178,17 @@ are wrong in a way nothing downstream can detect.
 If you need a filed version and the manifest says `not-in-hand` or shows
 a substitute, say so and stop. Do not substitute the nearest file.
 
+## STOP. What an order permits is answered from its words, not from a note
+
+Before telling anyone what an order allows or forbids, open the order
+and quote the operative clause verbatim, **exceptions included**. A
+note's summary of an order is a lead, not an answer. Resolve each term
+that refers outside the clause ("court-ordered", "as provided in the
+attached form", "the protected person") against every order in the
+matter, then state the answer as the clause plus what it reaches. When
+the words leave room, say so, and give both readings and the safer
+course. Do not collapse an exception into the narrower reading.
+
 ## Proofs of service: four places, search them all
 
 A proof of service is a source beside the served document in `src/`,
