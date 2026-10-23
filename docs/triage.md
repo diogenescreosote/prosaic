@@ -96,6 +96,20 @@ catalog row must satisfy, are the `triage-inbox` skill. The prompt
 template (`triage/prompts/sync_triage.md`) requires the same read of
 every headless session.
 
+## Orders: the operative words
+
+For any order, judgment, stipulation or injunction, the note quotes
+every operative clause **word for word**: each grant, prohibition,
+**exception**, condition, deadline and duration, with its item number.
+Do not paraphrase an exception. "Access only during court-ordered access
+or inspections" and "court-ordered inspections" are different rules, and
+the paraphrase is where the difference gets lost. Then, for every term
+that points elsewhere ("court-ordered", "the person in ①", "the attached
+form", "prior orders remain in effect"), **list what it reaches in this
+matter by name**: which existing orders, which people, which activities.
+A form attachment (a schedule on its own form) narrows nothing in the
+main order unless its own words say so.
+
 ## Tuning
 
 - Per-connector handling lives in `triage/prompts/sync_triage.md`.
