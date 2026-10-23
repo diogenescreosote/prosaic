@@ -512,6 +512,12 @@ ${msgHtml}
 
 let _browser = null;
 let _page = null;
+let _rendersSinceLaunch = 0;
+
+//: A long-lived headless browser degrades over a large batch: renders
+//: that take two seconds in a fresh browser start timing out after
+//: several hundred. Relaunch after this many.
+const RENDERS_PER_BROWSER = 200;
 
 async function ensureBrowser() {
   // A timed-out or crashed page leaves a closed session behind; every
@@ -531,6 +537,7 @@ async function closeBrowser() {
   const browser = _browser;
   _browser = null;
   _page = null;
+  _rendersSinceLaunch = 0;
   if (browser) {
     try {
       await browser.close();
@@ -590,6 +597,8 @@ async function htmlToPdf(htmlPath, pdfPath) {
     await closeBrowser();
     throw err;
   }
+  _rendersSinceLaunch += 1;
+  if (_rendersSinceLaunch >= RENDERS_PER_BROWSER) await closeBrowser();
 }
 
 /** Render one stored thread to a PDF. Returns the path written. */
