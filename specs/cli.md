@@ -83,6 +83,13 @@ subcommand's real promises live in that component's spec.
 - **`sc proof ...`** passes through to the remote-online-notarization
   client (`proof-client/client.py`). The real promises live in
   [proof.md](proof.md). *(tested: tests/test_proof.py)*
+- **`sc phone ingest|search|stats [dir]`** passes through to the phone
+  message store (`triage/phone_store.py`): incremental ingest of the
+  backups named in matter.yaml `phone:`, indexed search by text,
+  number, date and kind into a bannered report (`--format md|json`),
+  and a summary of what the store holds and which backups it read. The
+  real promises live in [phone-store.md](phone-store.md). *(tested:
+  tests/test_phone_store.py)*
 - **`sc connectors`** lists available connectors with their
   descriptions and auth requirements. *(untested)*
 - **`sc schedule <dir> [times]`** installs the 12-hourly background

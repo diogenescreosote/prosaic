@@ -12,5 +12,8 @@ out/*/.build_manifest.json
 # derived/text/ (page-marked text) IS tracked: small, and what the record is searched through.
 derived/ocr/
 
+# Phone message store (ADR-0048): derived from the backups, rebuilt by `sc phone ingest`.
+derived/phone/
+
 # Obsidian workspace state (optional viewer for knowledge/, ADR-0043)
 .obsidian/

@@ -55,6 +55,10 @@ system; `design/` records how and why it is *built* the way it is;
   failure behavior
 - [triage.md](triage.md) — the AI clerk: what it may and may not do
 - [cli.md](cli.md) — the `sc` command surface
+- [phone-logs.md](phone-logs.md) — one-off extraction of a number's calls and
+  messages from a phone backup
+- [phone-store.md](phone-store.md) — the per-matter message store: incremental
+  ingest, indexed search
 
 ## Relationship to design/
 

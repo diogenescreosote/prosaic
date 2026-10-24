@@ -22,6 +22,13 @@ backup:
 # related_matters:
 #   - ../other-matter
 
+# Phone backups (SMS Backup & Restore), indexed into a derived store
+# that `sc phone search` answers from. See prosaic docs/phone-logs.md.
+# phone:
+#   sources: ["~/Drive/sms-*.xml", "~/Drive/calls-*.xml"]
+#   since: "2024-05-01"               # nothing older is stored
+#   db: derived/phone/messages.sqlite # default; gitignored
+
 # Agent roles (ADR-0044): which model runs each headless job, and a turn
 # cap. Unset means the harness's default model, uncapped. Triage and
 # refine integrate new material and belong on the strongest model; the

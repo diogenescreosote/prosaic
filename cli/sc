@@ -12,6 +12,7 @@ details. Commands:
   clean [dir]             report stale files in out/ (--apply removes them)
   ocr <pdf> <outdir>      OCR-supplement one PDF
   connectors              list available connectors
+  phone <action> <dir>    phone message store: ingest, search, stats
   backup <action> [dir]   init/push/status a matter's backup upstream
   commit-check [file]     validate a matter commit message
   hooks <dir>             install the matter git hooks
@@ -451,6 +452,13 @@ def cmd_docuseal(args: argparse.Namespace) -> int:
 def cmd_sign(args: argparse.Namespace) -> int:
     return subprocess.run(
         [sys.executable, str(ROOT / "signing" / "sign.py"), *args.rest]
+    ).returncode
+
+
+def cmd_phone(args: argparse.Namespace) -> int:
+    rest = [a for a in args.rest if a != "--"]
+    return subprocess.run(
+        [sys.executable, str(ROOT / "triage" / "phone_store.py"), *rest]
     ).returncode
 
 
@@ -2496,6 +2504,11 @@ def main() -> int:
     sp.add_argument("rest", nargs=argparse.REMAINDER,
                     help="passed through to signing/sign.py")
     sp.set_defaults(func=cmd_sign)
+
+    sp = sub.add_parser("phone", help="phone message store: ingest, search, stats (SMS Backup & Restore)")
+    sp.add_argument("rest", nargs=argparse.REMAINDER,
+                    help="passed through to triage/phone_store.py")
+    sp.set_defaults(func=cmd_phone)
 
     sp = sub.add_parser("connectors", help="list available connectors")
     sp.set_defaults(func=cmd_connectors)

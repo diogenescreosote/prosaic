@@ -12,6 +12,11 @@ number, in this window?" with a single command, and get back a
 markdown report another session can quote, count, and cite from
 without ever opening the raw XML.
 
+For repeated questions over a matter's backups, the store in
+[phone-store.md](phone-store.md) answers from an index; this extractor
+remains the tool for a backup the store does not cover, and the
+reference for what a citable extract must say.
+
 ## Promises
 
 1. **Streaming, bounded memory.** Backups are parsed incrementally;

@@ -30,7 +30,7 @@ already have. The machinery stays local and is never shared.
 
 **Spec-first, tested always.** Every component has a contract in
 [specs/](specs/); every decision that constrains later work is an ADR in
-[design/](design/); 991 tests, with `ruff` and `mypy --strict` clean.
+[design/](design/); 1004 tests, with `ruff` and `mypy --strict` clean.
 
 ## Security, in technical terms
 
@@ -106,7 +106,7 @@ an agent loads on demand ([skills/README.md](skills/README.md),
 | [docuseal](skills/docuseal/SKILL.md) | Send for e-signature; bring back the signed original and audit log |
 | [proof](skills/proof/SKILL.md) | Remote online notarization: send, poll, fetch |
 | [crypto-attest](skills/crypto-attest/SKILL.md) | Hash, sign, verify, manifest and timestamp matter documents |
-| [phone-logs](skills/phone-logs/SKILL.md) | A citable call and message history with a number, from a phone backup |
+| [phone-logs](skills/phone-logs/SKILL.md) | A citable call and message history with a number: the matter's phone store first, a backup if need be |
 | [run-flow](skills/run-flow/SKILL.md) | Files-first agent/judge/gate flows for drafting loops and review passes |
 | [estate-plan](skills/estate-plan/SKILL.md) | Draft, execute and cryptographically bind a California estate plan |
 | [migrate-knowledge](skills/migrate-knowledge/SKILL.md) | Fold a legacy single-file knowledge base into the vault |
@@ -121,7 +121,7 @@ an agent loads on demand ([skills/README.md](skills/README.md),
 | Area | Commands |
 |---|---|
 | A matter | `init` scaffold · `upgrade` bring onto current conventions · `hooks` install the git hooks · `harness` install the agent bundle · `backup` init/push/status · `commit-check` validate a message · `brief` session-start summary · `open` built PDFs |
-| Getting material in | `sync` run connectors and triage now · `connectors` list them · `schedule` install the standby supervisor · `mail-render` re-render a stored thread · `ocr` supplement a PDF · `text` audit or ensure every document is searchable · `find` grep the record |
+| Getting material in | `sync` run connectors and triage now · `connectors` list them · `schedule` install the standby supervisor · `mail-render` re-render a stored thread · `ocr` supplement a PDF · `text` audit or ensure every document is searchable · `find` grep the record · `phone` ingest and search phone backups |
 | Knowledge | `knowledge` init, new, check, index, migrate · `refine` nightly proposals, never edits · `standup` the morning agenda |
 | Building | `list` envelopes · `build` an envelope · `build-doc` one source · `clean` stale output · `form` list, info, fill, fields |
 | Review | `review` preflight plumbing: paths, cites, report, status · `flow` run a files-first flow |
@@ -173,7 +173,7 @@ for the end-to-end tour.
 | | |
 |---|---|
 | Running it | [install.md](docs/install.md) · [deploy.md](docs/deploy.md) · [matter-layout.md](docs/matter-layout.md) · [harness.md](docs/harness.md) · [knowledge.md](docs/knowledge.md) · [review.md](docs/review.md) · [upgrade.md](docs/upgrade.md) · [scheduling.md](docs/scheduling.md) · [backup.md](docs/backup.md) |
-| Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) |
+| Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) · [phone-logs.md](docs/phone-logs.md) |
 | Getting documents out | [forms.md](docs/forms.md) |
 | Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
 | Working on it | [skills/](skills/README.md) · [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) |
