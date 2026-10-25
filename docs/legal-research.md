@@ -18,10 +18,26 @@ claude mcp add --transport http --scope user midpage https://app.midpage.ai/mcp/
 
 The server needs an account. After adding it, run `/mcp` in Claude Code
 and authenticate `midpage`; a session started before authentication
-does not see its tools. Use it to find cases, read opinions, and check
-later history. Then save the full opinion text into the matter's
-`research/authorities/` beside a comb note, as with any other source. A
-search result or summary is a lead, not the text.
+does not see its tools. What it does well:
+- One `search` call returns every opinion in a multi-appeal case,
+  with docket numbers, publication status and treatment counts.
+- `analyzeCaseDocument` answers a targeted question about an opinion with
+  verbatim, line-anchored quotes (deep links) and a `doesNotAddress` list.
+- `analyzeLaw` does the same for statutes and regulations.
+
+That makes it the fastest and cheapest way to find authority and to
+extract what an opinion says on a point.
+
+What it does not do: return the raw full text. Its answers are
+model-selected passages, so they do not satisfy the full-text rule on
+their own. For any authority a filing will rely on:
+1. Fetch the full text (CourtListener storage, the court's site or the
+   reporter).
+2. Save Midpage's analysis beside it as the start of the comb note.
+3. Read the rest yourself: footnotes, dissents and later history are
+   where a targeted answer stops.
+
+A search result or summary is a lead, not the text.
 
 ## CourtListener
 
