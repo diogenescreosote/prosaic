@@ -54,7 +54,7 @@ say it is not there.
 Every case, statute, rule and regulation a draft relies on, and every
 one the other side cites in a paper the draft answers, is fetched in
 full from a primary source (the legislature's site, eCFR, the court's
-rules page, CourtListener or the reporter) into the matter's
+rules page, Midpage, CourtListener or the reporter) into the matter's
 `research/authorities/`, and read in full. Not the headnote, not the
 pin page, not a summary from memory or from a secondary source, and not
 the other side's characterization.

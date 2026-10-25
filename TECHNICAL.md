@@ -173,7 +173,7 @@ for the end-to-end tour.
 | | |
 |---|---|
 | Running it | [install.md](docs/install.md) · [deploy.md](docs/deploy.md) · [matter-layout.md](docs/matter-layout.md) · [harness.md](docs/harness.md) · [knowledge.md](docs/knowledge.md) · [review.md](docs/review.md) · [upgrade.md](docs/upgrade.md) · [scheduling.md](docs/scheduling.md) · [backup.md](docs/backup.md) |
-| Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) · [phone-logs.md](docs/phone-logs.md) |
+| Getting material in | [connectors.md](docs/connectors.md) · [triage.md](docs/triage.md) · [stt.md](docs/stt.md) · [phone-logs.md](docs/phone-logs.md) · [legal-research.md](docs/legal-research.md) |
 | Getting documents out | [forms.md](docs/forms.md) |
 | Writing for it | [conventions.md](docs/conventions.md) · [writing-style.md](docs/writing-style.md) · [commits.md](docs/commits.md) |
 | Working on it | [skills/](skills/README.md) · [development.md](docs/development.md) · [testing.md](docs/testing.md) · [security.md](docs/security.md) · [CONTRIBUTING.md](CONTRIBUTING.md) · [AGENTS.md](AGENTS.md) |
