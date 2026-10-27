@@ -31,6 +31,7 @@ If there is no workspace contract above this directory, copy
 | Build a filing envelope | `/build <envelope>` (runs `<prosaic>/cli/sc build <envelope>` and relays; never edits a source) |
 | Open the built PDFs | `/open <envelope>` (`<prosaic>/cli/sc open <envelope>`) |
 | Where things stand | `/status`; every session starts with `<prosaic>/cli/sc brief .` |
+| Did the human already answer this? What does the vault say about X? | `sc recall <terms>` (vault, TODO/QUESTIONS, mail index; `--transcripts` adds what the human typed in sessions). Before listing a draft's questions: `sc open-questions <draft.md>` |
 | Is X in the record? When did X say Y? | `/find <term>` (`<prosaic>/cli/sc find <term>`: grep every text file and sidecar, list unsearched PDFs) first, then read the hits. Two words that belong together: `sc find --near family therapist`. A sender in a date window: `sc mail-index . --from doe --after 2025-11-01 --before 2025-12-15 [--grep RE]` (one row per message with its own date; the thread PDF may be dated weeks earlier). Never ask the user for a date or a subject line before both have run and the hits have been read |
 | Who texted or called whom, when? Where was X texted? | `<prosaic>/cli/sc phone ingest .` then `sc phone search . --number N [--from D --to D]` or `--text "phrase"` (the indexed store of the phone backups, `phone:` in matter.yaml; quote its coverage when reporting an absence) |
 | Commit typed work | `/commit <type(scope): subject>` (stages by explicit path) |

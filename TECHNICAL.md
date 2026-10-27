@@ -30,7 +30,7 @@ already have. The machinery stays local and is never shared.
 
 **Spec-first, tested always.** Every component has a contract in
 [specs/](specs/); every decision that constrains later work is an ADR in
-[design/](design/); 1022 tests, with `ruff` and `mypy --strict` clean.
+[design/](design/); 1040 tests, with `ruff` and `mypy --strict` clean.
 
 ## Security, in technical terms
 
@@ -80,6 +80,7 @@ an agent loads on demand ([skills/README.md](skills/README.md),
 |---|---|
 | `/status` | Where the matter stands: the brief, git status, stale output |
 | `/find` | Exhaustive search of the record; reports what could not be searched |
+| `/recall` | Cheap search of the vault and live lists before asking the human; `sc open-questions` for a draft's placeholders |
 | `/build`, `/build-doc` | Build a filing envelope, or one source, and relay the result verbatim |
 | `/open` | Open the built PDFs in the system viewer |
 | `/clean` | Report stale files in `out/` the configuration can no longer produce |

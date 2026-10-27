@@ -49,6 +49,16 @@ for the date or the subject line of something the record can be
 searched for. Only after the search is exhausted and reported may you
 say it is not there.
 
+## STOP. Recall before you ask
+
+Before asking the human any factual question, and before stating what
+a document says or is, run `sc recall <terms>` (the vault, the live
+lists and the mail index; a second, a few hundred tokens) and read the
+source it points to. Before listing questions from a draft, run
+`sc open-questions <draft.md>`. A placeholder in a draft is not
+evidence the question is open. A note describing a document is a lead;
+open the document.
+
 ## STOP. An authority is relied on only after its full text is read
 
 Every case, statute, rule and regulation a draft relies on, and every

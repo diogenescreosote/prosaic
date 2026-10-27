@@ -66,6 +66,41 @@ prints the notes whose aliases match a term before the ripgrep pass;
 writes notes at triage; ripgrep, the alias index and a Sonnet-class
 reader read them back.
 
+## Recall: the vault before the human
+
+A note is only worth writing if it is read before the next question.
+`sc recall <terms>` is the cheap read: ripgrep over `knowledge/`,
+`KNOWLEDGE.md`, `QUESTIONS.md`, `TODO.md` and the mail index, one
+trimmed line per hit, capped, in about a second. The contract asks an
+agent to run it before any factual question to the human and before
+saying what a document is. `sc open-questions <draft.md>` does the same
+for every placeholder a drafter left (`[XX: ...]`, `[Confirm ...]`,
+`[Verify ...]`, `[TODO ...]`), with keywords drawn from the placeholder
+and the sentence before it, so a draft is filled from recorded answers
+before anyone is asked anything.
+
+```
+$ sc recall custodian "Pat Lee"
+recall 'custodian' AND 'Pat Lee' (within 3 lines): 1 hit(s) in 1 file(s)
+knowledge/organizations/example-clinic.md:10: intake. The clinic's records custodian is Pat Lee.
+(transcripts not searched; add --transcripts for what the human typed)
+
+$ sc open-questions src/draft.md
+open questions in src/draft.md: 4 placeholder(s)
+
+L6 [XX: what time of day was the call?]
+  terms: March 14, 2026 · Jane Roe · Example Clinic · call
+  knowledge/organizations/example-clinic.md:9 (4/4): Jane Roe first called the Example Clinic on 2026-03-14 to ask about
+...
+```
+
+`--transcripts` adds what the human typed in coding-agent sessions
+(Claude Code's JSONL files; tool output, task notifications and
+subagent turns are skipped). It is off by default: a fact that lives
+only in a transcript belongs in the vault, and finding it there is the
+cue to record it. The contract for both commands is in
+[specs/cli.md](../specs/cli.md).
+
 ## Migrating an existing matter
 
 `sc upgrade <matter>` (or `sc knowledge migrate`) preserves the single

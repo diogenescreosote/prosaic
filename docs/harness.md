@@ -27,6 +27,7 @@ output on a small model at low effort.
 .claude/skills/status/         /status  (brief + git status + stale report)
 .claude/skills/commit/         /commit <type(scope): subject> [-- paths]
 .claude/skills/find/           /find <term> ...
+.claude/skills/recall/         /recall <term> ...   (vault before the human; sc open-questions for drafts)
 .claude/skills/standup/        /standup  (the daily thirty-minute knowledge loop)
 .claude/skills/citecheck/      /citecheck <env>     optional preflight (ADR-0045)
 .claude/skills/clerkreview/    /clerkreview <env>
@@ -82,6 +83,7 @@ failure is relayed rather than swallowed.
 | build, build-doc, open, clean, status | `claude-haiku-4-5`, effort low | pure relay of CLI output |
 | commit | `claude-sonnet-5`, effort medium | writes a commit body in the matter convention |
 | find | `claude-sonnet-5`, effort medium | reads hits, runs variants, OCRs unsearched PDFs |
+| recall | `claude-haiku-4-5`, effort low | cheap and frequent: relays vault hits, points at the source to read |
 | standup | `claude-opus-5`, effort medium | scribes human decisions into the vault; the human directs every edit |
 | citecheck, clerkreview, judgereview | `claude-opus-5`, effort high | judgment on a draft; each reads cold |
 | oppo | `claude-fable-5-1`, effort high | the adversary gets the strongest model |

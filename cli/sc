@@ -13,6 +13,8 @@ details. Commands:
   ocr <pdf> <outdir>      OCR-supplement one PDF
   connectors              list available connectors
   phone <action> <dir>    phone message store: ingest, search, stats
+  recall <term...>        cheap search of the vault, lists and mail index
+  open-questions <md>     a draft's placeholders, with what is already recorded
   backup <action> [dir]   init/push/status a matter's backup upstream
   commit-check [file]     validate a matter commit message
   hooks <dir>             install the matter git hooks
@@ -1838,8 +1840,11 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     lines.append("")
     lines.append("## Routine commands (deterministic; no deliberation needed)")
     lines.append("`/build <envelope>` `/build-doc <src>` `/open <envelope>` `/clean` "
-                 "`/status` `/find <term>` `/commit <type(scope): subject>` --- each runs the CLI and "
+                 "`/status` `/find <term>` `/recall <term>` `/commit <type(scope): subject>` --- each runs the CLI and "
                  "reports; a warning that needs a source edit is a separate, visible decision.")
+    lines.append("Before asking the human anything: `sc recall <terms>` (a second, a few hundred "
+                 "tokens); before listing the placeholders in a source as questions: "
+                 "`sc open-questions <src/file.md>`.")
     return "\n".join(lines) + "\n"
 
 
@@ -2228,6 +2233,23 @@ def cmd_find(args: argparse.Namespace) -> int:
     return 0 if any_hits else 1
 
 
+def _recall():
+    sys.path.insert(0, str(ROOT / "triage"))
+    import recall  # noqa: E402
+    return recall
+
+
+def cmd_recall(args: argparse.Namespace) -> int:
+    """Cheap search of the knowledge surfaces (triage/recall.py)."""
+    argv = sys.argv[sys.argv.index("recall") + 1:] if "recall" in sys.argv else args.terms
+    return _recall().cmd_recall(args, argv)
+
+
+def cmd_open_questions(args: argparse.Namespace) -> int:
+    """Placeholders in a draft, each with its recall hits."""
+    return _recall().cmd_open_questions(args)
+
+
 def cmd_brief(args: argparse.Namespace) -> int:
     matter = _matter_root(Path(args.matter_dir))
     sys.stdout.write(render_brief(matter, todo_limit=args.todo, dates_limit=args.dates))
@@ -2588,6 +2610,14 @@ def main() -> int:
     sp.add_argument("--full", action="store_true", help="snippets even for a broad term")
     sp.add_argument("--max-files", type=int, default=60, help="files listed in summary mode")
     sp.set_defaults(func=cmd_find)
+
+    sp = sub.add_parser("recall", help="cheap search of the knowledge vault, lists and mail index (exit 1: nothing recorded)")
+    _recall().add_recall_args(sp)
+    sp.set_defaults(func=cmd_recall)
+
+    sp = sub.add_parser("open-questions", help="placeholders in a draft, each with what the vault already records")
+    _recall().add_open_questions_args(sp)
+    sp.set_defaults(func=cmd_open_questions)
 
     sp = sub.add_parser("text", help="text coverage: audit or ensure that every document is searchable")
     sp.add_argument("action", choices=("audit", "ensure", "migrate"))

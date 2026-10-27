@@ -198,6 +198,39 @@ agent CLI is named (ADR-0020). Its promises:
   the phrase was ever written; the per-message mail index under
   `derived/mail/` is among what is searched, so a hit carries the
   message's own date. *(tested)*
+- **`sc recall <term…> [--matter DIR] [--max N] [--any] [--window N] [-F] [--transcripts [SOURCE]]`**
+  is the cheap search of what the humans already said: ripgrep over the
+  matter's knowledge surfaces only (every `.md` under `knowledge/`,
+  `KNOWLEDGE.md`, `QUESTIONS.md`, `TODO.md`, `derived/mail/messages.tsv`),
+  so it costs a second and a few hundred tokens and can be run before
+  every question to the human. Terms are case-insensitive regexes; with
+  several, a line is a hit when every term appears within `--window`
+  lines of it (default 3), and `--any` makes them alternatives instead.
+  Output is grouped by file, one line per hit (`path:line: …snippet…`,
+  trimmed to about 160 characters around the match), knowledge notes
+  first, identical snippets shown once, capped at `--max` (default 40;
+  0 is no cap) with the count of what was cut and the exact `rg`
+  command that shows it. `--transcripts` adds a pluggable transcript
+  source, off by default; the one shipped, `claude-code`, reads the
+  JSONL session files under `$CLAUDE_CONFIG_DIR/projects/<slug>/`
+  (default `~/.claude`; the slug is the matter's absolute path with
+  every non-alphanumeric character turned into `-`) and searches only
+  text the human typed: tool results, task notifications, meta and
+  compact-summary entries, subagent turns and harness tags are skipped,
+  and a multi-term hit there needs every term in one message. Exit 0
+  with hits, 1 with none. *(tested: tests/test_recall.py)*
+- **`sc open-questions <draft.md> [--matter DIR] [--pattern RE] [--top N] [--terms N] [--transcripts [SOURCE]]`**
+  lists the placeholders in a draft (`[XX: …]` initials notes,
+  `[Confirm …]`, `[Verify …]`, `[TODO …]`, `[TBD …]`, `[Check …]`,
+  `[Ask …]`; `--pattern` replaces the regex) and, under each, the top
+  `--top` (default 3) `sc recall` hits for keywords drawn from the
+  placeholder and the 200 characters before it: quoted phrases, dates
+  (searched in both their written and ISO forms), runs of capitalized
+  words, numbers of three or more digits, then long content words,
+  stopwords and month names dropped, at most `--terms` (default 4).
+  Hits are ranked by how many of the keywords the line carries. It
+  reads; it never edits the draft. Exit 0 when the draft has
+  placeholders, 1 when it has none. *(tested: tests/test_recall.py)*
 - **`sc mail-index [matter] [--from S] [--after D] [--before D] [--grep RE] [--rebuild]`**
   writes `derived/mail/messages.tsv` and `messages.md`, one row per
   message in every stored mbox (its own date and time, from, to, cc,
@@ -232,7 +265,7 @@ agent CLI is named (ADR-0020). Its promises:
   tests/test_text_coverage)*
 - **`sc harness install [matter]`** installs or refreshes the coding-agent
   harness bundle (`templates/matter/.claude`: the SessionStart hook and
-  the build, build-doc, open, clean, status, commit and find commands),
+  the build, build-doc, open, clean, status, commit, find and recall commands),
   resolving the checkout placeholder to a real path; `sc init` does the
   same at scaffold time. A matter's own settings.local.json is never
   touched. *(tested)*

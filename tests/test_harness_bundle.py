@@ -25,6 +25,7 @@ EXPECTED_COMMANDS = {
     "status",
     "commit",
     "find",
+    "recall",
     "standup",
     "citecheck",
     "clerkreview",
@@ -128,6 +129,7 @@ def test_brief_is_short_and_names_the_routine_commands(matter: Path) -> None:
     assert "File the reply by Friday" in out
     assert "long text" not in out, "the brief quotes calendar sections only"
     assert "/build" in out and "/find" in out
+    assert "/recall" in out and "sc open-questions" in out
     assert len(out.splitlines()) < 60
 
 
