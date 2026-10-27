@@ -4,6 +4,7 @@
 //
 // Usage:  node pull.js <matter_dir> [--dry-run] [--force]
 //                                   [--backfill-mbox [--limit N]]
+//                                   [--audit-drafts [--apply]]
 //                                   [--account <email>] [--concurrency N] [--full]
 //
 // Config (matter.yaml, connectors.gmail; legacy envelopes.yaml
@@ -28,10 +29,16 @@
 //     window and writes every recipient the list does not cover to
 //     .state/gmail_unlisted.json, so a correspondent the owner has
 //     written to but nobody listed is named in the brief instead of
-//     silently absent from the record;
-//   - a thread's unsent drafts are counted in its ledger entry
-//     (draftCount, latestDraftAt) so the brief can say a reply is
-//     still sitting in Drafts.
+//     silently absent from the record.
+//
+// DRAFTS ARE NOT MAIL (ADR-0049). An unsent draft is never listed,
+// fetched, stored in an mbox, rendered, counted or announced: listing
+// queries exclude in:drafts, every message carrying Gmail's DRAFT
+// label is dropped before any fetch, and the mbox writer refuses one.
+// A thread that is nothing but drafts produces nothing at all.
+// --audit-drafts finds drafts that captures made before this rule
+// left in the record, and --audit-drafts --apply moves them out of it
+// (drafts_audit.js).
 //
 // Credentials: OAuth client keys + one token per account live in
 // $PROSAIC_GMAIL_CREDS_DIR (default ~/.config/prosaic/gmail/); see
@@ -110,6 +117,7 @@ const { google } = require('googleapis');
 const creds = require('./creds');
 const mboxlib = require('./mbox');
 const render = require('./render');
+const audit = require('./drafts_audit');
 
 //: Ledger format. v1 was a bare {threads:{}} for one mailbox; v2 nests
 //: threads under an account key because Gmail thread ids are scoped to
@@ -244,9 +252,15 @@ function addressDisplay(entry) {
  * per message, and a thread is returned when any message matches — so
  * a routine run touches O(recent threads), not the whole history.
  */
+//: Appended to every search this connector makes. Message-level
+//: filtering (isNotDraft) is the guarantee; excluding drafts from the
+//: search as well keeps a draft-only thread from being listed at all.
+const EXCLUDE_DRAFTS = '-in:drafts';
+
 function listingQuery(addresses, { newerThanDays } = {}) {
   const clauses = addresses.map(addressClause).join(' OR ');
-  return newerThanDays ? `(${clauses}) newer_than:${newerThanDays}d` : clauses;
+  const q = `(${clauses}) ${EXCLUDE_DRAFTS}`;
+  return newerThanDays ? `${q} newer_than:${newerThanDays}d` : q;
 }
 
 async function searchThreads(gmail, addresses, opts = {}) {
@@ -385,25 +399,34 @@ function repairSharedFilenames(ledger, outDir, uniqueName, { dryRun = false } = 
 
 // --- drafts --------------------------------------------------------------
 
-//: A draft is not mail. Gmail keeps unsent drafts (including scheduled
-//: sends) inside the thread they belong to, and threads.get returns
-//: them beside the real messages. An earlier export rendered a
-//: scheduled-then-cancelled draft as though it had been sent; the
-//: matter's record then said a message went out that never did. So a
-//: message carrying the DRAFT label is never captured, counted or
-//: rendered.
+//: A draft is not mail (ADR-0049). Gmail keeps unsent drafts
+//: (including scheduled sends) inside the thread they belong to, and
+//: threads.get returns them beside the real messages. An earlier
+//: export rendered drafts as though they had been sent: a one-message
+//: PDF, From the mailbox owner, To the other side, indistinguishable
+//: from a letter that went out. So a message carrying the DRAFT label
+//: is never fetched, stored, rendered, counted or announced, and
+//: nothing about it is kept in the ledger.
 function isNotDraft(message) {
-  return !(message.labelIds || []).includes('DRAFT');
+  return !((message && message.labelIds) || []).includes('DRAFT');
+}
+
+//: Ledger fields an earlier version kept about a thread's drafts. They
+//: are tolerated when read and dropped whenever an entry is rewritten.
+const RETIRED_DRAFT_FIELDS = ['draftCount', 'latestDraftAt'];
+
+function withoutDraftFields(entry) {
+  const out = { ...(entry || {}) };
+  for (const key of RETIRED_DRAFT_FIELDS) delete out[key];
+  return out;
 }
 
 // --- change detection --------------------------------------------------
 
 /**
- * Can a listed thread be skipped from its list stub alone? Only when the
- * ledger's historyId matches AND the entry already carries a draft
- * count: an entry recorded before drafts were counted is examined once
- * (one metadata fetch) so the brief's draft report is true from the
- * first run rather than after the thread happens to change.
+ * Can a listed thread be skipped from its list stub alone? When the
+ * ledger's historyId matches the stub's, nothing in the thread has
+ * changed since it was recorded.
  */
 function entryCurrent(prev, t, force = false) {
   return (
@@ -411,8 +434,7 @@ function entryCurrent(prev, t, force = false) {
     !!prev &&
     prev.historyId != null &&
     t.historyId != null &&
-    String(prev.historyId) === String(t.historyId) &&
-    prev.draftCount !== undefined
+    String(prev.historyId) === String(t.historyId)
   );
 }
 
@@ -462,7 +484,7 @@ async function captureThread(gmail, threadId, mboxPath, { known = [] } = {}) {
   //: only while the mbox it describes exists.
   const have = new Set(fs.existsSync(mboxPath) ? known : []);
   const wanted = stubs.filter((stub) => !have.has(stub.id));
-  const messages = await mapLimit(wanted, MESSAGE_CONCURRENCY, async (stub) => {
+  const fetched = await mapLimit(wanted, MESSAGE_CONCURRENCY, async (stub) => {
     const msg = await apiCall(
       (opts) => gmail.users.messages.get({ userId: 'me', id: stub.id, format: 'raw' }, opts),
       `messages.get ${stub.id}`
@@ -470,9 +492,13 @@ async function captureThread(gmail, threadId, mboxPath, { known = [] } = {}) {
     return {
       id: msg.data.id || stub.id,
       internalDate: msg.data.internalDate || stub.internalDate,
+      labelIds: msg.data.labelIds || stub.labelIds || [],
       raw: Buffer.from(msg.data.raw, 'base64url'),
     };
   });
+  //: Checked again on the message itself: a stub can predate a label
+  //: change, and the raw fetch reports the labels as they are now.
+  const messages = fetched.filter(isNotDraft);
   const result = mboxlib.appendMessages(mboxPath, messages);
   return {
     mboxPath,
@@ -557,7 +583,7 @@ function isNoiseAddress(address, ownAddresses = []) {
 async function collectUnlisted(gmail, { addresses, ignore = [], ownAddresses = [], newerThanDays, limit = UNLISTED_LIMIT }) {
   const ids = [];
   let pageToken;
-  const q = `in:sent newer_than:${newerThanDays}d`;
+  const q = `in:sent ${EXCLUDE_DRAFTS} newer_than:${newerThanDays}d`;
   do {
     const res = await apiCall(
       (o) => gmail.users.messages.list({ userId: 'me', q, maxResults: Math.min(100, limit - ids.length), pageToken }, o),
@@ -682,6 +708,10 @@ function positionalArgs() {
 /**
  * One thread's decision inputs: subject, date-derived filename, count
  * and ids of its non-draft messages. Null for a draft-only thread.
+ *
+ * `excludeKeys` is the one thing kept about drafts, and only in memory:
+ * their Message-IDs, so that an mbox written before drafts were
+ * excluded is never rendered again with one in it.
  */
 async function fetchThreadMeta(gmail, t) {
   const res = await apiCall(
@@ -691,7 +721,7 @@ async function fetchThreadMeta(gmail, t) {
           userId: 'me',
           id: t.id,
           format: 'metadata',
-          metadataHeaders: ['Subject', 'Date'],
+          metadataHeaders: ['Subject', 'Date', 'Message-ID'],
           //: labelIds ride along with metadata; isNotDraft needs them.
         },
         opts
@@ -706,27 +736,31 @@ async function fetchThreadMeta(gmail, t) {
   const dateStr = getHeader(firstMsg.payload.headers, 'Date');
   const date = dateStr ? new Date(dateStr) : new Date();
   const yyyymmdd = date.toISOString().slice(0, 10).replace(/-/g, '');
-  //: Drafts are not mail (see isNotDraft), but a reply that never left
-  //: Drafts is a fact the matter needs: the record would otherwise show
-  //: a letter answered when nothing went out. Counted, never captured.
-  const drafts = all.filter((m) => !isNotDraft(m));
-  const draftDates = drafts
-    .map((m) => getHeader((m.payload && m.payload.headers) || [], 'Date'))
+  const excludeKeys = all
+    .filter((m) => !isNotDraft(m))
+    .map((m) => getHeader((m.payload && m.payload.headers) || [], 'Message-ID'))
     .filter(Boolean)
-    .map((s) => new Date(s))
-    .filter((d) => !Number.isNaN(d.getTime()));
+    .map((id) => id.trim().toLowerCase());
   return {
     threadId: t.id,
     historyId: t.historyId,
     subject,
     messageCount: msgs.length,
     messageIds: msgs.map((m) => m.id),
-    draftCount: drafts.length,
-    latestDraftAt: draftDates.length
-      ? new Date(Math.max(...draftDates.map((d) => d.getTime()))).toISOString()
-      : null,
+    excludeKeys,
     defaultFilename: `${yyyymmdd}_${snakeCase(subject)}.pdf`,
   };
+}
+
+/**
+ * The messages of a stored thread that may be rendered: all of them,
+ * less any whose Message-ID is a draft's. Only an mbox written before
+ * drafts were excluded can hold one; it is reported, not rendered.
+ */
+function renderableMessages(messages, excludeKeys = []) {
+  const exclude = new Set(excludeKeys);
+  if (!exclude.size) return messages;
+  return messages.filter((m) => !exclude.has(mboxlib.messageKey(m.raw)));
 }
 
 async function pullAccount(ctx, account) {
@@ -751,6 +785,15 @@ async function pullAccountListed(ctx, account) {
   const profile = await gmail.users.getProfile({ userId: 'me' });
   const userEmail = profile.data.emailAddress;
   let identity = ledger.identity || userEmail;
+  //: The token file learns which mailbox it authorizes, so creds.js can
+  //: keep it and its alias in step.
+  if (ctx.tokenFile && !dryRun) {
+    try {
+      creds.recordAccount(ctx.tokenFile, userEmail);
+    } catch (err) {
+      console.error(`  warning: could not record the account in the token file: ${err.message}`);
+    }
+  }
 
   const plan = listingPlan(ledger, new Date(), { full: ctx.full });
   ctx.plan = plan;
@@ -825,12 +868,10 @@ async function pullAccountListed(ctx, account) {
         toExport.push(meta);
       } else {
         ledger.threads[t.id] = {
-          ...prev,
+          ...withoutDraftFields(prev),
           historyId: meta.historyId,
           messageCount: meta.messageCount,
           messageIds: meta.messageIds,
-          draftCount: meta.draftCount || 0,
-          latestDraftAt: meta.latestDraftAt || null,
         };
         if (!dryRun) saveState(ctx.matterDir, 'gmail', state);
       }
@@ -882,7 +923,18 @@ async function pullAccountListed(ctx, account) {
       await captureThread(gmail, meta.threadId, mboxPath, {
         known: (meta.previous && meta.previous.messageIds) || [],
       });
-      const messages = render.loadThread(mboxPath);
+      const stored = render.loadThread(mboxPath);
+      const messages = renderableMessages(stored, meta.excludeKeys);
+      if (messages.length < stored.length) {
+        console.error(
+          `\n  ${stored.length - messages.length} draft(s) in this thread's mbox predate the ` +
+            'drafts rule and are not rendered (`sc mail-audit-drafts` moves them out)\n  ... '
+        );
+      }
+      if (!messages.length) {
+        console.error('nothing but drafts; skipped');
+        continue;
+      }
 
       // The identity in the print view's header line: the mailbox, with
       // whatever display name it uses in its own messages.
@@ -928,8 +980,6 @@ async function pullAccountListed(ctx, account) {
         historyId: meta.historyId,
         messageCount: meta.messageCount,
         messageIds: meta.messageIds,
-        draftCount: meta.draftCount || 0,
-        latestDraftAt: meta.latestDraftAt || null,
         subject: meta.subject,
         filename: meta.filename,
         mbox: path.relative(outDir, mboxPath),
@@ -1003,7 +1053,7 @@ async function backfillAccount(ctx, account) {
       const mboxPath = mboxlib.mboxPathFor(outDir, entry.filename);
       const result = await captureThread(gmail, threadId, mboxPath);
       ledger.threads[threadId] = {
-        ...entry,
+        ...withoutDraftFields(entry),
         mbox: path.relative(outDir, mboxPath),
         messageCount: Math.max(entry.messageCount || 0, result.total),
         messageIds: result.ids,
@@ -1054,8 +1104,75 @@ async function backfillAccount(ctx, account) {
   return done;
 }
 
+/**
+ * --audit-drafts: compare this account's drafts and captured threads
+ * against the record (drafts_audit.js). Report only unless --apply.
+ */
+async function auditDraftsAccount(ctx, account) {
+  const { gmail, outDir, state, matterDir } = ctx;
+  const key = creds.accountKey(account);
+  const ledger = ledgerFor(state, key);
+  const helpers = { apiCall, mapLimit };
+  console.error(`[${key}] listing drafts ...`);
+  const drafts = await audit.listDrafts(gmail, helpers);
+  const threadIds = new Set(drafts.map((d) => d.threadId).filter(Boolean));
+  for (const [id, entry] of Object.entries(ledger.threads)) {
+    if (entry && entry.filename) threadIds.add(id);
+  }
+  console.error(`[${key}] ${drafts.length} draft(s); reading ${threadIds.size} thread(s) as Gmail holds them now ...`);
+  const live = new Map();
+  await mapLimit([...threadIds], METADATA_CONCURRENCY, async (id) => {
+    live.set(id, await audit.liveThread(gmail, id, helpers));
+  });
+  const result = audit.auditRecord({ matterDir, outDir, ledgerThreads: ledger.threads, drafts, live });
+  let applied = null;
+  if (ctx.apply) {
+    applied = new Map();
+    const actionable = result.findings.filter((f) => f.kind !== 'unverified');
+    if (actionable.length && audit.ensurePrivateIgnored(matterDir)) {
+      console.error(`  added ${audit.PRIVATE_DRAFTS_DIR.split(path.sep)[0]}/ to .gitignore`);
+    }
+    for (const f of actionable) {
+      try {
+        applied.set(
+          f.stem,
+          await audit.applyFinding(f, {
+            matterDir,
+            outDir,
+            ledger,
+            gmail,
+            captureThread,
+            render,
+            quoted: ctx.quoted,
+            identity: ledger.identity || key,
+            tmpDir: ctx.tmpDir,
+          })
+        );
+      } catch (err) {
+        applied.set(f.stem, `FAILED (${err.message})`);
+      }
+      saveState(matterDir, 'gmail', state);
+    }
+    const known = new Set((loadState(matterDir, audit.DRAFT_STATE, {}).keys) || []);
+    for (const d of drafts) if (d.key) known.add(d.key);
+    saveState(matterDir, audit.DRAFT_STATE, {
+      version: 1,
+      updatedAt: new Date().toISOString(),
+      keys: [...known].sort(),
+    });
+  }
+  process.stdout.write(audit.formatReport(result, { matterDir, account: key, applied }));
+  return result.findings.length;
+}
+
 async function main() {
   const dryRun = process.argv.includes('--dry-run');
+  const auditDrafts = process.argv.includes('--audit-drafts');
+  const apply = process.argv.includes('--apply');
+  if (apply && !auditDrafts) {
+    console.error('--apply only means something with --audit-drafts');
+    process.exit(1);
+  }
   const force = process.argv.includes('--force');
   const backfill = process.argv.includes('--backfill-mbox');
   const onlyAccount = flagValue('--account', null);
@@ -1071,7 +1188,8 @@ async function main() {
   }
 
   const outDir = path.resolve(matterDir, cfg.out_dir || 'assets/gmail');
-  fs.mkdirSync(outDir, { recursive: true });
+  //: A report-only audit writes nothing, not even an empty directory.
+  if (!(auditDrafts && !apply)) fs.mkdirSync(outDir, { recursive: true });
 
   const configured = creds.configuredAccounts(cfg);
   // The primary is the first CONFIGURED account, not the first one this
@@ -1114,6 +1232,7 @@ async function main() {
     },
     concurrency,
     full,
+    apply,
   };
 
   if (!render.QUOTED_MODES.includes(ctx.quoted)) {
@@ -1130,10 +1249,12 @@ async function main() {
         primary: creds.accountKey(account) === primaryKey,
       });
       const gmail = google.gmail({ version: 'v1', auth });
-      const accountCtx = { ...ctx, gmail };
-      total += backfill
-        ? await backfillAccount(accountCtx, account)
-        : await pullAccount(accountCtx, account);
+      const accountCtx = { ...ctx, gmail, tokenFile: auth.prosaicTokenPath };
+      total += auditDrafts
+        ? await auditDraftsAccount(accountCtx, account)
+        : backfill
+          ? await backfillAccount(accountCtx, account)
+          : await pullAccount(accountCtx, account);
     }
   } finally {
     fs.rmSync(ctx.tmpDir, { recursive: true, force: true });
@@ -1141,9 +1262,12 @@ async function main() {
   }
 
   console.error(
-    backfill
-      ? `\nDone. ${total} thread(s) backfilled under ${outDir}`
-      : `\nDone. ${total} thread(s) exported to ${outDir}`
+    auditDrafts
+      ? `\nDone. ${total} render(s) in the record carry drafts or need review` +
+          (apply ? '' : ' (report only; nothing changed)')
+      : backfill
+        ? `\nDone. ${total} thread(s) backfilled under ${outDir}`
+        : `\nDone. ${total} thread(s) exported to ${outDir}`
   );
 }
 
@@ -1151,6 +1275,9 @@ module.exports = {
   captureThread,
   threadChanged,
   isNotDraft,
+  withoutDraftFields,
+  renderableMessages,
+  EXCLUDE_DRAFTS,
   mapLimit,
   filenameClaimedByAnother,
   repairSharedFilenames,

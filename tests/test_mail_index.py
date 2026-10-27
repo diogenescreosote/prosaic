@@ -186,3 +186,52 @@ def test_near_regex_is_order_free_and_bounded() -> None:
     assert pat.search("from the child's therapist to family therapist")
     assert pat.search("a family systems therapist")
     assert not pat.search("family " + "word " * 8 + "therapist")
+
+
+def test_a_known_draft_in_a_legacy_mbox_gets_no_row_and_no_body(tmp_path: Path) -> None:
+    """Drafts are not mail (ADR-0049). An mbox written before the rule may
+    hold one; the audit's Message-ID list and a Takeout label keep it out."""
+    import json
+
+    matter = tmp_path
+    mbox_dir = matter / "assets" / "gmail" / "mbox"
+    mbox_dir.mkdir(parents=True)
+    box = mailbox.mbox(str(mbox_dir / "20260105_site_visit.mbox"))
+    real = _msg(
+        "Mon, 5 Jan 2026 09:00:00 -0800",
+        "John Smith <john@example.com>",
+        "Jane Roe <jane@example.com>",
+        "Site visit",
+        "Confirmed for the fifth.",
+    )
+    real["Message-ID"] = "<real@example.com>"
+    draft = _msg(
+        "Mon, 5 Jan 2026 10:00:00 -0800",
+        "Jane Roe <jane@example.com>",
+        "John Smith <john@example.com>",
+        "Re: Site visit",
+        "Unsent reply text.",
+    )
+    draft["Message-ID"] = "<Draft@Mail.Example.com>"
+    takeout = _msg(
+        "Mon, 5 Jan 2026 11:00:00 -0800",
+        "Jane Roe <jane@example.com>",
+        "John Smith <john@example.com>",
+        "Re: Site visit",
+        "Another unsent one.",
+    )
+    takeout["X-Gmail-Labels"] = "Opened,Drafts"
+    for m in (real, draft, takeout):
+        box.add(m)
+    box.flush()
+    box.close()
+    (matter / ".state").mkdir()
+    (matter / ".state" / "gmail_drafts.json").write_text(
+        json.dumps({"version": 1, "keys": ["<draft@mail.example.com>"]})
+    )
+    _tsv, md, n = mail_index.build(matter)
+    assert n == 1
+    assert "Unsent" not in md.read_text(encoding="utf-8")
+    body = (matter / "derived" / "mail" / "threads" / "20260105_site_visit.txt").read_text()
+    assert "Confirmed for the fifth." in body and "Unsent" not in body and "unsent" not in body
+    assert mail_index.search(matter, grep="unsent") == []

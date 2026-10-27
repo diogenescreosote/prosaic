@@ -17,3 +17,7 @@ derived/phone/
 
 # Obsidian workspace state (optional viewer for knowledge/, ADR-0043)
 .obsidian/
+
+# Private material kept out of the record: Gmail drafts moved by
+# `sc mail-audit-drafts --apply` (ADR-0049). Never committed, never searched.
+.private/

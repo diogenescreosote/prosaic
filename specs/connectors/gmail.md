@@ -91,10 +91,8 @@ what is stored, and can be produced again.
    re-triaged; a thread whose `historyId` moved for a label or
    read-state change only refreshes its ledger entry. An entry recorded
    before message ids were kept falls back to the count comparison
-   until its next export or backfill. Messages carrying Gmail's `DRAFT` label
-   (unsent drafts, including scheduled sends not yet gone) are never
-   captured, counted or rendered; a thread that is only a draft is
-   skipped. *(tested)* Because identity is the thread id rather than the filename,
+   until its next export or backfill. Drafts are excluded throughout
+   (promise 14). *(tested)* Because identity is the thread id rather than the filename,
    triage may move or rename an exported PDF and it will not be
    re-pulled. A matter whose `assets/gmail/` predates the ledger
    absorbs those files on first run instead of re-exporting them. A
@@ -148,15 +146,72 @@ what is stored, and can be produced again.
     `notifications`, `mailer-daemon`, …) and the owner's own mailboxes
     are never reported. Nothing is exported from that check.
     *(tested: tests/test_mail_guard.py)*
-14. **An unsent draft is reported, not captured.** A thread's ledger
-    entry records how many `DRAFT`-labelled messages it holds and the
-    newest one's date (`draftCount`, `latestDraftAt`), so the brief
-    can say that a reply is still sitting in Drafts --- the record
-    would otherwise show a letter answered when nothing went out. An
-    entry recorded before drafts were counted is examined once, on
-    the next run that lists it, so the report is true from the first
-    run rather than after the thread happens to change.
-    *(tested: tests/test_mail_guard.py)*
+14. **A draft is not mail, and nothing about it enters the record**
+    (ADR-0049). Every search the connector makes carries `-in:drafts`
+    (the thread listing and the sent-mail watch alike), every message
+    carrying Gmail's `DRAFT` label (unsent drafts, including scheduled
+    sends not yet gone) is dropped before it is fetched and again on
+    the fetched message's own labels, and the mbox writer refuses one
+    whoever hands it over. A draft is never stored, rendered, counted,
+    announced or recorded in the ledger; a thread that is nothing but
+    drafts produces no file at all. Ledger entries written by earlier
+    versions may still carry `draftCount`/`latestDraftAt`; they are
+    tolerated, never read, and dropped when the entry is rewritten.
+    An mbox written before this rule that still holds a draft is
+    never rendered with it: the thread's drafts' Message-IDs are held
+    in memory during an export and excluded. The brief says nothing
+    about drafts. The one exception is the user's own explicit
+    instruction to look at a particular draft, which no tool here
+    performs. *(tested: tests/test_mail_guard.py,
+    tests/test_connectors_gmail.py)*
+15. **Legacy drafts are found and moved out on request.**
+    `pull.js --audit-drafts` (and `sc mail-audit-drafts`) compares the
+    mailbox's drafts (`drafts.list` and the `DRAFT` label; metadata and
+    Gmail's snippet only) and each captured thread as Gmail holds it now
+    (`threads.get` metadata) against the record: a stored message whose
+    Message-ID is a draft's; a PDF-only render whose text holds the
+    opening words of one of its thread's drafts, or whose thread holds
+    nothing but drafts; an mbox no ledger entry names; and a PDF no
+    ledger entry names, matched by the filename the draft's own date
+    and subject would have produced plus its opening words. Each
+    render is reported as DRAFT-ONLY, MIXED, or UNVERIFIED (a stored
+    message the Gmail thread no longer has: deleted, or an earlier
+    saved version of a draft; or a render with no mbox whose print view
+    counts more messages than Gmail now holds, so that it may be the
+    only record of deleted mail) with every file that belongs to it ---
+    PDF, `.txt`, `_ocr.pdf`, mbox, attachments directory, and their
+    `derived/` text, OCR and thread-body files --- every Markdown file
+    that mentions it, and copies elsewhere under `assets/`. The report
+    names files and Gmail ids, never a draft's subject or words, and
+    a report run writes nothing. `--apply` moves each draft-only
+    render's files to `.private/gmail_drafts/<stem>/` (paths kept, a
+    manifest with the evidence, each file's sha256 and the ledger
+    entry) and drops its ledger entry; moves a mixed render's files the
+    same way and rebuilds it without its drafts, from its own mbox when
+    there is one (every other message byte-identical) or by a fresh
+    capture otherwise, announcing the new PDF and attachments with
+    `NEW` lines; adds `.private/` to the matter's `.gitignore` first;
+    records the drafts' Message-IDs in `.state/gmail_drafts.json` for
+    the mail index's guard; and never touches an UNVERIFIED render or
+    deletes anything. Markdown that mentions a moved render is
+    reported, not edited. *(tested: tests/test_drafts_audit.py)*
+16. **A refresh_token is never lost.** Google sends one only at
+    consent; a token file without it stops working an hour later and
+    every pull fails with `invalid_grant`. The two writers of a token
+    file (auth.js after consent, the OAuth client's refresh handler)
+    merge into the file as it is on disk at that moment, never into a
+    snapshot taken when the run began: empty values never overwrite, a
+    `refresh_token` in the file survives any refresh that does not
+    bring a new one, a file re-authorized while a run was going is left
+    alone, and a consent that returns no `refresh_token` keeps the one
+    already saved for that mailbox. Writes are atomic and mode 0600.
+    Each file records the mailbox it authorizes (`account`); the
+    primary account's own file and `credentials.json` are kept in step
+    (a refresh writes both, unless `credentials.json` is recorded as
+    another mailbox or holds a separate grant), and the primary reads
+    whichever of the two still has a `refresh_token`. A file with none
+    is named in a warning. No token value is ever printed.
+    *(tested: tests/test_gmail_creds.py)*
 
 ## Non-obvious constraints
 

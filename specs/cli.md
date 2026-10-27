@@ -165,10 +165,12 @@ agent CLI is named (ADR-0020). Its promises:
   a failing connector is the first line (`!! CONNECTOR FAILURE: …`),
   and directly under the case line the brief announces what the mail
   connector did since the last brief (floor: one day, because the hook
-  also fires on resume and compact): threads exported, inbound first;
-  unsent drafts sitting in captured threads; and correspondents the
-  owner has written to whom `connectors.gmail.addresses` does not
-  cover. Each section appears only when it has something to say.
+  also fires on resume and compact): threads exported, inbound first,
+  and correspondents the owner has written to whom
+  `connectors.gmail.addresses` does not cover. Each section appears
+  only when it has something to say. Drafts are not mail (ADR-0049):
+  the brief never reports one, and a message `sc mail-audit-drafts`
+  recorded as a draft is never shown as a thread's latest.
   *(tested: tests/test_mail_guard.py)*
 - **`sc open <envelope|path…> [--variant V] [--print-only]`** opens an
   envelope's built PDFs in the system viewer (newest variant plus the
@@ -234,6 +236,16 @@ agent CLI is named (ADR-0020). Its promises:
   resolving the checkout placeholder to a real path; `sc init` does the
   same at scaffold time. A matter's own settings.local.json is never
   touched. *(tested)*
+- **`sc mail-audit-drafts [matter] [--apply] [--account A] [--report PATH]`**
+  finds Gmail drafts that captures made before ADR-0049 left in the
+  mail record and reports each render as draft-only, mixed or
+  unverified, with its files, the Markdown that mentions it, and the
+  evidence, never a draft's words; report-only by default and writes
+  nothing. `--apply` moves drafts out to `.private/gmail_drafts/`
+  (gitignored; nothing deleted), rebuilds mixed threads without them,
+  and then rebuilds the mail index. Runs `pull.js --audit-drafts`; the
+  behavior is the gmail connector spec's promise 15. *(tested:
+  tests/test_drafts_audit.py)*
 - **`sc mail-render <mbox> [...]`** re-renders one stored gmail
   thread from its mbox: the print-view PDF (`--pdf`), the intermediate
   HTML (`--html`), the attachments extracted from its MIME parts

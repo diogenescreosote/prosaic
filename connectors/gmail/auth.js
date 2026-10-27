@@ -30,6 +30,7 @@ const {
   GMAIL_SCOPES,
   accountSlug,
   tokenPath,
+  saveAuthorized,
 } = require('./creds');
 
 function argValue(name) {
@@ -64,20 +65,29 @@ function argValue(name) {
     keyfilePath: OAUTH_KEYS_PATH,
   });
 
-  if (account) {
-    const profile = await google
-      .gmail({ version: 'v1', auth: client })
-      .users.getProfile({ userId: 'me' });
-    const authorized = profile.data.emailAddress;
-    if (authorized.toLowerCase() !== account.toLowerCase()) {
-      console.error(
-        `Authorized ${authorized}, but --account said ${account}. ` +
-          'Nothing was saved; sign in as the account you named and retry.'
-      );
-      process.exit(1);
-    }
+  // The mailbox consented to, recorded in the token file so the
+  // per-account file and credentials.json can be kept in step (creds.js).
+  const profile = await google
+    .gmail({ version: 'v1', auth: client })
+    .users.getProfile({ userId: 'me' });
+  const authorized = profile.data.emailAddress;
+  if (account && authorized.toLowerCase() !== account.toLowerCase()) {
+    console.error(
+      `Authorized ${authorized}, but --account said ${account}. ` +
+        'Nothing was saved; sign in as the account you named and retry.'
+    );
+    process.exit(1);
+  }
+  if (!client.credentials.refresh_token) {
+    console.error(
+      'Google returned no refresh_token (it sends one only at first consent); ' +
+        'keeping the one already saved for this mailbox, if any.'
+    );
   }
 
-  fs.writeFileSync(destination, JSON.stringify(client.credentials));
-  console.error(`Token saved to ${destination}`);
+  // Merged, never overwritten: a consent that returns no refresh_token
+  // must not erase the one already on disk.
+  for (const file of saveAuthorized(destination, client.credentials, authorized)) {
+    console.error(`Token saved to ${file}`);
+  }
 })();

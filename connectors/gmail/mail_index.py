@@ -12,12 +12,20 @@ message number, attachment count, snippet) and a Markdown twin grouped
 by month, so that "what did X write in mid-November" is one grep, and
 `sc find` sees the message dates too. It is a pure function of the mbox
 files; rerun it any time.
+
+Drafts are not mail (ADR-0049). The connector never stores one, but an
+mbox written before that rule may hold one, and the raw bytes carry no
+Gmail label to say so. Two guards keep such a message out of the
+index: a Message-ID that `sc mail-audit-drafts --apply` recorded in
+`.state/gmail_drafts.json`, and a Takeout-style `X-Gmail-Labels` header
+naming Drafts. A message either guard catches gets no row and no body.
 """
 
 from __future__ import annotations
 
 import csv
 import email
+import json
 import email.utils
 import mailbox
 import re
@@ -29,6 +37,9 @@ from html import unescape
 from pathlib import Path
 
 SNIPPET_CHARS = 300
+
+#: Written by `sc mail-audit-drafts --apply`: Message-IDs of drafts.
+DRAFT_STATE = Path(".state") / "gmail_drafts.json"
 
 _QUOTE_HEAD_RE = re.compile(r"(?:^|\n)On .{0,200}?wrote:", re.S)
 _BOILERPLATE_RE = re.compile(
@@ -140,9 +151,30 @@ def _local_date_time(value: str | None) -> tuple[str, str]:
     return dt.strftime("%Y-%m-%d"), dt.strftime("%H:%M")
 
 
-def rows_for_mbox(path: Path) -> Iterator[Row]:
+def known_draft_ids(matter: Path) -> frozenset[str]:
+    """Message-IDs recorded as drafts for this matter (lowercased)."""
+    try:
+        data = json.loads((matter / DRAFT_STATE).read_text(encoding="utf-8"))
+    except (OSError, ValueError):
+        return frozenset()
+    return frozenset(str(k).strip().lower() for k in data.get("keys") or [])
+
+
+def is_draft(msg: email.message.Message, drafts: frozenset[str] = frozenset()) -> bool:
+    """A stored message the guards recognize as an unsent draft."""
+    labels = str(msg.get("X-Gmail-Labels") or "")
+    if any(label.strip().lower() in ("draft", "drafts") for label in labels.split(",")):
+        return True
+    return str(msg.get("Message-ID") or "").strip().lower() in drafts
+
+
+def rows_for_mbox(path: Path, drafts: frozenset[str] = frozenset()) -> Iterator[Row]:
     box = mailbox.mbox(str(path))
     for i, msg in enumerate(box, start=1):
+        # i stays the message's position in the mbox, draft or not, so a
+        # row's #n still addresses the right message in the file.
+        if is_draft(msg, drafts):
+            continue
         date, time = _local_date_time(msg.get("Date"))
         yield Row(
             date=date,
@@ -164,10 +196,11 @@ def build(
     mbox_dir = mbox_dir or matter / "assets" / "gmail" / "mbox"
     out_dir = out_dir or matter / "derived" / "mail"
     out_dir.mkdir(parents=True, exist_ok=True)
+    drafts = known_draft_ids(matter)
     rows: list[Row] = []
     for mb in sorted(mbox_dir.glob("*.mbox")):
         try:
-            rows.extend(rows_for_mbox(mb))
+            rows.extend(rows_for_mbox(mb, drafts))
         except Exception as exc:  # a corrupt mbox must not sink the index
             print(f"mail-index: skipping {mb.name}: {exc}", file=sys.stderr)
     rows.sort(key=lambda r: (r.date, r.time, r.thread, r.n))
@@ -179,11 +212,13 @@ def build(
             w.writerow(r.as_list())
     md = out_dir / "messages.md"
     md.write_text(render_markdown(rows), encoding="utf-8")
-    write_thread_bodies(mbox_dir, out_dir / "threads")
+    write_thread_bodies(mbox_dir, out_dir / "threads", drafts)
     return tsv, md, len(rows)
 
 
-def write_thread_bodies(mbox_dir: Path, out_dir: Path) -> int:
+def write_thread_bodies(
+    mbox_dir: Path, out_dir: Path, drafts: frozenset[str] = frozenset()
+) -> int:
     """One decoded full-text file per thread, quoted chains included.
 
     The rendered thread PDFs reproduce Gmail's print view, which
@@ -212,6 +247,8 @@ def write_thread_bodies(mbox_dir: Path, out_dir: Path) -> int:
             "",
         ]
         for i, msg in enumerate(box, start=1):
+            if is_draft(msg, drafts):
+                continue
             parts += [
                 f"[[[ message {i} ]]]",
                 f"Date: {msg.get('Date', '')}",

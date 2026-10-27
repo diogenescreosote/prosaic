@@ -67,7 +67,7 @@ A connector is a directory `connectors/<name>/` containing:
 
 | name | what it does | auth |
 |---|---|---|
-| `gmail` | Captures every Gmail thread involving configured addresses/domains **as raw mail** — one mbox per thread at `assets/gmail/mbox/<stem>.mbox`, RFC 822 bytes exactly as the API returns them for `format=raw` — and renders that mbox to the court-usable print-view PDF at `assets/gmail/<stem>.pdf` (ADR-0038). Capture and rendering are separate steps: the PDF is a pure function of the mbox plus options, so `sc mail-render` regenerates it at any time, with different options, offline. Quoted reply chains are **shown by default** (`quoted: hide` in config, or `--quoted hide`, reproduces Gmail's `[Quoted text hidden]` print behavior). Supports per-address `after:`/`before:` bounds, and `accounts:` for a matter that watches more than one mailbox — one OAuth token each, ledger keyed by account then thread id. Incremental via a `.state/gmail.json` thread ledger (per-thread `historyId`, message count and message ids, plus per-account run stamps): a routine run lists only threads with a message in a `newer_than:` window since the last run (full listing on the first run, on `--full`, or weekly), a changed thread fetches only the messages its mbox lacks, unchanged threads are skipped without a fetch, threads whose message set changed (grown, or a message replaced at the same count) re-export and re-triage, and a thread once exported is never re-pulled even if triage later moves the PDF. **Attachments are extracted from the stored MIME parts**, into `assets/gmail/attachments/<pdf stem>/`, each with its own `NEW` line — the print view can only list an attachment's *name*, and a document whose value is its contents is invisible to triage until the file itself lands. Images actually embedded in the rendering are excluded; files over 25MB are skipped with a `SKIPPED` line; a file already present at its target path with the expected size is not rewritten. The mbox gets no `NEW` line — it is the source the announced PDF was rendered from, not a second document. Threads exported before the mbox existed get one from `pull.js --backfill-mbox` (opt-in, `--limit N`, `--concurrency N`, resumable, renders nothing and announces nothing). Fetching is concurrent and bounded (6 messages per thread, 4 threads at a time in a backfill, 8 metadata lookups) with a 60-second per-request timeout and retry on transient failures. **The address list is the only capture criterion, and its edges are watched:** each run reads the headers (never a body) of the owner's sent mail in the same window and writes every recipient the list does not cover to `.state/gmail_unlisted.json` for the brief to report (`ignore_unlisted:` silences noise); a thread's unsent drafts are counted in its ledger entry so the brief can say a reply never left Drafts. | OAuth; `node connectors/gmail/auth.js [--account <email>]` once per mailbox |
+| `gmail` | Captures every Gmail thread involving configured addresses/domains **as raw mail** — one mbox per thread at `assets/gmail/mbox/<stem>.mbox`, RFC 822 bytes exactly as the API returns them for `format=raw` — and renders that mbox to the court-usable print-view PDF at `assets/gmail/<stem>.pdf` (ADR-0038). Capture and rendering are separate steps: the PDF is a pure function of the mbox plus options, so `sc mail-render` regenerates it at any time, with different options, offline. Quoted reply chains are **shown by default** (`quoted: hide` in config, or `--quoted hide`, reproduces Gmail's `[Quoted text hidden]` print behavior). Supports per-address `after:`/`before:` bounds, and `accounts:` for a matter that watches more than one mailbox — one OAuth token each, ledger keyed by account then thread id. Incremental via a `.state/gmail.json` thread ledger (per-thread `historyId`, message count and message ids, plus per-account run stamps): a routine run lists only threads with a message in a `newer_than:` window since the last run (full listing on the first run, on `--full`, or weekly), a changed thread fetches only the messages its mbox lacks, unchanged threads are skipped without a fetch, threads whose message set changed (grown, or a message replaced at the same count) re-export and re-triage, and a thread once exported is never re-pulled even if triage later moves the PDF. **Attachments are extracted from the stored MIME parts**, into `assets/gmail/attachments/<pdf stem>/`, each with its own `NEW` line — the print view can only list an attachment's *name*, and a document whose value is its contents is invisible to triage until the file itself lands. Images actually embedded in the rendering are excluded; files over 25MB are skipped with a `SKIPPED` line; a file already present at its target path with the expected size is not rewritten. The mbox gets no `NEW` line — it is the source the announced PDF was rendered from, not a second document. Threads exported before the mbox existed get one from `pull.js --backfill-mbox` (opt-in, `--limit N`, `--concurrency N`, resumable, renders nothing and announces nothing). Fetching is concurrent and bounded (6 messages per thread, 4 threads at a time in a backfill, 8 metadata lookups) with a 60-second per-request timeout and retry on transient failures. **The address list is the only capture criterion, and its edges are watched:** each run reads the headers (never a body) of the owner's sent mail in the same window and writes every recipient the list does not cover to `.state/gmail_unlisted.json` for the brief to report (`ignore_unlisted:` silences noise). **Drafts are not mail** (ADR-0049): every search carries `-in:drafts`, a `DRAFT`-labelled message is never fetched, stored, rendered, counted or announced, the mbox writer refuses one, and a draft-only thread produces nothing; the user's explicit instruction about a particular draft is the only exception, and no tool performs it. Captures made before that rule are audited by `sc mail-audit-drafts` (report only; `--apply` moves draft-only renders to `.private/gmail_drafts/` and rebuilds mixed threads without their drafts). | OAuth; `node connectors/gmail/auth.js [--account <email>]` once per mailbox |
 | `mycase` | Walks a MyCase client portal's document folder tree, diffs against a manifest (doc id + content hash), downloads new/updated documents into staging renamed to dated snake_case, keeping the portal folder as a routing hint. With `billing: <dir>` configured, also pulls the Billing tab: every bill whose detail page offers the portal's first-class PDF export (`/bills/<id>.pdf`) lands directly in `<dir>` (no triage — billing PDFs are born-digital and authoritatively named) as `<date>_invoice_<n>.pdf`, re-exported when a bill's listed status changes (a payment posts, a balance forwards) and never overwriting a previously fetched file; a bill with no export (funds requests) is noted, not fetched. | Keychain |
 
 ## Writing a new connector
@@ -126,6 +126,39 @@ sc mail-render <mbox> --attachments           # extract the parts
 No token, no mailbox, no network (beyond the gstatic icons Gmail's own
 print view uses). This is what a stored raw record buys: a rendering
 defect is a bug to fix and re-run, not damage to the archive.
+
+## Drafts are not mail
+
+An unsent draft is not a message anyone received, and a draft rendered
+as a print view looks exactly like one that was sent: "1 message",
+From the mailbox owner, To the other side. So the gmail connector never
+captures, searches, counts or reports a draft (ADR-0049), and nothing
+else in the record treats one as mail. A draft becomes material only
+when the user explicitly says so, about that draft, and no tool here
+does that for them.
+
+Matters captured before the rule may still hold drafts. Audit them:
+
+```
+sc mail-audit-drafts .                            # report only; changes nothing
+sc mail-audit-drafts . --report /tmp/drafts.txt   # the same, to a file
+sc mail-audit-drafts . --apply                    # move them out of the record
+```
+
+The report lists each affected render as DRAFT-ONLY (every message a
+draft), MIXED (a real thread that also carries a draft) or UNVERIFIED
+(a stored message Gmail no longer has; a human decides), with every
+file belonging to it, the Markdown files that mention it, and the
+evidence (Message-ID matches, the thread's state in Gmail, opening
+words of the draft found in the rendered text). It never quotes a
+draft. `--apply` moves draft-only renders, and the old copies of mixed
+ones, to `.private/gmail_drafts/<stem>/` with a manifest (nothing is
+deleted; `.private/` is gitignored, and `sc find`, the text audit and
+the mail index never look inside it), rebuilds each mixed thread
+without its drafts, prints `NEW` lines for what it re-rendered, and
+rebuilds the mail index. Catalog and index rows that name a moved file
+are reported for a human to remove; run `sc text ensure` afterwards so
+re-rendered PDFs get fresh sidecars.
 
 Local deployments can carry additional connectors under
 `local/connectors/` (see ADR-0032); they dispatch identically and are

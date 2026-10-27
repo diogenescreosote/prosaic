@@ -75,6 +75,19 @@ The PDF shows quoted reply chains by default. If one reads
 predates ADR-0038) --- re-render it rather than reporting the thread as
 incomplete.
 
+## STOP. A draft is not mail
+
+An unsent Gmail draft is not correspondence. The connector never
+captures, searches or counts one (ADR-0049), and you never treat one as
+evidence of what anyone sent or received, never search a mailbox's
+drafts, and never bring one into the record, unless the user
+explicitly tells you to, about that draft. Captures made before the
+rule may hold drafts rendered exactly like sent mail. `sc
+mail-audit-drafts .` reports them (it changes nothing), and the user
+decides whether to run it with `--apply`, which moves them to
+`.private/gmail_drafts/`. Nothing under `.private/` is part of the
+record: it is gitignored, never searched, and never cited.
+
 ---
 ---
 

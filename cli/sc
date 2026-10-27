@@ -485,6 +485,33 @@ def cmd_mail_index(args: argparse.Namespace) -> int:
     ).returncode
 
 
+def cmd_mail_audit_drafts(args: argparse.Namespace) -> int:
+    """Drafts in the mail record (ADR-0049): report, or with --apply move
+    them out to .private/gmail_drafts/ and rebuild the mail index."""
+    node = shutil.which("node")
+    if node is None:
+        print("sc mail-audit-drafts needs node on PATH", file=sys.stderr)
+        return 1
+    matter = _matter_root(Path(args.matter_dir))
+    argv = [node, str(ROOT / "connectors" / "gmail" / "pull.js"), str(matter), "--audit-drafts"]
+    if args.apply:
+        argv.append("--apply")
+    if args.account:
+        argv += ["--account", args.account]
+    env = {**os.environ, "NODE_PATH": str(ROOT / "connectors" / "node_modules")}
+    if args.report:
+        with open(args.report, "w", encoding="utf-8") as fh:
+            rc = subprocess.run(argv, env=env, stdout=fh).returncode
+        print(f"report: {args.report}")
+    else:
+        rc = subprocess.run(argv, env=env).returncode
+    if rc == 0 and args.apply:
+        rc = subprocess.run(
+            [sys.executable, str(ROOT / "connectors" / "gmail" / "mail_index.py"), str(matter), "--rebuild"]
+        ).returncode
+    return rc
+
+
 def cmd_mail_render(args: argparse.Namespace) -> int:
     node = shutil.which("node")
     if node is None:
@@ -841,7 +868,7 @@ def cmd_upgrade(args: argparse.Namespace) -> int:
     print("-- .gitignore")
     gi = matter / ".gitignore"
     have = gi.read_text().splitlines() if gi.exists() else []
-    want = ["derived/ocr/", ".obsidian/", ".state/"]
+    want = ["derived/ocr/", ".obsidian/", ".state/", ".private/"]
     missing = [w for w in want if w not in have]
     if missing and not dry:
         gi.write_text((gi.read_text().rstrip("\n") + "\n" if gi.exists() else "") + "\n".join(missing) + "\n")
@@ -1315,6 +1342,13 @@ def _gmail_ledger_threads(matter: Path) -> list[tuple[str, dict, dict]]:
     return out
 
 
+def _known_draft_ids(matter: Path) -> set[str]:
+    """Message-IDs `sc mail-audit-drafts --apply` found to be drafts: a
+    guard so a legacy mbox never presents one as the latest mail."""
+    data = _read_json(matter / ".state" / "gmail_drafts.json")
+    return {str(k).strip().lower() for k in (data.get("keys") or [])}
+
+
 def _mbox_last_from(matter: Path, entry: dict) -> tuple[str, str, float]:
     """(from, subject, date) of the newest message in a thread's mbox,
     cheaply: the file is read once, headers only. Falls back to the ledger."""
@@ -1328,7 +1362,9 @@ def _mbox_last_from(matter: Path, entry: dict) -> tuple[str, str, float]:
     if not p.is_file():
         return "", subject, 0.0
     try:
-        msgs = list(mailbox.mbox(str(p)))
+        drafts = _known_draft_ids(matter)
+        msgs = [m for m in mailbox.mbox(str(p))
+                if str(m.get("Message-ID") or "").strip().lower() not in drafts]
     except Exception:
         return "", subject, 0.0
     if not msgs:
@@ -1381,20 +1417,6 @@ def new_correspondence(matter: Path, since_ts: float, limit: int = 25) -> list[s
     return out
 
 
-def unsent_drafts(matter: Path) -> list[str]:
-    rows = []
-    for _account, _meta, entry in _gmail_ledger_threads(matter):
-        n = int(entry.get("draftCount") or 0)
-        if n <= 0:
-            continue
-        subject = entry.get("subject") or Path(entry.get("filename") or "").stem
-        when = entry.get("latestDraftAt")
-        rows.append((str(when or ""), f"{subject[:90]} --- {n} draft(s)" + (f", latest {_fmt_ts(when)}" if when else "")
-                     + f" --- {entry.get('filename', '')}"))
-    rows.sort(reverse=True)
-    return [r[1] for r in rows]
-
-
 def unlisted_correspondents(matter: Path) -> list[str]:
     data = _read_json(matter / ".state" / "gmail_unlisted.json")
     rows = []
@@ -1407,19 +1429,15 @@ def unlisted_correspondents(matter: Path) -> list[str]:
 
 
 def mail_watch_sections(matter: Path, since_ts: float) -> list[str]:
-    """The mail-watch block of the brief: what arrived, what never left,
-    who is not being captured. Empty when there is nothing to say."""
+    """The mail-watch block of the brief: what arrived and who is not
+    being captured. Empty when there is nothing to say. Drafts are not
+    mail (ADR-0049) and the brief says nothing about them."""
     lines: list[str] = []
     fresh = new_correspondence(matter, since_ts)
     if fresh:
         n = sum(1 for r in fresh if not r.startswith("... and "))
         lines += ["", f"## New correspondence since {_fmt_ts(since_ts)} ({n}{'+' if n < len(fresh) or fresh[-1].startswith('... and ') else ''})"]
         lines += [f"- {r}" for r in fresh]
-    drafts = unsent_drafts(matter)
-    if drafts:
-        lines += ["", f"## Unsent drafts in captured threads ({len(drafts)})"]
-        lines += [f"- {r}" for r in drafts[:15]]
-        lines.append("- a draft is not a reply; nothing above has been sent")
     unlisted = unlisted_correspondents(matter)
     if unlisted:
         lines += ["", f"## Correspondents not on the address list ({len(unlisted)})"]
@@ -1863,7 +1881,7 @@ def cmd_text(args: argparse.Namespace) -> int:
 #: silently --- a document that was not searched is not a document that
 #: says nothing.
 FIND_GLOBS = ("*.md", "*.txt", "*.yaml", "*.yml", "*.json", "*.csv", "*.srt", "*.eml", "*.html")
-FIND_EXCLUDE_DIRS = ("out", ".state", ".git", ".flow", "node_modules", ".claude")
+FIND_EXCLUDE_DIRS = ("out", ".state", ".git", ".flow", "node_modules", ".claude", ".private")
 
 
 def near_regex(terms: list[str], within: int = 6) -> str:
@@ -2522,6 +2540,16 @@ def main() -> int:
     sp.add_argument("rest", nargs=argparse.REMAINDER,
                     help="passed through to connectors/gmail/render.js")
     sp.set_defaults(func=cmd_mail_render)
+
+    sp = sub.add_parser("mail-audit-drafts",
+                        help="find Gmail drafts that older captures left in the mail record; "
+                             "--apply moves them to .private/gmail_drafts/")
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--apply", action="store_true",
+                    help="move draft-only renders out and rebuild mixed threads without their drafts")
+    sp.add_argument("--account", help="only this connectors.gmail account")
+    sp.add_argument("--report", help="write the report to this file instead of stdout")
+    sp.set_defaults(func=cmd_mail_audit_drafts)
 
     sp = sub.add_parser("mail-index",
                         help="per-message index of the stored mail (derived/mail/messages.{tsv,md}); "

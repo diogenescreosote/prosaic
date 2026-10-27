@@ -941,6 +941,72 @@ def test_drafts_in_a_thread_are_never_captured() -> None:
     assert out["draftOnly"] is False and out["sent"] is True and out["unlabeled"] is True
 
 
+def test_the_mbox_writer_refuses_a_draft() -> None:
+    """The storage layer's own guard: a DRAFT-labelled message is never
+    written, whoever forgot to filter it."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const mbox = require('./mbox.js');
+        const raw = (id) => Buffer.from(`From: jane@example.com\r\nMessage-ID: <${id}>\r\n\r\nx\r\n`);
+        const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+        const p = path.join(dir, 't.mbox');
+        const only = mbox.appendMessages(path.join(dir, 'u.mbox'), [
+          { id: 'd0', labelIds: ['DRAFT'], raw: raw('d0@example.com') }]);
+        const r = mbox.appendMessages(p, [
+          { id: 'd1', labelIds: ['DRAFT'], raw: raw('d1@example.com') },
+          { id: 's1', labelIds: ['SENT'], raw: raw('s1@example.com') },
+        ]);
+        console.log(JSON.stringify({ added: r.added, refused: r.refused,
+          stored: mbox.readMessages(p).map(mbox.messageKey),
+          draftOnlyFile: fs.existsSync(path.join(dir, 'u.mbox')), onlyRefused: only.refused }));
+        """
+    )
+    assert out["added"] == ["s1"] and out["refused"] == ["d1"]
+    assert out["stored"] == ["<s1@example.com>"]
+    assert out["draftOnlyFile"] is False, "a draft-only thread writes no mbox at all"
+    assert out["onlyRefused"] == ["d0"]
+
+
+def test_a_message_the_raw_fetch_reports_as_a_draft_is_dropped() -> None:
+    """The stub said nothing; the message itself says DRAFT. It is not stored."""
+    out = _json(
+        r"""
+        const fs = require('fs'); const os = require('os'); const path = require('path');
+        const pull = require('./pull.js'); const mbox = require('./mbox.js');
+        const raw = (id) => Buffer.from(`From: jane@example.com\r\nMessage-ID: <${id}>\r\n\r\nx\r\n`);
+        const gmail = { users: {
+          threads: { get: async () => ({ data: { messages: [{ id: 's1' }, { id: 'd1' }] } }) },
+          messages: { get: async (p) => ({ data: { id: p.id,
+            labelIds: p.id === 'd1' ? ['DRAFT'] : ['SENT'],
+            raw: raw(p.id + '@example.com').toString('base64url') } }) },
+        } };
+        (async () => {
+          const dir = fs.mkdtempSync(path.join(os.tmpdir(), 'cap-'));
+          const p = path.join(dir, 't.mbox');
+          await pull.captureThread(gmail, 't', p);
+          console.log(JSON.stringify(mbox.readMessages(p).map(mbox.messageKey)));
+        })();
+        """
+    )
+    assert out == ["<s1@example.com>"]
+
+
+def test_a_legacy_mbox_is_never_rendered_with_its_draft() -> None:
+    out = _json(
+        r"""
+        const pull = require('./pull.js');
+        const m = (id) => ({ raw: Buffer.from(`Message-ID: <${id}>\r\n\r\nx\r\n`) });
+        const all = [m('s1@example.com'), m('d1@example.com'), m('s2@example.com')];
+        console.log(JSON.stringify({
+          kept: pull.renderableMessages(all, ['<d1@example.com>']).length,
+          none: pull.renderableMessages(all, []).length,
+        }));
+        """
+    )
+    assert out == {"kept": 2, "none": 3}
+
+
 # --- concurrency ---------------------------------------------------------
 
 
@@ -1037,8 +1103,10 @@ def test_listing_plan_lists_recent_threads_between_periodic_full_passes() -> Non
     assert out["gap"] == {"full": False, "newerThanDays": 7}, "ceil(4.2) + 2 days of slack"
     a = "(from:a@example.com OR to:a@example.com)"
     b = "(from:example.org OR to:example.org)"
-    assert out["q"] == f"({a} OR {b}) newer_than:3d"
-    assert out["qFull"] == "(from:a@example.com OR to:a@example.com)"
+    assert out["q"] == f"({a} OR {b}) -in:drafts newer_than:3d"
+    assert out["qFull"] == "((from:a@example.com OR to:a@example.com)) -in:drafts", (
+        "drafts are excluded from every listing, not only filtered after it"
+    )
 
 
 def test_search_threads_pages_through_the_window() -> None:

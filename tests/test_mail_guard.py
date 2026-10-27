@@ -1,8 +1,8 @@
 """The mail watch (the address list is the only net; these are the alarms
 on its edges): a failing connector interrupts and heads the brief, the
-owner's sent mail names correspondents the list does not cover, exported
-threads are announced in the brief, and an unsent draft is never mistaken
-for a reply.
+owner's sent mail names correspondents the list does not cover, and
+exported threads are announced in the brief. Drafts are not mail
+(ADR-0049): nothing here counts, reports or keeps one.
 
 Nothing here touches Google: the gmail client is a hand-built stub.
 """
@@ -144,7 +144,7 @@ def test_sent_mail_names_unlisted_recipients_without_fetching_a_body() -> None:
         "the newest sighting wins"
     )
     assert row["domain"] == "vendor.example"
-    assert out["calls"][0]["q"] == "in:sent newer_than:3d"
+    assert out["calls"][0]["q"] == "in:sent -in:drafts newer_than:3d"
     gets = [c for c in out["calls"] if "id" in c]
     assert all(c["format"] == "metadata" for c in gets), "never a body"
     assert all(set(c["headers"]) == {"To", "Cc", "Date", "Subject"} for c in gets)
@@ -154,49 +154,60 @@ def test_sent_mail_names_unlisted_recipients_without_fetching_a_body() -> None:
 
 
 @needs_node
-def test_a_draft_in_a_thread_is_counted_but_never_a_message() -> None:
+def test_a_draft_in_a_thread_is_never_counted_or_kept() -> None:
+    """The thread's decision inputs know nothing about its drafts but
+    their Message-IDs, held in memory so a legacy mbox is never rendered
+    with one; a thread of nothing but drafts is not a thread at all."""
     out = _json(
         r"""
         const p = require('./pull.js');
-        const gmail = { users: { threads: { get: async () => ({ data: { messages: [
-          { id: 's1', labelIds: ['INBOX'], payload: { headers: [
-            { name: 'Subject', value: 'Objection' },
-            { name: 'Date', value: 'Thu, 10 Sep 2026 09:10:16 -0500' } ] } },
-          { id: 'd1', labelIds: ['DRAFT'], payload: { headers: [
-            { name: 'Subject', value: 'Re: Objection' },
-            { name: 'Date', value: 'Thu, 10 Sep 2026 07:59:49 -0700' } ] } },
-        ] } }) } } };
+        const thread = (messages) => ({ users: { threads: { get: async () => ({ data: { messages } }) } } });
+        const sent = { id: 's1', labelIds: ['INBOX'], payload: { headers: [
+          { name: 'Subject', value: 'Objection' },
+          { name: 'Message-ID', value: '<s1@vendor.example>' },
+          { name: 'Date', value: 'Thu, 10 Sep 2026 09:10:16 -0500' } ] } };
+        const draft = { id: 'd1', labelIds: ['DRAFT'], payload: { headers: [
+          { name: 'Subject', value: 'Re: Objection' },
+          { name: 'Message-ID', value: '<D1@Mail.Example>' },
+          { name: 'Date', value: 'Thu, 10 Sep 2026 07:59:49 -0700' } ] } };
         (async () => {
-          const meta = await p.fetchThreadMeta(gmail, { id: 't', historyId: '9' });
-          console.log(JSON.stringify(meta));
+          const meta = await p.fetchThreadMeta(thread([sent, draft]), { id: 't', historyId: '9' });
+          const only = await p.fetchThreadMeta(thread([draft]), { id: 'u', historyId: '9' });
+          console.log(JSON.stringify({ meta, only }));
         })();
         """
     )
-    assert out["messageCount"] == 1 and out["messageIds"] == ["s1"]
-    assert out["draftCount"] == 1 and out["latestDraftAt"] == "2026-09-10T14:59:49.000Z"
+    meta = out["meta"]
+    assert meta["messageCount"] == 1 and meta["messageIds"] == ["s1"]
+    assert meta["excludeKeys"] == ["<d1@mail.example>"]
+    assert not {k for k in meta if "draft" in k.lower()}, "no draft field reaches the ledger"
+    assert meta["subject"] == "Objection"
+    assert out["only"] is None, "a draft-only thread produces nothing"
 
 
 @needs_node
-def test_an_entry_without_a_draft_count_is_examined_once() -> None:
+def test_a_legacy_entry_s_draft_fields_are_tolerated_and_dropped() -> None:
     out = _json(
         r"""
-        const { entryCurrent } = require('./pull.js');
+        const { entryCurrent, withoutDraftFields } = require('./pull.js');
         const t = { id: 't', historyId: '7' };
         console.log(JSON.stringify({
-          counted: entryCurrent({ historyId: '7', draftCount: 0 }, t),
-          uncounted: entryCurrent({ historyId: '7' }, t),
-          moved: entryCurrent({ historyId: '6', draftCount: 0 }, t),
-          forced: entryCurrent({ historyId: '7', draftCount: 0 }, t, true),
+          legacy: entryCurrent({ historyId: '7', draftCount: 2, latestDraftAt: 'x' }, t),
+          plain: entryCurrent({ historyId: '7' }, t),
+          moved: entryCurrent({ historyId: '6' }, t),
+          forced: entryCurrent({ historyId: '7' }, t, true),
           unknown: entryCurrent(undefined, t),
+          stripped: withoutDraftFields({ historyId: '7', draftCount: 2, latestDraftAt: 'x', filename: 'a.pdf' }),
         }));
         """
     )
     assert out == {
-        "counted": True,
-        "uncounted": False,
+        "legacy": True,
+        "plain": True,
         "moved": False,
         "forced": False,
         "unknown": False,
+        "stripped": {"historyId": "7", "filename": "a.pdf"},
     }
 
 
@@ -244,7 +255,7 @@ def test_brief_leads_with_a_failing_connector_and_counts_the_runs(matter: Path) 
     assert "# Matter brief: Smith v. Roe" in out
 
 
-def test_brief_announces_new_mail_unsent_drafts_and_unlisted_correspondents(matter: Path) -> None:
+def test_brief_announces_new_mail_and_unlisted_correspondents_never_drafts(matter: Path) -> None:
     state = matter / ".state"
     state.mkdir(exist_ok=True)
     _mbox(
@@ -308,9 +319,7 @@ def test_brief_announces_new_mail_unsent_drafts_and_unlisted_correspondents(matt
     )
     assert "from vendor.example --- Preservation demand --- 20260903_preservation_demand.pdf" in out
     assert "20250101_old.pdf" not in out, "only what arrived inside the window"
-    assert "## Unsent drafts in captured threads (1)" in out
-    assert "Preservation demand --- 1 draft(s), latest 2026-09-10" in out
-    assert "a draft is not a reply" in out
+    assert "draft" not in out.lower(), "a legacy ledger's draft count is never reported"
     assert "## Correspondents not on the address list (1)" in out
     assert (
         "legal@vendor.example --- 2026-09-0" in out and "add to connectors.gmail.addresses" in out

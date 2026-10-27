@@ -163,22 +163,33 @@ function storedKeys(mboxPath) {
 
 // --- writing ----------------------------------------------------------
 
+//: Gmail's label for an unsent draft. A draft is not mail (ADR-0049):
+//: the writer refuses one even if a caller forgot to filter.
+const DRAFT_LABEL = 'DRAFT';
+
 /**
  * Append raw messages to a thread's mbox, skipping ones already there.
  *
- * `messages` is [{raw: Buffer, id}] where `id` is the Gmail message id
- * (recorded by the caller in the ledger; never written into the file,
- * because the stored bytes are the message and nothing else). Returns
- * {added, skipped, keys} — `added` being the ids actually written, so
- * the caller can tell a grown thread from an unchanged one.
+ * `messages` is [{raw: Buffer, id, labelIds?}] where `id` is the Gmail
+ * message id (recorded by the caller in the ledger; never written into
+ * the file, because the stored bytes are the message and nothing
+ * else). A message whose `labelIds` include DRAFT is never written; it
+ * is returned in `refused`. Returns {added, skipped, refused, keys} —
+ * `added` being the ids actually written, so the caller can tell a
+ * grown thread from an unchanged one.
  */
 function appendMessages(mboxPath, messages) {
   fs.mkdirSync(path.dirname(mboxPath), { recursive: true });
   const seen = storedKeys(mboxPath);
   const added = [];
   const skipped = [];
+  const refused = [];
   let chunk = '';
   for (const message of messages) {
+    if ((message.labelIds || []).includes(DRAFT_LABEL)) {
+      refused.push(message.id);
+      continue;
+    }
     const raw = Buffer.isBuffer(message.raw)
       ? message.raw
       : Buffer.from(String(message.raw), 'binary');
@@ -199,10 +210,11 @@ function appendMessages(mboxPath, messages) {
     added.push(message.id);
   }
   if (chunk) fs.appendFileSync(mboxPath, Buffer.from(chunk, 'binary'));
-  return { added, skipped, keys: [...seen] };
+  return { added, skipped, refused, keys: [...seen] };
 }
 
 module.exports = {
+  DRAFT_LABEL,
   MBOX_DIR_NAME,
   MBOX_EXTENSION,
   mboxPathFor,

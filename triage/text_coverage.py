@@ -101,7 +101,7 @@ BANNER = "MACHINE TEXT --- VERIFY AGAINST THE DOCUMENT BEFORE CITING IN ANY FILI
 CACHE_NAME = "text_coverage.json"
 
 EXCLUDE_DIRS = frozenset(
-    {"out", ".state", ".git", ".flow", "node_modules", ".claude", ".venv", "derived"}
+    {"out", ".state", ".git", ".flow", "node_modules", ".claude", ".venv", "derived", ".private"}
 )
 DERIVED = "derived"
 PDF_EXT = {".pdf"}
