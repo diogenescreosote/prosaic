@@ -146,6 +146,7 @@ from __future__ import annotations
 import argparse
 import json
 import os
+import re
 import sys
 from pathlib import Path
 from typing import Any
@@ -189,6 +190,156 @@ def _color(cfg: dict[str, Any], key: str, default: list[float]) -> tuple[float, 
     return (float(v[0]), float(v[1]), float(v[2]))
 
 
+# ---------------------------------------------------------------------------
+# Off-page carriers: links, struct tree, alt text
+# ---------------------------------------------------------------------------
+
+# Text removed from a page can survive OUTSIDE the page's content: a link
+# annotation's /A /URI holds the full URL that was printed, and a tagged PDF's
+# structure tree holds /Alt or /ActualText copies of it. apply_redactions drops
+# the link from the page's /Annots, but the annotation OBJECT lives on when the
+# StructTreeRoot still points at it (an OBJR via /StructParent), and garbage=4
+# cannot collect an object that is still referenced. The URL then sits in the
+# saved file in plain text, invisible to every viewer. So every redaction rect
+# records what it covered, and a final pass scrubs those strings from every
+# object in the file. Reset per run().
+_REDACTED_TEXT: set[str] = set()
+
+# Fragments shorter than this are not scrubbed from off-page objects: a stray
+# "of" captured at the edge of a box would otherwise blank every string that
+# contains it.
+_MIN_SCRUB_LEN = 6
+
+# Keys whose string values are textual copies of page content.
+_ANNOT_SUBTYPE_KEY = "Subtype"
+
+
+def _note_redaction(page: fitz.Page, rect: fitz.Rect) -> None:
+    """Record what `rect` covers and remove the links it touches.
+
+    Called before the redaction is applied, while the text is still there.
+    A link under a redaction box is redacted content too: its target is
+    recorded so other copies of it get scrubbed, and the link is deleted
+    rather than left to apply_redactions, which can orphan it (see above).
+    """
+    try:
+        covered = page.get_textbox(rect)
+    except Exception:
+        covered = ""
+    for line in covered.splitlines():
+        line = line.strip()
+        if len(line) >= _MIN_SCRUB_LEN:
+            _REDACTED_TEXT.add(line)
+    for link in page.get_links():
+        frm = link.get("from")
+        if frm is None or not fitz.Rect(frm).intersects(rect):
+            continue
+        uri = link.get("uri") or link.get("file") or ""
+        if len(uri) >= _MIN_SCRUB_LEN:
+            _REDACTED_TEXT.add(uri)
+        page.delete_link(link)
+
+
+def _string_paths(doc: fitz.Document, xref: int, prefix: str = "",
+                  depth: int = 0) -> list[tuple[str, str]]:
+    """(key path, decoded value) for every string in an object, one dict deep."""
+    out: list[tuple[str, str]] = []
+    try:
+        keys = doc.xref_get_keys(xref) if not prefix else []
+    except Exception:
+        return out
+    if prefix:
+        # Nested inline dict: fitz exposes its keys only through the path.
+        typ, src = doc.xref_get_key(xref, prefix)
+        if typ != "dict":
+            return out
+        # Over-collects (name VALUES like /URI in /S /URI look like keys too);
+        # a path that is not a key just reads back as null, so that is harmless.
+        keys = list(dict.fromkeys(re.findall(r"/([A-Za-z0-9_.#-]+)", src)))
+    for key in keys:
+        path = f"{prefix}/{key}" if prefix else key
+        try:
+            typ, val = doc.xref_get_key(xref, path)
+        except Exception:
+            continue
+        if typ == "string":
+            out.append((path, val))
+        elif typ == "dict" and depth < 1:
+            out.extend(_string_paths(doc, xref, path, depth + 1))
+    return out
+
+
+def _is_annotation(doc: fitz.Document, xref: int) -> bool:
+    typ, val = doc.xref_get_key(xref, "Type")
+    if typ == "name" and val == "/Annot":
+        return True
+    sub_t, _ = doc.xref_get_key(xref, _ANNOT_SUBTYPE_KEY)
+    rect_t, _ = doc.xref_get_key(xref, "Rect")
+    return sub_t == "name" and rect_t == "array"
+
+
+def _scrub_offpage_carriers(doc: fitz.Document) -> int:
+    """Remove redacted text from objects outside the page content.
+
+    1. Every live annotation whose strings (a link's /URI, a comment's
+       /Contents) contain redacted text is deleted from its page.
+    2. Every Link annotation no page's /Annots lists any more is blanked:
+       it is dead weight at best and a URL carrier at worst, and something
+       like the structure tree may still be keeping it alive.
+    3. Every other object's string values containing redacted text --
+       struct-element /Alt and /ActualText, outline titles, the Info
+       dict -- are emptied in place, so the object's shape survives.
+
+    Returns the number of objects changed.
+    """
+    texts = sorted(_REDACTED_TEXT)
+
+    def leaks(val: str) -> bool:
+        return any(t in val for t in texts)
+
+    live: set[int] = set()
+    for page in doc:
+        for xref in [a[0] for a in page.annot_xrefs()]:
+            if any(leaks(v) for _, v in _string_paths(doc, xref)):
+                for link in page.get_links():
+                    if link.get("xref") == xref:
+                        page.delete_link(link)
+                        break
+                else:
+                    annot = page.load_annot(xref)
+                    if annot is not None:
+                        page.delete_annot(annot)
+                continue
+            live.add(xref)
+
+    changed = 0
+    for xref in range(1, doc.xref_length()):
+        try:
+            if doc.xref_is_stream(xref) or xref in live:
+                continue
+            if _is_annotation(doc, xref):
+                _, sub = doc.xref_get_key(xref, _ANNOT_SUBTYPE_KEY)
+                if sub == "/Link" or any(leaks(v) for _, v in _string_paths(doc, xref)):
+                    doc.update_object(xref, "<<>>")
+                    changed += 1
+                continue
+            hit = False
+            for path, val in _string_paths(doc, xref):
+                if leaks(val):
+                    if "/" in path:
+                        # An inline action dict (/A << /S /URI /URI (...) >>)
+                        # outside an annotation: drop the whole entry.
+                        doc.xref_set_key(xref, path.split("/")[0], "null")
+                    else:
+                        doc.xref_set_key(xref, path, "()")
+                    hit = True
+            if hit:
+                changed += 1
+        except Exception:
+            continue
+    return changed
+
+
 def _add_redact(
     page: fitz.Page,
     rect: fitz.Rect,
@@ -199,6 +350,7 @@ def _add_redact(
     font_size: float,
 ) -> None:
     """Add a single redaction annotation with a text label (no border — draw after apply)."""
+    _note_redaction(page, rect)
     # Last line of defence for the base-14 encoding trap: whatever the caller
     # passed, only draw glyphs the label font has. See sanitize_label.
     label, _dropped = sanitize_label(label)
@@ -603,6 +755,7 @@ def _blank_page(page, replacement_text: str, border_width: float) -> None:
         page.rect.x0 + margin, page.rect.y0 + margin,
         page.rect.x1 - margin, page.rect.y1 - margin,
     )
+    _note_redaction(page, rect)
     page.add_redact_annot(rect, fill=(1.0, 1.0, 1.0))
     page.apply_redactions(graphics=1)
     if border_width > 0:
@@ -641,6 +794,7 @@ def _op_seal_pages(doc: fitz.Document, op: dict, cfg: dict) -> int:
         )
 
         # Fill with white (not black — saves ink, matches user preference).
+        _note_redaction(page, rect)
         page.add_redact_annot(rect, fill=(1.0, 1.0, 1.0))
         page.apply_redactions(graphics=1)
 
@@ -899,6 +1053,7 @@ def run(config_path: Path, force: bool = False) -> int:
     output_pdf.parent.mkdir(parents=True, exist_ok=True)
     doc = fitz.open(str(source_pdf))
 
+    _REDACTED_TEXT.clear()
     redactions = cfg.get("redactions", [])
     _resolve_anchors(doc, redactions)
 
@@ -952,6 +1107,10 @@ def run(config_path: Path, force: bool = False) -> int:
             print(f"  {failure}", file=sys.stderr)
         return 1
 
+    scrubbed = _scrub_offpage_carriers(doc)
+    if scrubbed:
+        print(f"  scrubbed redacted text from {scrubbed} off-page object(s) "
+              f"(links, structure tree, metadata)", flush=True)
     doc.save(str(output_pdf), garbage=4, deflate=True, clean=True)
     doc.close()
     print(f"  Wrote {output_pdf}", flush=True)

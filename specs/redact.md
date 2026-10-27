@@ -84,6 +84,23 @@ verification catch the wrapped remnants.
   CATALOG SEALED]` tells the reader the fact you just withheld. Labels
   name the *authority and item number*, never the content:
   `[ITEM 5 -- SEALED]`.
+- **A hyperlinked URL outlives its text.** Redacting a printed URL
+  removes the glyphs, and the link drops out of the page's `/Annots`,
+  but in a tagged PDF the annotation object (its `/A /URI` holding the
+  full URL) stays in the file: the structure tree still points at it
+  through `/StructParent`, so `garbage=4` cannot collect it. The
+  struct element's `/Alt` often holds a second copy. Nothing on the
+  page shows it; `verify_redactions.py` reports it under "Raw bytes
+  and decompressed streams". `redact_pdf.py` now records what every
+  box covers, deletes links under a box before applying it, deletes
+  any live annotation whose strings name redacted text, blanks link
+  annotations no page lists any more, and empties matching strings
+  elsewhere (struct `/Alt` and `/ActualText`, outline titles, Info),
+  then saves with `garbage=4, deflate=True, clean=True` (tested:
+  tests/scenarios/pleading_exhibits/test_tool_clis.py::test_redact_pdf_strips_link_uri_under_redaction).
+  Run verification anyway: fragments under six characters are not
+  scrubbed off-page, and a URL that wraps differently from its link
+  target can still escape.
 - **Base-14 label fonts encode Latin-1.** An em dash renders as `?` on
   the page. `sanitize_label` now folds typographic punctuation
   automatically, but do not rely on it: write labels in plain ASCII.

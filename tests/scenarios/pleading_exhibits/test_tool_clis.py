@@ -211,3 +211,108 @@ def test_redact_pdf_unknown_op_type_fails(tmp_path):
     assert proc.returncode != 0
     assert "unknown operation type" in proc.stderr
     assert not (tmp_path / "redacted.pdf").exists()
+
+
+# ---------------------------------------------------------------------------
+# redact_pdf.py: hyperlinked URLs in a tagged PDF
+# ---------------------------------------------------------------------------
+
+LINK_SECRET = "XQ7-SECRETPATH"
+LINK_URL = f"https://files.example.com/share/{LINK_SECRET}"
+
+
+def _make_tagged_link_pdf(path: Path, *, link_on_url: bool = True,
+                          orphan: bool = False) -> None:
+    """A one-page tagged PDF whose printed URL is also a link annotation.
+
+    The structure tree holds a /Link element with the URL as /Alt and an
+    OBJR pointing at the annotation through /StructParent: the shape a
+    word processor's "export tagged PDF" produces. That reference is
+    what kept a redacted URL alive in the saved file (Oct 2026).
+
+    link_on_url=False puts the link over other text ("click here"), so
+    the redaction box never touches it but its /URI still names the URL.
+    orphan=True drops the annotation from the page's /Annots up front,
+    leaving the structure tree as its only referrer.
+    """
+    import fitz  # type: ignore[import]
+
+    doc = fitz.open()
+    page = doc.new_page()
+    page.insert_text((72, 100), "Intro text before the link.")
+    page.insert_text((72, 130), LINK_URL)
+    page.insert_text((72, 190), "Click here for the folder.")
+    if link_on_url:
+        width = fitz.get_text_length(LINK_URL, fontsize=11)
+        rect = fitz.Rect(72, 118, 72 + width, 134)
+    else:
+        rect = fitz.Rect(72, 178, 200, 194)
+    page.insert_link({"kind": fitz.LINK_URI, "from": rect, "uri": LINK_URL})
+    page.insert_text((72, 160), "Closing text after the link.")
+    doc = fitz.open("pdf", doc.tobytes())
+    page = doc[0]
+    annot = page.get_links()[0]["xref"]
+    root, docel, linkel, ptree = (doc.get_new_xref() for _ in range(4))
+    doc.update_object(ptree, f"<< /Nums [0 {linkel} 0 R] >>")
+    doc.update_object(root, f"<< /Type /StructTreeRoot /K {docel} 0 R "
+                            f"/ParentTree {ptree} 0 R /ParentTreeNextKey 1 >>")
+    doc.update_object(docel, f"<< /Type /StructElem /S /Document "
+                             f"/P {root} 0 R /K [{linkel} 0 R] >>")
+    doc.update_object(linkel, (
+        f"<< /Type /StructElem /S /Link /P {docel} 0 R /Pg {page.xref} 0 R "
+        f"/Alt ({LINK_URL}) /K [<< /Type /OBJR /Obj {annot} 0 R "
+        f"/Pg {page.xref} 0 R >>] >>"))
+    doc.xref_set_key(annot, "StructParent", "0")
+    if orphan:
+        doc.xref_set_key(page.xref, "Annots", "[]")
+    cat = doc.pdf_catalog()
+    doc.xref_set_key(cat, "StructTreeRoot", f"{root} 0 R")
+    doc.xref_set_key(cat, "MarkInfo", "<< /Marked true >>")
+    doc.save(str(path))
+
+
+@pytest.mark.parametrize("link_on_url,orphan", [
+    (True, False),    # the box covers the link itself
+    (False, False),   # the link sits elsewhere but targets the redacted URL
+    (True, True),     # the annotation was already orphaned in the source
+], ids=["covered", "elsewhere", "orphaned"])
+def test_redact_pdf_strips_link_uri_under_redaction(tmp_path, link_on_url,
+                                                    orphan):
+    """A redacted URL must not survive as a link's /URI, a struct-tree
+    /Alt, or an orphaned annotation the structure tree still references:
+    verify_redactions finds nothing in raw bytes or decoded streams."""
+    src = tmp_path / "source.pdf"
+    _make_tagged_link_pdf(src, link_on_url=link_on_url, orphan=orphan)
+    assert util.contains_text(src, LINK_SECRET)  # the fixture carries it
+    cfg = tmp_path / "config.json"
+    cfg.write_text(json.dumps({
+        "source_pdf": "source.pdf",
+        "output_pdf": "redacted.pdf",
+        "redactions": [{
+            "type": "redact_clause",
+            "description": "remove the shared-folder URL",
+            "search_text": LINK_URL,
+            "label": "[REDACTED-OK]",
+        }],
+    }))
+    proc = run_cli("redact_pdf.py", str(cfg))
+    assert proc.returncode == 0, proc.stderr
+    out = tmp_path / "redacted.pdf"
+
+    terms = tmp_path / "terms.txt"
+    terms.write_text(f"{LINK_SECRET}\nfiles.example.com\n")
+    check = run_cli("verify_redactions.py", str(out), "--terms", str(terms),
+                    "--config", str(cfg))
+    assert "## Raw bytes and decompressed streams: CLEAN" in check.stdout, (
+        check.stdout)
+    assert check.returncode == 0, check.stdout + check.stderr
+    assert LINK_SECRET.encode() not in out.read_bytes()
+
+    import fitz  # type: ignore[import]
+    with fitz.open(str(out)) as doc:
+        assert doc[0].get_links() == []
+        text = doc[0].get_text()
+    # Neighbouring content and the tagging survive.
+    assert "Intro text before the link." in text
+    assert "Closing text after the link." in text
+    assert b"/StructTreeRoot" in out.read_bytes()
