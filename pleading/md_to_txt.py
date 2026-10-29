@@ -157,6 +157,10 @@ def block_to_line(block: mp.Block,
                 num = (footnote_numbers or {}).get(span.footnote_id)
                 parts.append(f"[{num}]" if num is not None
                              else f"[^{span.footnote_id}]")
+            elif span.line_break:
+                # \newline: the paragraph continues on the next line of
+                # the same (unseparated) block.
+                parts.append("\n")
             else:
                 parts.append(span.text)
         text = "".join(parts)
@@ -212,6 +216,7 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
     # expand the '#.' flat auto-numbering sentinel, pull footnote definitions
     # out of the body, and number references in reading order (defined ids
     # only \u2014 undefined ids keep their literal marker).
+    body = mp.mark_trailing_space_breaks(body)
     body = mp.autonumber_list_items(body)
     body, footnote_defs = mp.extract_footnote_defs(body)
     footnote_numbers: Dict[str, int] = {}

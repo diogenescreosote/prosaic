@@ -80,6 +80,7 @@ from md_pleading import (
     effective_variant,
     extract_footnote_defs,
     load_external_exhibits,
+    mark_trailing_space_breaks,
     exhibit_list_mode,
     substitute_exhibit_list_macro,
     exhibit_label_for_doctype,
@@ -261,6 +262,14 @@ def _add_spans(p, text: str, base_bold: bool = False,
             ref.set(qn("w:id"), str(num))
             run._r.append(ref)
             continue
+        if span.line_break:
+            # \newline: a <w:br/> run, so the paragraph continues on the
+            # next line with no paragraph spacing or numbering between.
+            # {keep} asks Word to keep the paragraph's lines on one page.
+            p.add_run().add_break()
+            if span.keep_with_next:
+                p.paragraph_format.keep_together = True
+            continue
         if span.text == "":
             continue
         run = p.add_run(span.text)
@@ -304,6 +313,9 @@ def _spans_to_run_xml(text: str) -> str:
         if span.footnote_id is not None:  # nested footnotes: render literally
             runs.append('<w:r><w:t xml:space="preserve">%s</w:t></w:r>'
                         % escape(f"[^{span.footnote_id}]"))
+            continue
+        if span.line_break:
+            runs.append("<w:r><w:br/></w:r>")
             continue
         if span.text == "":
             continue
@@ -1249,6 +1261,7 @@ def main() -> None:
     # Shared front-end transforms (identical to the PDF renderer): expand the
     # '#.' flat auto-numbering sentinel, pull out footnote definitions, and
     # number footnote references in reading order.
+    body = mark_trailing_space_breaks(body)
     body = autonumber_list_items(body)
     body, footnote_defs = extract_footnote_defs(body)
     footnote_numbers = _assign_footnote_numbers(body, footnote_defs)

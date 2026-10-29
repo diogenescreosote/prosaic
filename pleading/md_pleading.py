@@ -523,6 +523,13 @@ class TextSpan:
     # When set, this span is a footnote *reference* marker (text is ignored;
     # the superscript number is assigned later from document order).
     footnote_id: Optional[str] = None
+    # \newline (or two trailing spaces on a source line): a hard line break
+    # inside the paragraph. The text is empty; the span is a position.
+    # \newline{skip} parses as two of these in a row.
+    line_break: bool = False
+    # \newline{keep}: the line after the break stays on the page of the
+    # line before it.
+    keep_with_next: bool = False
 
 
 @dataclass
@@ -538,6 +545,11 @@ class StyledWord:
     link_target: Optional[str] = None
     # Footnote number this word marks (set on superscript reference markers).
     footnote_num: Optional[int] = None
+    # A hard line break: the wrappers end the current line here and leave
+    # this word, never drawn (empty text, zero width), at the end of the
+    # line it ended, so the page loop can read the keep flag off it.
+    line_break: bool = False
+    keep_with_next: bool = False
 
     def font_name(self) -> str:
         if self.mono:
@@ -1012,8 +1024,49 @@ _INLINE_RE = re.compile(
     r"|\[\^([^\]]+?)\]"       # 11: [^footnote-id]  (reference marker)
     r"|\\bates\{([^{}\n]*)\}"     # 12: \bates{TOKEN} / \bates{TOKEN--NNNNN}
     r"|\\doclink\{([^{}\n]*)\}\{([^{}\n]*)\}"  # 13/14: \doclink{path}{text}
+    # 15/16: \newline, optionally with flags: \newline{skip}, \newline{keep},
+    # \newline{skip,keep}. An unknown flag leaves its braces unmatched and
+    # visible in the output, like a malformed \blank{...}.
+    r"|(\\newline)(\{\s*(?:skip|keep)(?:\s*,\s*(?:skip|keep))*\s*\})?(?![A-Za-z])"
     r")"
 )
+
+# A source line ending in two or more spaces is Markdown's hard line
+# break; the renderers rewrite it to the \newline token before parsing.
+_TRAILING_SPACE_BREAK_RE = re.compile(r"(?<=\S) {2,}$")
+_BLOCK_MACRO_LINE_RE = re.compile(r"^\\[a-zA-Z]+(?:\{[^{}]*\})+\s*$")
+
+
+def mark_trailing_space_breaks(body: str) -> str:
+    """Rewrite Markdown's two-trailing-spaces hard break as ``\\newline``.
+
+    Every renderer rstrips its source lines and rewraps a paragraph into
+    one flow, so trailing whitespace would otherwise vanish. The rewrite
+    runs before any line is stripped and skips what is not prose: the
+    verbatim lines of a block ``\\fixedwidth{`` ... ``}``, pipe-table rows
+    (a token after the last ``|`` would read as an extra cell), lines
+    that are a block macro call (``\\signblock{...}``, matched whole-line
+    by the parser), and lines ending in an HTML comment.
+    """
+    out: List[str] = []
+    in_fixedwidth = False
+    for line in body.replace("\r\n", "\n").split("\n"):
+        stripped = line.strip()
+        if in_fixedwidth:
+            if stripped == "}":
+                in_fixedwidth = False
+            out.append(line)
+            continue
+        if stripped == "\\fixedwidth{":
+            in_fixedwidth = True
+            out.append(line)
+            continue
+        if (stripped.startswith("|") or stripped.endswith("-->")
+                or _BLOCK_MACRO_LINE_RE.match(stripped)):
+            out.append(line)
+            continue
+        out.append(_TRAILING_SPACE_BREAK_RE.sub(" \\\\newline", line))
+    return "\n".join(out)
 
 
 def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
@@ -1071,6 +1124,21 @@ def parse_inline_styles(text: str, bold: bool = False, italic: bool = False,
             spans.append(TextSpan(m.group(14), bold=bold, italic=italic,
                                   underline=True, highlight=highlight,
                                   doc_link=m.group(13)))
+        elif m.group(15) is not None:
+            # The whitespace around a break belongs to the break: the new
+            # line must not open with a space in DOCX or TXT. \newline{skip}
+            # is two breaks: the wrappers render consecutive breaks as one
+            # empty grid line inside the paragraph.
+            flags = {f.strip() for f in (m.group(16) or "{}")[1:-1].split(",")}
+            if spans and not spans[-1].line_break:
+                spans[-1].text = spans[-1].text.rstrip()
+            spans.append(TextSpan("", line_break=True, keep_with_next="keep" in flags))
+            if "skip" in flags:
+                spans.append(TextSpan("", line_break=True, keep_with_next="keep" in flags))
+            last = m.end()
+            while last < len(text) and text[last] in " \t":
+                last += 1
+            continue
         last = m.end()
     if last < len(text):
         spans.append(TextSpan(text[last:], bold=bold, italic=italic,
@@ -1120,10 +1188,15 @@ def spans_to_styled_words(spans: List[TextSpan],
                                         no_space_before=bool(words),
                                         footnote_num=num))
             continue
+        if span.line_break:
+            words.append(StyledWord("", line_break=True,
+                                    keep_with_next=span.keep_with_next))
+            continue
         parts = span.text.split()
         for i, w in enumerate(parts):
             glue = bool(words
                         and i == 0
+                        and not words[-1].line_break
                         and not span.text[0].isspace()
                         and (words[-1].text[-1] in _OPENING_PUNCT
                              or w[0] in _CLOSING_PUNCT_CHARS))
@@ -1171,6 +1244,43 @@ def glue_clusters(words: List[StyledWord]) -> List[List[StyledWord]]:
     return clusters
 
 
+def _is_break_cluster(cluster: List[StyledWord]) -> bool:
+    return any(w.line_break for w in cluster)
+
+
+def _without_breaks(cluster: List[StyledWord]) -> List[StyledWord]:
+    return [w for w in cluster if not w.line_break]
+
+
+def _the_break(cluster: List[StyledWord]) -> StyledWord:
+    return next(w for w in cluster if w.line_break)
+
+
+def _ends_with_keep_break(words: List[StyledWord]) -> bool:
+    return bool(words) and words[-1].line_break and words[-1].keep_with_next
+
+
+def keep_runs(lines: List[Tuple[List[StyledWord], float]]) -> Dict[int, int]:
+    """Map the index of a line ending in a ``\\newline{keep}`` to the number
+    of consecutive lines tied to it: itself, every line it or a successor
+    keeps, and the line after the last keep. The paragraph's trailing
+    blank separator (no words at all) is never tied."""
+    runs: Dict[int, int] = {}
+    i = 0
+    while i < len(lines):
+        if _ends_with_keep_break(lines[i][0]):
+            j = i
+            while (j + 1 < len(lines) and lines[j + 1][0]
+                   and _ends_with_keep_break(lines[j][0])):
+                j += 1
+            if j > i:
+                runs[i] = j - i + 1
+            i = j + 1
+        else:
+            i += 1
+    return runs
+
+
 def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: Optional[int] = None) -> List[List[StyledWord]]:
     if font_size is None:
         font_size = FONT_SIZE
@@ -1181,6 +1291,16 @@ def wrap_styled_words(words: List[StyledWord], max_width: float, font_size: Opti
     space_w = pdfmetrics.stringWidth(" ", FONT_NAME, font_size)
     cur_width = 0.0
     for cluster in glue_clusters(words):
+        if _is_break_cluster(cluster):
+            # Hard break: end the line here, the (undrawn) break word
+            # closing it. A break at the paragraph's very start is
+            # dropped; between two breaks (\newline{skip}) lies a line
+            # holding nothing but the second break, i.e. an empty one.
+            if current or lines:
+                lines.append(current + [_the_break(cluster)])
+            current = _without_breaks(cluster)
+            cur_width = sum(w.width(font_size) for w in current)
+            continue
         cw = sum(w.width(font_size) for w in cluster)
         gap = space_w if current else 0.0
         if current and cur_width + gap + cw > max_width:
@@ -1213,6 +1333,7 @@ def draw_styled_words(c: canvas.Canvas, x: float, y: float, words: List[StyledWo
                       font_size: Optional[int] = None) -> List[Tuple[float, float, float, str]]:
     if font_size is None:
         font_size = FONT_SIZE
+    words = _without_breaks(words)  # a \newline marker closes a line; it has no ink
     """Draw words and return list of (x, width, y, link_dest) for any linked words.
 
     Underlined runs are drawn as a single continuous rule beneath the text
@@ -2849,6 +2970,17 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
         current = list(clusters[0])
         cur_w = sum(w.width() for w in current)
         for cluster in clusters[1:]:
+            if _is_break_cluster(cluster):
+                # Hard break: the continuation takes the hanging indent,
+                # exactly as a wrapped line of the same item would. Two in
+                # a row (\newline{skip}) leave one empty grid line.
+                lines_out.append((current + [_the_break(cluster)],
+                                  indent if first_line else indent + hanging))
+                current = _without_breaks(cluster)
+                cur_w = sum(w.width() for w in current)
+                first_line = False
+                max_w = text_width - indent - hanging
+                continue
             cw = sum(w.width() for w in cluster)
             trial = cur_w + space_w + cw
             if trial <= max_w:
@@ -2860,7 +2992,8 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
                 cur_w = cw
                 first_line = False
                 max_w = text_width - indent - hanging
-        lines_out.append((current, indent if first_line else indent + hanging))
+        if current:  # empty only after a trailing hard break
+            lines_out.append((current, indent if first_line else indent + hanging))
         lines_out.append(([], 0))
         return lines_out
 
@@ -3756,6 +3889,7 @@ class PleadingPDF:
             grid.append(cells)
 
         def words_width(words: List[StyledWord]) -> float:
+            words = _without_breaks(words)
             if not words:
                 return 0.0
             space_w = pdfmetrics.stringWidth(" ", FONT_NAME, FONT_SIZE)
@@ -4208,7 +4342,7 @@ class PleadingPDF:
         font_size = FONT_SIZE if font_size is None else font_size
         space_w = pdfmetrics.stringWidth(" ", FONT_NAME, font_size)
         total = 0.0
-        for i, w in enumerate(words):
+        for i, w in enumerate(_without_breaks(words)):
             if i > 0 and not w.no_space_before:
                 total += space_w
             total += w.width(font_size)
@@ -4671,7 +4805,23 @@ class PleadingPDF:
                     and block_lines
                     and not block_lines[-1][0]):
                 block_lines = block_lines[:-1]
-            for words, indent in block_lines:
+
+            # \newline{keep}: the line after the break stays on the page
+            # of the line before it. If the page would otherwise turn
+            # inside a tied run, move the whole paragraph to a fresh page
+            # when it fits on one; a paragraph longer than a page breaks
+            # a line earlier instead (the per-line check below).
+            tied = keep_runs(block_lines)
+            if tied and current_line != 1:
+                content_lines = sum(1 for words, _ in block_lines if words)
+                bottom = self.lines_per_page - self._fn_area_lines
+                if content_lines <= self.lines_per_page and any(
+                        current_line + start <= bottom < current_line + start + length - 1
+                        for start, length in tied.items()):
+                    self.start_page()
+                    current_line = 1
+
+            for li, (words, indent) in enumerate(block_lines):
                 # Footnotes newly referenced on this line shrink the usable
                 # body area; account for them before the page-break decision so
                 # a marker and its note always land on the same page.
@@ -4682,10 +4832,15 @@ class PleadingPDF:
                             and w.footnote_num not in new_nums):
                         new_nums.append(w.footnote_num)
                 bottom = self.lines_per_page - self._fn_area_for(self._page_fn_nums + new_nums)
-                if current_line > bottom:
-                    if not words:
-                        # Drop overflowed separator lines so they do not create
-                        # blank trailing pages at the end of a document.
+                needed = tied.get(li, 1)
+                content = _without_breaks(words)
+                if current_line > bottom or (
+                        needed > 1 and current_line != 1
+                        and current_line + needed - 1 > bottom):
+                    if not content and needed == 1:
+                        # Drop overflowed separator lines (and a \newline{skip}
+                        # blank) so they do not create blank trailing pages
+                        # at the end of a document or blank page tops.
                         continue
                     self.start_page()
                     current_line = 1
@@ -4696,7 +4851,7 @@ class PleadingPDF:
                 if new_nums:
                     self._page_fn_nums.extend(new_nums)
                     self._fn_area_lines = self._fn_area_for(self._page_fn_nums)
-                if words:
+                if content:
                     self.draw_styled_line(current_line, words, indent=indent)
                 current_line += 1
 
@@ -5432,6 +5587,7 @@ def main() -> None:
                                              list_mode, input_path.name)
         body = substitute_date_macro(body, meta)
         body = flatten_lettersignblock(body)
+        body = mark_trailing_space_breaks(body)
         body = autonumber_list_items(body)
         body, footnote_defs = extract_footnote_defs(body)
         blocks = parse_markdown_blocks(body, doctype=doctype)

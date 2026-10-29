@@ -136,6 +136,10 @@ NOT full Markdown:
 | `\filelink{path}` or `\filelink{path}{text}` | monospace, underlined, carrying a relative-file link annotation (/GoToR) that opens `path` when the PDF is viewed beside its companions |
 | `\doclink{path}{text}` | the display text in the body face, dark blue and underlined, carrying the same relative-file link annotation (/GoToR) as `\filelink`; for working documents whose cross-references open companion files beside the PDF. A path beginning `#` (`\doclink{#exhibit_A}{Exhibit A}`) jumps to that destination inside the PDF instead, same ink |
 | `[^id]` | footnote reference marker |
+| `\newline` (or two trailing spaces at the end of a source line) | hard line break: the paragraph continues on the next grid line, with no blank line and no new paragraph number (see **Hard line breaks** under **Block quotes**) |
+| `\newline{skip}` | hard line break plus one empty grid line, still inside the same paragraph |
+| `\newline{keep}` | hard line break whose continuation stays on the same page as the line before it (the paragraph moves to the next page whole when it fits on one; a longer paragraph turns the page a line earlier) |
+| `\newline{skip,keep}` | the flags are independent and combine in either order |
 
 `\fixedwidth{...}` is the construct for file paths, hashes, Bates
 tokens, and code: its contents render in Courier, are taken verbatim
@@ -1758,6 +1762,58 @@ Education Code § 49069.7(a) provides:
 > to any and all pupil records related to their children that are maintained by
 > school districts or private schools.
 ```
+
+### Hard line breaks (`\newline`)
+
+Paragraphs rewrap the same way: the source's line breaks are joined
+into one flow and broken again at the measure. The one exception is
+`\newline`, a bare token (no braces) that ends the output line where
+it stands and continues the **same** paragraph on the next grid line:
+no blank separator, no new paragraph number, and the paragraph's own
+continuation indent (none for an ordinary or `#. ` paragraph; the
+hanging indent of a list item, so the continuation aligns with the
+item's text). Markdown's two-or-more trailing spaces at the end of a
+source line mean the same thing, but an invisible marker is easy to
+lose to an editor that trims whitespace, so prefer the token. A
+proposed order wants its fill-in on the line directly under each
+ruling:
+
+```md
+#. The request of Petitioner Jane Roe for an order compelling the
+deposition of John Doe, with the reporter's fee borne by Respondent
+Richard Roe, is \newline GRANTED ____ DENIED ____
+
+#. The request of Respondent Richard Roe for sanctions is \newline
+GRANTED ____ DENIED ____
+```
+
+renders `1.` and `2.` with `GRANTED ____ DENIED ____` flush left on
+the grid line immediately below each paragraph's last line of text.
+The token takes optional flags in braces, independent and in either
+order (`\newline{skip}`, `\newline{keep}`, `\newline{skip,keep}`):
+
+- `skip`: one empty grid line before the continuation, still inside
+  the paragraph (no new paragraph, no new number).
+- `keep`: the continuation must land on the same page as the line
+  before the break. If the page would otherwise turn at that break,
+  the whole paragraph moves to the next page when it fits on one;
+  a paragraph longer than a page turns the page a line earlier
+  instead, so the ruling line is never orphaned from its order. DOCX
+  marks the paragraph keep-lines-together (`w:keepLines`).
+
+Plain `\newline`, and the trailing-spaces synonym (plain form only),
+do neither: the break alone, with page turns allowed as in any
+paragraph. A proposed order's rulings want `\newline{keep}`. An
+unknown flag is not swallowed: the break happens and the braces print,
+so the typo is visible.
+
+The break works inside ordinary paragraphs, `#. ` paragraphs, list
+items and block quotes (where it breaks within the quote). It adds one
+grid line to the paragraph (two for `{skip}`) and nothing else:
+keep-together decisions see a paragraph that much longer. DOCX carries
+it as a line break (a `w:br` run, two for `{skip}`) inside the
+paragraph, and TXT as a newline inside the block. Inside
+`\fixedwidth{...}` or backticks the characters are verbatim, as always.
 
 ## Envelope build system (`envelopes.yaml`)
 
