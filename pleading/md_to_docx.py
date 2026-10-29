@@ -41,6 +41,9 @@ _W_NS = "http://schemas.openxmlformats.org/wordprocessingml/2006/main"
 # ---------------------------------------------------------------------------
 
 BODY_FONT_NAME = "Times New Roman"
+# Word face per `body_font:` key (md_pleading._BODY_FONT_FAMILIES); a key
+# absent here keeps BODY_FONT_NAME.
+_DOCX_BODY_FONT_NAMES = {"times": "Times New Roman"}
 BODY_FONT_SIZE_PT = 12
 BODY_LINE_SPACING_PT = 24        # exact double spacing for 12 pt body type
 CAPTION_LINE_SPACING_PT = 14     # single-spaced caption / letter-header lines
@@ -1217,6 +1220,13 @@ def main() -> None:
     meta.pop("_final", None)
     if args.final:
         meta["_final"] = True
+    # body_font: the PDF embeds Liberation Serif for `times`; Word users
+    # have Times New Roman itself, so the DOCX names that. Any other key
+    # keeps the module default. Resolved through md_pleading so an unknown
+    # value fails the DOCX build with the same message as the PDF build.
+    global BODY_FONT_NAME
+    body_font_key = mp.resolve_body_font_key(meta.get("body_font"), input_path.name)
+    BODY_FONT_NAME = _DOCX_BODY_FONT_NAMES.get(body_font_key, BODY_FONT_NAME)
 
     # Exhibit citations resolve through the shared substitute_exhibit_refs
     # (both \exhibit{} and \attachment{}, doctype-aware label, en-dash page

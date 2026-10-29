@@ -288,6 +288,18 @@ These fields are expected for a normal pleading-style caption:
   name (e.g., a federal agency) would otherwise wrap onto too many lines.
   Values around `40`–`60` work well for agency-length names.
 - `case_number` — string
+- `body_font_size` — integer (points, default `12`, bounded `8`–`18`); the
+  body point size for the whole document. Exists for documents a statute
+  requires larger than house style (Civ. Code § 56.11(c): a CMIA
+  authorization in a typeface no smaller than 14-point).
+- `body_font` — string; the body typeface. `century` (default; Century
+  Schoolbook via TeX Gyre Schola) or `times`, which embeds Liberation Serif,
+  a metric-compatible stand-in for Times New Roman (the DOCX names Times New
+  Roman itself, which Word users have). Case-insensitive; `century
+  schoolbook`, `times new roman` and `tnr` are accepted aliases, and any
+  other value fails the build. Cal. Rules of Court, rule 2.105 allows either
+  face. Grid, margins and leading do not change. A markdown exhibit child
+  chooses its own face from its own front matter.
 - `paper_subtitle` — string; rendered in the right column below the paper title
 - ~~`footer_title`~~ — **removed**; the footer now always uses `paper_title` (uppercased, regular weight). No other key overrides the footer: `short_title` is read only by JC cover-form fills (see `jc_common.py`) and never reaches the footer.
 - `statutory_basis` — string; rendered in the right column below the title/subtitle, e.g. `"(Code Civ. Proc. §§ 527, 526a)"`
@@ -1546,6 +1558,11 @@ The script requires TeX Gyre Schola TTF files in the `fonts/` directory relative
 - `fonts/texgyreschola-bolditalic.ttf`
 
 These are converted from OTF originals distributed by GUST (the Polish TeX Users Group) under the GUST Font License. TeX Gyre Schola is a metric-compatible free clone of Century Schoolbook.
+
+For `body_font: times` the script also requires Liberation Serif
+(`fonts/LiberationSerif-{Regular,Bold,Italic,BoldItalic}.ttf`, release 2.1.5,
+SIL Open Font License; `fonts/LICENSE-LiberationFonts.txt`), a
+metric-compatible free clone of Times New Roman.
 
 ## Page model
 

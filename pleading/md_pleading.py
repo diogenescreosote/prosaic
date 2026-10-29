@@ -59,7 +59,32 @@ _FONT_FILES = {
     "CenturySchoolbook-Bold":       "texgyreschola-bold.ttf",
     "CenturySchoolbook-Italic":     "texgyreschola-italic.ttf",
     "CenturySchoolbook-BoldItalic": "texgyreschola-bolditalic.ttf",
+    # Liberation Serif (SIL OFL; fonts/LICENSE-LiberationFonts.txt) is
+    # metric-compatible with Times New Roman and stands in for it when a
+    # source asks for `body_font: times`.
+    "TimesNewRoman":                "LiberationSerif-Regular.ttf",
+    "TimesNewRoman-Bold":           "LiberationSerif-Bold.ttf",
+    "TimesNewRoman-Italic":         "LiberationSerif-Italic.ttf",
+    "TimesNewRoman-BoldItalic":     "LiberationSerif-BoldItalic.ttf",
 }
+
+# Body typeface families a source may select with `body_font:`, each as
+# (regular, bold, italic, bold-italic) registered names. "century" is the
+# house style and the default; "times" satisfies a court or counterparty
+# that expects Times New Roman (Cal. Rules of Court, rule 2.105 allows
+# either). Keys are what the front matter names; aliases map onto them.
+_BODY_FONT_FAMILIES = {
+    "century": ("CenturySchoolbook", "CenturySchoolbook-Bold",
+                "CenturySchoolbook-Italic", "CenturySchoolbook-BoldItalic"),
+    "times": ("TimesNewRoman", "TimesNewRoman-Bold",
+              "TimesNewRoman-Italic", "TimesNewRoman-BoldItalic"),
+}
+_BODY_FONT_ALIASES = {
+    "century schoolbook": "century",
+    "times new roman": "times",
+    "tnr": "times",
+}
+DEFAULT_BODY_FONT = "century"
 
 
 _SIGNATURE_FONT_FILE = "DancingScript.ttf"
@@ -75,16 +100,15 @@ def _register_fonts() -> None:
         if not path.exists():
             raise FileNotFoundError(
                 f"Font file not found: {path}\n"
-                "Place TeX Gyre Schola .ttf files in the fonts/ directory."
+                "Place the TeX Gyre Schola and Liberation Serif .ttf files "
+                "in the fonts/ directory."
             )
         pdfmetrics.registerFont(TTFont(name, str(path)))
-    pdfmetrics.registerFontFamily(
-        "CenturySchoolbook",
-        normal="CenturySchoolbook",
-        bold="CenturySchoolbook-Bold",
-        italic="CenturySchoolbook-Italic",
-        boldItalic="CenturySchoolbook-BoldItalic",
-    )
+    for regular, bold, italic, bold_italic in _BODY_FONT_FAMILIES.values():
+        pdfmetrics.registerFontFamily(
+            regular, normal=regular, bold=bold, italic=italic,
+            boldItalic=bold_italic,
+        )
     sig_path = FONT_DIR / _SIGNATURE_FONT_FILE
     if sig_path.exists():
         pdfmetrics.registerFont(TTFont(SIGNATURE_FONT, str(sig_path)))
@@ -97,10 +121,46 @@ _register_fonts()
 # Layout constants — California pleading style
 # ---------------------------------------------------------------------------
 
-FONT_NAME = "CenturySchoolbook"
-FONT_NAME_BOLD = "CenturySchoolbook-Bold"
-FONT_NAME_ITALIC = "CenturySchoolbook-Italic"
-FONT_NAME_BOLD_ITALIC = "CenturySchoolbook-BoldItalic"
+FONT_NAME, FONT_NAME_BOLD, FONT_NAME_ITALIC, FONT_NAME_BOLD_ITALIC = \
+    _BODY_FONT_FAMILIES[DEFAULT_BODY_FONT]
+
+
+def resolve_body_font_key(value, source_name: str = "source") -> str:
+    """Normalize a `body_font:` front-matter value to a registry key.
+
+    Case-insensitive; accepts the family keys and a few spoken aliases
+    ("Times New Roman", "TNR", "Century Schoolbook"). An unknown value
+    fails the build naming the file and the allowed values, because a
+    typo that silently fell back to house style would be invisible on
+    the page until a court clerk noticed.
+    """
+    if value is None:
+        return DEFAULT_BODY_FONT
+    key = " ".join(str(value).strip().lower().split())
+    key = _BODY_FONT_ALIASES.get(key, key)
+    if key not in _BODY_FONT_FAMILIES:
+        allowed = " | ".join(sorted(_BODY_FONT_FAMILIES))
+        raise SystemExit(
+            f"{source_name}: body_font {value!r} is not recognized; "
+            f"allowed values: {allowed} (aliases: "
+            + ", ".join(repr(a) for a in sorted(_BODY_FONT_ALIASES)) + ")"
+        )
+    return key
+
+
+def set_body_font(key: str) -> None:
+    """Rebind the four body-face globals to the family `key` names.
+
+    Every drawing site reads FONT_NAME* at call time (no default argument
+    captures them at import), so one call before rendering switches the
+    body, caption, footer, exhibit tab sheets and signature blocks
+    together. Metrics come from pdfmetrics by name, so wrapping follows.
+    """
+    global FONT_NAME, FONT_NAME_BOLD, FONT_NAME_ITALIC, FONT_NAME_BOLD_ITALIC
+    FONT_NAME, FONT_NAME_BOLD, FONT_NAME_ITALIC, FONT_NAME_BOLD_ITALIC = \
+        _BODY_FONT_FAMILIES[key]
+
+
 FONT_SIZE = 12
 FONT_SIZE_SMALL = 10
 
@@ -3381,10 +3441,13 @@ class PleadingPDF:
                 ln += 1
 
     def draw_text_line(self, line_no: int, text: str, indent: float = 0,
-                       font: str = FONT_NAME, size: Optional[float] = None) -> None:
-        # Resolve the size at call time: a default of FONT_SIZE would be
-        # bound once at import and ignore body_font_size (Civ. Code 56.11
-        # needs the signature block at the body's 14+ points too).
+                       font: Optional[str] = None,
+                       size: Optional[float] = None) -> None:
+        # Resolve the face and size at call time: defaults of FONT_NAME /
+        # FONT_SIZE would be bound once at import and ignore body_font and
+        # body_font_size (Civ. Code 56.11 needs the signature block at the
+        # body's 14+ points too).
+        font = FONT_NAME if font is None else font
         size = FONT_SIZE if size is None else size
         self.c.setFont(font, size)
         self.c.drawString(self.left_margin + indent, self.line_y(line_no), text)
@@ -3398,13 +3461,17 @@ class PleadingPDF:
             ))
 
     def _draw_caption_text(self, x: float, y: float, text: str,
-                           font: str = FONT_NAME, size: Optional[float] = None) -> None:
+                           font: Optional[str] = None,
+                           size: Optional[float] = None) -> None:
+        font = FONT_NAME if font is None else font
         size = FONT_SIZE if size is None else size
         self.c.setFont(font, size)
         self.c.drawString(x, y, text)
 
     def _draw_right_aligned(self, line_no: int, text: str,
-                            font: str = FONT_NAME, size: Optional[float] = None) -> None:
+                            font: Optional[str] = None,
+                            size: Optional[float] = None) -> None:
+        font = FONT_NAME if font is None else font
         size = FONT_SIZE if size is None else size
         self.c.setFont(font, size)
         x = PAGE_WIDTH - RIGHT_MARGIN - pdfmetrics.stringWidth(text, font, size)
@@ -3911,7 +3978,8 @@ class PleadingPDF:
             self.esign_fields[-1]["font_size"] = FONT_SIZE
 
     def _tag_blanks(self, line_no: int, text: str, specs: List[Optional[str]],
-                    font: str = FONT_NAME, size: Optional[float] = None) -> None:
+                    font: Optional[str] = None,
+                    size: Optional[float] = None) -> None:
         """Place fields over the ``___`` blank runs of a drawn line, in
         order; a None spec skips that blank. Each field is sized to
         its blank and bottoms out on the underscore rule. A 6 pt tag
@@ -3920,6 +3988,7 @@ class PleadingPDF:
         interleave in the text layer and DocuSeal would read garbage
         -- with the field height grown to keep its bottom edge on the
         same rule."""
+        font = FONT_NAME if font is None else font
         size = FONT_SIZE if size is None else size
         rule_y = self.line_y(line_no) - 2  # underscores sit under the baseline
         level_end_x: List[float] = []
@@ -5280,6 +5349,12 @@ def main() -> None:
             raise SystemExit(
                 f"{input_path.name}: body_font_size {size} out of range 8-18")
         FONT_SIZE = size
+    # body_font: per-document body typeface (century | times). Resolved
+    # here, in the process that renders this document; a markdown exhibit
+    # renders in its own subprocess (_render_markdown_exhibit), so a child
+    # picks its own face from its own front matter and the parent's choice
+    # never bleeds into it.
+    set_body_font(resolve_body_font_key(meta.get("body_font"), input_path.name))
     # A source cannot self-finalize: only the build flag clears the
     # default draft banner, and it does so per invocation.
     meta.pop("_final", None)
