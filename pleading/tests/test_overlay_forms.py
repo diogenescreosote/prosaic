@@ -165,6 +165,30 @@ def test_form_style_overrides_font_size_for_one_field(tmp_path):
     assert abs(styled - target) < 0.01, (baseline, target, styled)
 
 
+def test_form_style_min_font_size_is_the_explicit_way_below_the_floor(tmp_path):
+    """The 8 pt floor is the default; a source's ``form_style:`` may name
+    a smaller ``min_font_size`` for one field, and only then does the
+    engine go below it."""
+    long_street = ("12345 Extremely Long Boulevard of Excessive Length, "
+                   "Suite 999, Building C, Care of the Registered Agent for "
+                   "Service of Process, Example City, California 90000-0000")
+    out, res = _fill(tmp_path, extra={"mc040_new_street": long_street})
+    street = [s for (t, _x, _y, s) in _runs(PdfReader(str(out)).pages[0])
+              if "Extremely Long" in t][0]
+    assert street >= form_fill.DEFAULT_MIN_FONT_SIZE, street
+    assert any("overflows its box" in w for w in res.warnings), res.warnings
+
+    out2 = tmp_path / "mc040_small.pdf"
+    meta = {**META, "form_style": {"mc040": {
+        "mc040_new_street": {"min_font_size": 5},
+    }}}
+    data = {**DATA, "mc040_new_street": long_street}
+    form_fill.fill("mc040", out2, meta=meta, data=data)
+    small = [s for (t, _x, _y, s) in _runs(PdfReader(str(out2)).pages[0])
+             if "Extremely Long" in t][0]
+    assert small < form_fill.DEFAULT_MIN_FONT_SIZE, (street, small)
+
+
 def test_size_group_members_share_a_size(tmp_path):
     # A deliberately long street forces a shrink; the (short) city line
     # must come down to the same size rather than render larger.

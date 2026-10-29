@@ -134,7 +134,12 @@ FILL_FONTS = {
     "times": "Times-Roman",
 }
 DEFAULT_FONT_SIZE = 9.0
-DEFAULT_MIN_FONT_SIZE = 6.0
+# The floor a shrinking field stops at. It was 6 pt, and 6 pt filled
+# forms kept coming back from the reader as unreadable: a long answer
+# in a JC form's response box shrank to fine print nobody checks. 8 pt
+# (a third larger) is the default; a descriptor's or a source's
+# ``min_font_size:`` is the explicit choice to go smaller for one field.
+DEFAULT_MIN_FONT_SIZE = 8.0
 LEADING_RATIO = 1.15
 
 # E-sign field taxonomy: the least common multiple of DocuSeal,
@@ -675,6 +680,11 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     # can opt into shrinking with an explicit min_font_size.
     default_min = DEFAULT_FONT_SIZE if strategy == "overflow_attachment" else DEFAULT_MIN_FONT_SIZE
     min_size = float(spec.get("min_font_size") or default_min)
+    # A box shorter than the floor (JC forms draw some one-line cells 7 pt
+    # tall) is the form's own statement of how big its text can be; the
+    # floor never forces text taller than the cell that holds it.
+    if "min_font_size" not in spec:
+        min_size = max(1.0, min(min_size, abs(rect[3] - rect[1])))
     font = str(spec.get("font") or DEFAULT_FONT)
     can_shrink = "shrink" in strategy or strategy == "overflow_attachment"
     can_wrap = "wrap" in strategy or strategy == "overflow_attachment" or spec.get("multiline")
@@ -1052,7 +1062,11 @@ def fill(
         for fname, overrides in style_overrides.items():
             if fname not in merged:
                 continue
-            keep = {k: v for k, v in overrides.items() if k in ("font_size", "leading_ratio")}
+            keep = {
+                k: v
+                for k, v in overrides.items()
+                if k in ("font_size", "min_font_size", "leading_ratio")
+            }
             merged[fname] = {**merged[fname], **keep}
         fields = merged
     if fill_font != DEFAULT_FONT:

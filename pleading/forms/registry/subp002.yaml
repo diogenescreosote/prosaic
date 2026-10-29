@@ -227,6 +227,9 @@ fields:
       from filer_name (SBN stripped).
     auto: filer_name_bare
     fit: shrink
+    # A 126 pt one-line cell; a long attorney name needs less than the
+    # 8 pt floor, and the form's own print here is small.
+    min_font_size: 6
   contact_phone:
     map: "SUBP-002[0].Page1[0].List4[0].Lib[0].FillText19[0]"
     page: 1

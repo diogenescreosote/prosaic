@@ -146,6 +146,23 @@ def test_fit_wrap_produces_lines():
     assert len(r.lines) > 1 and r.fits
 
 
+def test_fit_shrink_stops_at_the_eight_point_floor_by_default():
+    """Fine print that technically fits is worse on a court form than an
+    overflow a human sees: shrinking stops at 8 pt unless a field says
+    otherwise, and the result is reported as not fitting."""
+    rect = [0, 0, 120, 14]
+    long = "This string needs far less than eight points to fit a box this narrow"
+    r = form_fill.fit_text(long, rect, {"fit": "shrink"})
+    assert r.font_size == form_fill.DEFAULT_MIN_FONT_SIZE == 8.0
+    assert not r.fits
+    # The explicit choice to go smaller is honored, field by field.
+    r6 = form_fill.fit_text(long, rect, {"fit": "shrink", "min_font_size": 6})
+    assert r6.font_size < 8.0
+    # A multiline box behaves the same: wrap, then shrink, never below 8.
+    rw = form_fill.fit_text(" ".join(["word"] * 400), [0, 0, 200, 60], {"fit": "shrink_wrap"})
+    assert rw.font_size == 8.0 and not rw.fits
+
+
 # ---------------------------------------------------------------------------
 # Descriptor ↔ blank consistency (revision-drift alarm)
 # ---------------------------------------------------------------------------

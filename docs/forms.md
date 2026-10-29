@@ -213,7 +213,14 @@ annotations, identical rendering everywhere. Fields with no widget
 Sizing balances fit against consistency: a field with no explicit
 `fit:` defaults to `shrink`, and fields sharing a `size_group:` all
 render at the smallest size any member needed, so a block of related
-boxes never shows three different type sizes. Because the engine draws
+boxes never shows three different type sizes. Shrinking stops at
+**8 pt** by default: text that still does not fit there is drawn at
+8 pt and warned about ("overflows its box"), because fine print that
+technically fits is worse on a court form than an overflow a human
+sees. A descriptor's `min_font_size:`, or a source's
+`form_style: {<form>: {<field>: {min_font_size: 6}}}`, is the explicit
+decision to go smaller for that one field; `overflow_attachment`
+fields never shrink below full size unless given one. Because the engine draws
 the lines itself, the height a block needs is exact — first baseline
 one em below the top, then 1.15 em per line — and nothing is left to a
 viewer's layout.

@@ -54,6 +54,9 @@ fields:
     page: 1
     auto: short_title
     fit: shrink_wrap
+    # The box is 174 x 17 pt: two lines do not fit at the 8 pt floor, so
+    # this caption field is the explicit exception that may go to 6.
+    min_font_size: 6
     doc: >-
       Case name, e.g. 'Roe v. Doe'. shrink_wrap because a realistic long
       caption overflows this narrow box even at shrink's minimum size
@@ -205,6 +208,8 @@ fields:
   household_age_1:
     map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeAge1[0]"
     page: 2
+    # A 15 pt cell for a two-digit age: the 8 pt floor cannot apply.
+    min_font_size: 5
     default: ""
   household_rel_1:
     map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeRel1[0]"
@@ -221,6 +226,8 @@ fields:
   household_age_2:
     map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeAge2[0]"
     page: 2
+    # A 15 pt cell for a two-digit age: the 8 pt floor cannot apply.
+    min_font_size: 5
     default: ""
   household_rel_2:
     map: "FW-001[0].Page2[0].List9[0].Lia[0].HouseholdIncomeRel2[0]"
