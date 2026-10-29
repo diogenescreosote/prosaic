@@ -348,3 +348,29 @@ def test_keep_runs_tie_the_right_lines():
     assert mp.keep_runs(skip_keep) == {0: 3}
     trailing = [line("a", "keep"), ([], 0.0)]
     assert mp.keep_runs(trailing) == {}, "the separator is never tied"
+
+
+def test_keep_paragraph_starting_on_the_last_grid_line_moves_whole(tmp_path):
+    # Fillers put the paragraph's FIRST line on the page's last grid line,
+    # so the page would turn after it, before the break, not at it. keep
+    # still moves the whole three-line paragraph to the next page.
+    def body(n: int) -> str:
+        # One two-line filler shifts parity so the start can hit the last line.
+        filler = "\n\n".join(f"Filler paragraph {i}." for i in range(n))
+        return (f"Filler lead \\newline continued.\n\n{filler}\n\n"
+                f"#. Short request, \\newline which is \\newline{{keep}} "
+                f"{FILLIN}\n\n#. Next.")
+
+    for n in range(8, 24):
+        plain = build(tmp_path, body(n).replace("{keep}", ""))
+        if page_of(plain, "Short request,") == 0 and page_of(plain, "which is") == 1:
+            break
+    else:
+        raise AssertionError("never placed the first line on the last grid line")
+    kept = build(tmp_path, body(n))
+    for needle in ("Short request,", "which is", FILLIN):
+        assert page_of(kept, needle) == 1, needle
+    assert page_of(kept, f"Filler paragraph {n - 1}.") == 0
+    page2 = page_lines(kept, 1)
+    ys = [next(ln[0] for ln in page2 if s in ln[2]) for s in ("Short request,", "which is", FILLIN)]
+    assert abs((ys[1] - ys[0]) - pitch(page2)) < 0.5 and abs((ys[2] - ys[1]) - pitch(page2)) < 0.5

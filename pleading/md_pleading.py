@@ -4806,18 +4806,18 @@ class PleadingPDF:
                     and not block_lines[-1][0]):
                 block_lines = block_lines[:-1]
 
-            # \newline{keep}: the line after the break stays on the page
-            # of the line before it. If the page would otherwise turn
-            # inside a tied run, move the whole paragraph to a fresh page
-            # when it fits on one; a paragraph longer than a page breaks
-            # a line earlier instead (the per-line check below).
+            # \newline{keep}: the whole paragraph, every line before and
+            # after the break, stays on one page whenever it fits on one.
+            # If it cannot finish on this page, it starts on the next. A
+            # paragraph longer than a page may split, but never at the
+            # break: the per-line check below turns the page a line
+            # earlier so the tied lines travel together.
             tied = keep_runs(block_lines)
             if tied and current_line != 1:
                 content_lines = sum(1 for words, _ in block_lines if words)
                 bottom = self.lines_per_page - self._fn_area_lines
-                if content_lines <= self.lines_per_page and any(
-                        current_line + start <= bottom < current_line + start + length - 1
-                        for start, length in tied.items()):
+                if (content_lines <= self.lines_per_page
+                        and current_line + content_lines - 1 > bottom):
                     self.start_page()
                     current_line = 1
 

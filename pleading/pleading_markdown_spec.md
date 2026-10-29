@@ -138,7 +138,7 @@ NOT full Markdown:
 | `[^id]` | footnote reference marker |
 | `\newline` (or two trailing spaces at the end of a source line) | hard line break: the paragraph continues on the next grid line, with no blank line and no new paragraph number (see **Hard line breaks** under **Block quotes**) |
 | `\newline{skip}` | hard line break plus one empty grid line, still inside the same paragraph |
-| `\newline{keep}` | hard line break whose continuation stays on the same page as the line before it (the paragraph moves to the next page whole when it fits on one; a longer paragraph turns the page a line earlier) |
+| `\newline{keep}` | hard line break whose paragraph stays whole on one page whenever it fits on one (it starts on the next page if it cannot finish on this one; a paragraph longer than a page never splits at the break) |
 | `\newline{skip,keep}` | the flags are independent and combine in either order |
 
 `\fixedwidth{...}` is the construct for file paths, hashes, Bates
@@ -1794,12 +1794,12 @@ order (`\newline{skip}`, `\newline{keep}`, `\newline{skip,keep}`):
 
 - `skip`: one empty grid line before the continuation, still inside
   the paragraph (no new paragraph, no new number).
-- `keep`: the continuation must land on the same page as the line
-  before the break. If the page would otherwise turn at that break,
-  the whole paragraph moves to the next page when it fits on one;
-  a paragraph longer than a page turns the page a line earlier
-  instead, so the ruling line is never orphaned from its order. DOCX
-  marks the paragraph keep-lines-together (`w:keepLines`).
+- `keep`: the whole paragraph, every line before and after the break,
+  stays on one page whenever it fits on one: if it cannot finish on
+  the current page, it starts on the next. Only a paragraph longer
+  than a page may split, and then never at the break (the page turns
+  a line earlier), so the ruling line is never orphaned from its
+  order. DOCX marks the paragraph keep-lines-together (`w:keepLines`).
 
 Plain `\newline`, and the trailing-spaces synonym (plain form only),
 do neither: the break alone, with page turns allowed as in any
