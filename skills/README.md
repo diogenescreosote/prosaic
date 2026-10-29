@@ -72,4 +72,5 @@ depends on a particular harness.
 | [run-flow](run-flow/SKILL.md) | Run or write a files-first flow: agent/judge/gate graphs for drafting loops and review passes |
 | [new-matter](new-matter/SKILL.md) | Scaffold a matter directory: layout, git, hooks, contracts, backup |
 | [redact](redact/SKILL.md) | Redact a filing from a declared schedule, then prove the output before anyone sees it |
+| [highlight](highlight/SKILL.md) | Make a highlighted excerpt of a received PDF, boxes anchored to the printed words, then look at the rendered page |
 - [migrate-knowledge/SKILL.md](migrate-knowledge/SKILL.md) --- fold a legacy single-file KNOWLEDGE.md, split into staging by `sc knowledge migrate`, into the vault of typed notes (ADR-0043)

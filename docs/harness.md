@@ -38,7 +38,7 @@ output on a small model at low effort.
 ```
 
 Alongside the relay commands, the **knowledge skills** from `skills/`
-are installed into the same directory --- `redact`,
+are installed into the same directory --- `redact`, `highlight`,
 `drafting-conventions`, `triage-inbox`, `prove-electronic-service`,
 `fill-form`, `build-envelope`, `migrate-knowledge`, `proof`,
 `docuseal`, `run-flow`, `phone-logs`, `crypto-attest`, `estate-plan`.

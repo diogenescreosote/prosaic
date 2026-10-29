@@ -993,10 +993,16 @@ python3 <prosaic>/pleading/highlight_pdf.py assets/received/long_declaration.pdf
 ```
 
 The output holds only the selected pages (`--pages` takes the `pages`
-syntax above; omit it for the whole file) with a yellow highlight
-annotation on each phrase, one rectangle per printed line. The original
-is never modified: output always goes to a new path, and the tool refuses
-an output path that is the input.
+syntax above; omit it for the whole file) with a translucent yellow
+highlight on each phrase, one rectangle per printed line. The highlight
+is **drawn into the page content**, never added as an annotation: the
+renderer imports exhibit pages with pypdf and scales and centers each
+one into its box, and an annotation does not follow that transform, so
+an annotated excerpt that looked right on its own had every box a line
+off the words in the built packet. Content drawing survives the import
+and prints the same everywhere. The original is never modified: output
+always goes to a new path, and the tool refuses an output path that is
+the input.
 
 The highlights are anchored to the **printed words**, not to the text
 layer. A scan has no text layer, and a scan that ocrmypdf has deskewed

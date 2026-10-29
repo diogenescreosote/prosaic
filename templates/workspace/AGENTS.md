@@ -226,6 +226,22 @@ written term list, then a render handed to a human.
 Redact from the court-filed version. Match the unit to the structure —
 a table row, not a phrase; in prose, the minimum phrase, not the line.
 
+## Highlighting: never hand-place; verify by looking at the page
+
+An exhibit excerpt that draws the court's eye to passages of a received
+document is made with the `highlight` skill, never with boxes placed by
+hand and never with the redaction tools:
+
+```bash
+python3 <prosaic>/pleading/highlight_pdf.py <in.pdf> <out.pdf> --pages 4,10 --phrase "..." [--mode image]
+```
+
+The original is never modified. Exit 2 means a phrase landed nowhere:
+fix the phrase or the pages, do not attach. `--mode image` for a
+deskewed scan. Then render the output and look at every page before
+it goes in an envelope; the exhibit's title says "with the ...
+passages highlighted."
+
 ## Conduct
 
 You are a clerk, not a lawyer. Catalog, route, summarize, draft.

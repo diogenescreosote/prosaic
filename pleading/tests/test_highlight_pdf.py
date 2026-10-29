@@ -58,9 +58,16 @@ def expected_region() -> "fitz.Rect":
 
 
 def highlight_rects(pdf: Path, page_index: int = 0) -> list:
+    """The yellow filled rectangles drawn into the page content. A
+    highlight is never an annotation (see the module docstring of the
+    tool), so this reads the content stream, not the annots."""
     with fitz.open(pdf) as doc:
         page = doc[page_index]
-        return [a.rect for a in page.annots() if a.type[1] == "Highlight"]
+        assert not list(page.annots()), "a highlight must be content, not an annotation"
+        return [
+            d["rect"] for d in page.get_drawings()
+            if d.get("fill") and tuple(round(c, 2) for c in d["fill"]) == hp.HIGHLIGHT_FILL
+        ]
 
 
 def run(*args):
@@ -79,6 +86,52 @@ def test_text_mode_highlights_where_the_text_was_drawn(digital_pdf, tmp_path):
     assert len(rects) == 1
     assert rects[0].intersects(expected_region()), (rects[0], expected_region())
     assert not highlight_rects(out, 0) and not highlight_rects(out, 2)
+
+
+def test_highlight_is_drawn_into_the_content_not_an_annotation(digital_pdf, tmp_path):
+    """The renderer imports exhibit pages with pypdf and scales each into
+    its box; an annotation does not follow that transform, so a packet
+    built from an annotated excerpt had every box a line off the words.
+    The highlight must therefore live in the content stream."""
+    out = tmp_path / "out.pdf"
+    proc = run(digital_pdf, out, "--phrase", PHRASE, "--mode", "text")
+    assert proc.returncode == 0, proc.stdout + proc.stderr
+    with fitz.open(out) as doc:
+        page = doc[1]
+        assert not list(page.annots())
+        stream = page.read_contents()
+        assert b" re" in stream and b"f" in stream, "no filled rectangle in the content"
+        drawn = [
+            d for d in page.get_drawings()
+            if d.get("fill") and tuple(round(c, 2) for c in d["fill"]) == hp.HIGHLIGHT_FILL
+        ]
+        assert len(drawn) == 1
+        assert drawn[0]["rect"].intersects(expected_region())
+        assert 0 < drawn[0]["fill_opacity"] < 1, "translucent, so the words stay legible"
+        # the words under the box are still there and still searchable
+        assert page.search_for(PHRASE)
+
+    # and the box survives a pypdf import with a scale-and-center
+    # transform, which is what the pleading renderer does to an exhibit
+    from pypdf import PdfReader, PdfWriter, Transformation
+
+    reader = PdfReader(str(out))
+    writer = PdfWriter()
+    src_page = reader.pages[1]
+    box = writer.add_blank_page(width=PAGE_W, height=PAGE_H)
+    box.merge_transformed_page(src_page, Transformation().scale(0.8).translate(61, 79))
+    scaled = tmp_path / "scaled.pdf"
+    with open(scaled, "wb") as fh:
+        writer.write(fh)
+    with fitz.open(scaled) as doc:
+        page = doc[0]
+        drawn = [
+            d for d in page.get_drawings()
+            if d.get("fill") and tuple(round(c, 2) for c in d["fill"]) == hp.HIGHLIGHT_FILL
+        ]
+        assert len(drawn) == 1
+        words = page.search_for(PHRASE)
+        assert words and drawn[0]["rect"].intersects(words[0]), (drawn[0]["rect"], words[0])
 
 
 @pytest.mark.skipif(shutil.which("tesseract") is None,

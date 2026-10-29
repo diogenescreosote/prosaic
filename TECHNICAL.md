@@ -30,7 +30,7 @@ already have. The machinery stays local and is never shared.
 
 **Spec-first, tested always.** Every component has a contract in
 [specs/](specs/); every decision that constrains later work is an ADR in
-[design/](design/); 1057 tests, with `ruff` and `mypy --strict` clean.
+[design/](design/); 1063 tests, with `ruff` and `mypy --strict` clean.
 
 ## Security, in technical terms
 
@@ -103,6 +103,7 @@ an agent loads on demand ([skills/README.md](skills/README.md),
 | [fill-form](skills/fill-form/SKILL.md) | Fill a Judicial Council form from its descriptor, with the verification discipline |
 | [drafting-conventions](skills/drafting-conventions/SKILL.md) | Pagination and signature-block discipline: what the renderer enforces, what the drafter judges |
 | [redact](skills/redact/SKILL.md) | Redact from a declared schedule, then prove the output |
+| [highlight](skills/highlight/SKILL.md) | A highlighted excerpt of a received PDF, boxes anchored to the printed words by `highlight_pdf.py` |
 | [prove-electronic-service](skills/prove-electronic-service/SKILL.md) | Paper an e-service with POS-050/EFS-050 |
 | [docuseal](skills/docuseal/SKILL.md) | Send for e-signature; bring back the signed original and audit log |
 | [proof](skills/proof/SKILL.md) | Remote online notarization: send, poll, fetch |

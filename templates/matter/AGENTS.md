@@ -43,6 +43,7 @@ If there is no workspace contract above this directory, copy
 | OCR-supplement a PDF | `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>` |
 | Pull sources + triage now | `<prosaic>/cli/sc sync .` |
 | Redact a PDF | `python3 <prosaic>/pleading/redact_pdf.py …` |
+| Highlight passages of a received PDF (exhibit excerpt) | `python3 <prosaic>/pleading/highlight_pdf.py <in.pdf> <out.pdf> --pages … --phrase "…"` (load the `highlight` skill; `--mode image` for deskewed scans) |
 | Back up this matter | `<prosaic>/cli/sc backup push .` |
 
 Configuration: `matter.yaml` (case, connectors, backup),

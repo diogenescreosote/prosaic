@@ -263,7 +263,13 @@ def test_knowledge_skills_reach_the_matter(matter: Path) -> None:
     proc = sc("harness", "install", str(matter))
     assert proc.returncode == 0, proc.stderr
     skills = matter / ".claude" / "skills"
-    for name in ("redact", "drafting-conventions", "triage-inbox", "prove-electronic-service"):
+    for name in (
+        "redact",
+        "highlight",
+        "drafting-conventions",
+        "triage-inbox",
+        "prove-electronic-service",
+    ):
         assert (skills / name / "SKILL.md").exists(), (
             f"{name} did not reach the matter; the workspace contract tells agents to load it"
         )

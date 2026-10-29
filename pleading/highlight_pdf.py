@@ -1,6 +1,14 @@
 #!/usr/bin/env python3
-"""Place yellow highlight annotations on phrases in a PDF, anchored to the
-printed words rather than to the text layer.
+"""Paint yellow highlights on phrases in a PDF, anchored to the printed
+words rather than to the text layer.
+
+The highlight is drawn into the page content (a translucent filled
+rectangle), not added as an annotation. The pleading renderer imports
+exhibit pages with pypdf and scales and centers each one into its box,
+and annotations do not travel with that transform: an annotated excerpt
+looked right on its own and had every box a line off in the built
+packet. Content drawing survives any import and prints the same way
+everywhere.
 
 Why this exists: highlighting with `page.search_for` on the text layer
 puts the box where the text layer says the words are. On an image-only
@@ -50,6 +58,22 @@ MODES = ("auto", "text", "image")
 MAX_NOISE = 2          # stray tokens tolerated between two matched words
 PREFIX_MIN = 4         # tokens at least this long may match by prefix
 PAD_PT = 1.0           # vertical padding on each highlight rectangle
+HIGHLIGHT_FILL = (1.0, 1.0, 0.0)   # yellow
+HIGHLIGHT_OPACITY = 0.4            # translucent, so the words stay legible
+
+
+def paint(page: "fitz.Page", rect: "fitz.Rect") -> None:
+    """Draw one highlight into the page's content stream, over the text.
+
+    Never an annotation: see the module docstring for why.
+    """
+    page.draw_rect(
+        rect,
+        color=None,
+        fill=HIGHLIGHT_FILL,
+        fill_opacity=HIGHLIGHT_OPACITY,
+        overlay=True,
+    )
 
 
 # ---------------------------------------------------------------------------
@@ -318,7 +342,7 @@ def highlight(
                     rects = text_rects(page, ph)
                     if rects:
                         for r in rects:
-                            page.add_highlight_annot(r)
+                            paint(page, r)
                         count += len(rects)
                         found[ph] = True
                     else:
@@ -339,7 +363,7 @@ def highlight(
                     for ph in pending:
                         for hit in find_phrase(words, ph):
                             for r in line_rects(hit):
-                                page.add_highlight_annot(r)
+                                paint(page, r)
                                 placed += 1
                             found[ph] = True
                     if placed:
