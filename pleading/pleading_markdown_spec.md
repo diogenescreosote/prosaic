@@ -978,6 +978,44 @@ Configuration rules:
   `path`; that legacy combination is rejected because the two strategies
   conflict
 
+#### Highlighted exhibit excerpts
+
+When a declaration points the court at particular passages of a long
+received document, attach an excerpt with those passages highlighted,
+made with `pleading/highlight_pdf.py`:
+
+```bash
+python3 <prosaic>/pleading/highlight_pdf.py assets/received/long_declaration.pdf \
+    exhibits/long_declaration_pp4_10_excerpt.pdf \
+    --pages 4,10 \
+    --phrase "asked the school to enforce the order" \
+    --phrase "appearing at the school unannounced"
+```
+
+The output holds only the selected pages (`--pages` takes the `pages`
+syntax above; omit it for the whole file) with a yellow highlight
+annotation on each phrase, one rectangle per printed line. The original
+is never modified: output always goes to a new path, and the tool refuses
+an output path that is the input.
+
+The highlights are anchored to the **printed words**, not to the text
+layer. A scan has no text layer, and a scan that ocrmypdf has deskewed
+often carries an OCR layer shifted from the picture, so a text-layer
+search puts the box beside the words a reader sees. The default
+`--mode auto` searches the text layer first and, for a page with no
+text layer or a phrase the layer does not find, renders the page
+(`--dpi`, default 200), OCRs it with tesseract and boxes the pixels.
+`--mode image` always OCRs the picture (use it on a deskewed scan whose
+layer *does* find the phrase, in the wrong place); `--mode text` never
+does. Matching tolerates a pleading line number or stray glyph between
+two words and a hyphenated word split across lines.
+
+The report on stdout counts the rectangles placed on each output page
+and lists every phrase that matched on no selected page; any miss exits
+with status 2, so a build script notices and the drafter learns the
+first time that a phrase did not land. Attach the output as an ordinary
+exhibit `path`; its page citation follows the excerpt's own numbering.
+
 Supported attachment file types:
 
 - `.pdf`

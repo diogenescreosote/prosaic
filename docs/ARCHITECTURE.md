@@ -31,6 +31,9 @@ pleading/       the renderer and the form filler.
                       the descriptors, never in the engine (ADR-0006).
   ocr_supplement.py   adds a text layer only to pages that lack one.
   redact_pdf.py       true redaction of received PDFs.
+  highlight_pdf.py    highlighted excerpts of received PDFs, the boxes
+                      anchored to the printed words by OCR when the text
+                      layer is absent or shifted.
 cli/sc          the entry point: init, sync, form, ocr, build, hooks.
 connectors/     one process per source (gmail, mycase), each conforming to
                 the NEW-line contract in ADR-0003.
