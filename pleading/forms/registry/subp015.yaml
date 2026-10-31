@@ -217,10 +217,11 @@ fields:
       "(TYPE OR PRINT NAME)" under the issuing signature. An attorney of
       record issues a deposition subpoena without any court order (CCP
       § 2020.210(b)); a self-represented party has the clerk issue it on
-      a blank and fills the rest. Pre-filled from filer_name (SBN
-      suffix stripped) so only the signature and date remain for the
-      human. The signature line itself has no widget.
+      a blank and writes this line. Drawn
+      from filer_name (SBN suffix stripped) only for an attorney filer.
+      The signature line itself has no widget.
     auto: filer_name_bare
+    when: filer_bar_number
     fit: shrink
   issuer_title:
     map: "SUBP-015[0].Page1[0].Sign[0].TextField9[0]"
@@ -230,6 +231,7 @@ fields:
       to filer_role verbatim. (Widget leaf name TextField9 repeats the
       page-2 address-where-served box under a different parent.)
     auto: filer_role
+    when: filer_bar_number
     fit: shrink
 
   # ---- Page 2: proof-of-service caption echo ---------------------------
@@ -525,9 +527,10 @@ agent_guide: |
   pending (CCP § 2025.250); the form's item 3 recites this.
 
   ALWAYS LEFT BLANK — do not fill:
-    - date_issued and the issuing signature (issuer_print_name and
-      issuer_title ARE pre-filled; the pen strokes and the date remain
-      for the human);
+    - date_issued and the issuing signature (issuer_print_name and issuer_title are drawn only for an attorney
+      of record (when: filer_bar_number). A self-represented party never
+      issues: the clerk issues on a court blank and writes the date, the
+      clerk's name and "Deputy Clerk" there, so those lines stay blank);
     - every page-2 proof-of-service field and checkbox (pos_*) — the
       server completes them after service, and the copy served on the
       deponent carries page 2 blank.

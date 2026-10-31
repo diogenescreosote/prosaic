@@ -995,3 +995,26 @@ def test_subpoena_addressee_stacks_with_phone_in_its_own_column(form_id, block, 
     assert tel[0][0] > name[0][2] + 10, "phone sits in a column to the right"
     assert abs(tel[0][3] - name[0][3]) < 0.5, "phone is level with the name"
     assert tel[1] == name[1], "phone and address draw at one size"
+
+
+@pytest.mark.parametrize("form_id", ["subp001", "subp002", "subp010", "subp015"])
+def test_subpoena_issuer_lines_are_never_drawn_for_a_self_represented_filer(form_id, tmp_path):
+    """The clerk issues a self-represented party's subpoena: the issuer's
+    name and title stay blank, even when a value is supplied. An attorney
+    of record still gets them."""
+    if form_id not in FORMS:
+        pytest.skip(f"{form_id} descriptor not present")
+    pro_per = dict(FIXTURE_META, filer_role="Respondent, In Pro Per")
+    out = tmp_path / "pro_per.pdf"
+    res = form_fill.fill(form_id, out, meta=pro_per,
+                         data={"issuer_title": "Respondent, In Pro Per"})
+    assert probe.field_text(out, form_id, "issuer_print_name") == ""
+    assert probe.field_text(out, form_id, "issuer_title") == ""
+    assert any("issuer_title: left blank" in w for w in res.warnings)
+
+    counsel = dict(FIXTURE_META, filer_name="Jane Roe (SBN 123456)",
+                   filer_bar_number="123456", filer_role="Attorney for Respondent")
+    out2 = tmp_path / "counsel.pdf"
+    form_fill.fill(form_id, out2, meta=counsel)
+    assert "Roe" in probe.field_text(out2, form_id, "issuer_print_name")
+    assert "Attorney" in probe.field_text(out2, form_id, "issuer_title")

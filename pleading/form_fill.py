@@ -749,9 +749,19 @@ def resolve_values(
                 val = fn(meta) or val
         if name in form_block:
             val = form_block[name]
+        explicit = name in form_block or name in data
         if name in data:
             val = data.pop(name)
         val = "" if val is None else str(val)
+        # ``when: <meta key>``: the field exists only for filers who have
+        # that key (a subpoena's issuer lines need a bar number; for a
+        # self-represented party the clerk issues and they stay blank).
+        # A value supplied anyway is dropped, never drawn.
+        when = spec.get("when")
+        if when and not str(meta.get(when) or "").strip():
+            if explicit and val.strip():
+                problems.append(f"field {name}: left blank because '{when}' is not set")
+            val = ""
         if spec.get("required") and not val.strip():
             problems.append(f"required field '{name}' is empty")
         texts[name] = val

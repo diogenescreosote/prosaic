@@ -22,7 +22,11 @@ of programming.
 2. **Nothing is signed, dated, or decided by the machine.** Signature
    lines, date-of-signature lines, role checkboxes, and court-use
    fields (hearing details, judicial officer) are always left blank
-   for the human or the court. *(tested)*
+   for the human or the court. *(tested)* A self-represented filer is
+   never written in as the issuer of a subpoena: the clerk issues it,
+   so the issuer's name and title stay blank unless the filer has a
+   bar number. *(tested:
+   test_subpoena_issuer_lines_are_never_drawn_for_a_self_represented_filer)*
 3. **Text that cannot fit becomes a proper attachment.** Rather than
    shrinking below legibility or truncating — either of which changes
    what the court reads — overflow produces "See Attachment N." plus a

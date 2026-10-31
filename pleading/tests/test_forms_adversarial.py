@@ -69,7 +69,10 @@ def test_every_field_lands_in_its_own_box(form_id, tmp_path):
     # on both sides, so no token contains another.
     tokens = {name: f"Z{i}J" for i, name in enumerate(fields)}
     out = tmp_path / f"{form_id}.pdf"
-    form_fill.fill(form_id, out, meta={}, data=dict(tokens))
+    # A `when:`-gated field is drawn only when its key is set; set them
+    # all, so every field is put to the test.
+    gates = {s["when"]: "x" for s in fields.values() if s.get("when")}
+    form_fill.fill(form_id, out, meta=gates, data=dict(tokens))
 
     problems = []
     for name, spec in fields.items():

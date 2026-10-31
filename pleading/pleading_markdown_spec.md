@@ -694,6 +694,15 @@ a line reserved for counsel (an attorney's fee confirmation, say):
 asked to sign it. The geometry preview still draws the area, labeled
 with its condition. *(tested: tests/test_esign_geometry.py)*
 
+**Conditional fields.** A field (not only an e-sign area) may carry
+`when: <front-matter key>`: it is drawn only when that key is
+non-empty, and a value supplied for it anyway is dropped with a
+warning rather than drawn. The subpoena forms gate their issuer name
+and title on `when: filer_bar_number`: an attorney of record issues a
+subpoena, a self-represented party never does --- the clerk issues it
+on a court blank and writes the date, the clerk's name and "Deputy
+Clerk" there. *(tested: test_subpoena_issuer_lines_are_never_drawn_for_a_self_represented_filer)*
+
 The `court_county` field should hold just the county name (e.g.
 `"SAN FRANCISCO"`) rather than `"COUNTY OF EXAMPLE"`; the generator accepts
 either form and strips the redundant prefix.

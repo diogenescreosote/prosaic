@@ -185,6 +185,10 @@ fields:
     map: "..."
     doc: "LEAVE BLANK — hand-dated at signature"
     default: ""
+  issuer_title:
+    map: "..."
+    auto: filer_role
+    when: filer_bar_number   # drawn only when this front-matter key is set
 
 checkboxes:
   method_mail_to_officer:

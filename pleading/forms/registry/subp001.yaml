@@ -238,11 +238,12 @@ fields:
     map: "SUBP-001[0].Page1[0].Sign[0].SigName[0]"
     page: 1
     doc: >-
-      "(TYPE OR PRINT NAME)" under the issuing signature — the filer,
-      pre-filled from filer_name (SBN suffix stripped) so only the
-      signature and date remain for the human. The signature line
+      "(TYPE OR PRINT NAME)" under the issuing signature. Drawn only for
+      an attorney of record (from filer_name, SBN suffix stripped); for a
+      self-represented party the clerk issues and writes this line. The signature line
       itself has no widget.
     auto: filer_name_bare
+    when: filer_bar_number
     fit: shrink
   issuer_title:
     map: "SUBP-001[0].Page1[0].Sign[0].FillText108[0]"
@@ -252,6 +253,7 @@ fields:
       to filer_role verbatim. (Note the widget name FillText108 repeats
       item 2's contact-name widget under a different parent.)
     auto: filer_role
+    when: filer_bar_number
     fit: shrink
 
   # ---- Page 2: proof-of-service caption echo ---------------------------
@@ -479,9 +481,10 @@ agent_guide: |
   checkbox; fill only what the court actually uses.
 
   ALWAYS LEFT BLANK — do not fill:
-    - date_issued and the issuing signature (issuer_print_name and
-      issuer_title ARE pre-filled; the pen strokes and the date remain
-      for the human);
+    - date_issued and the issuing signature (issuer_print_name and issuer_title are drawn only for an attorney
+      of record (when: filer_bar_number). A self-represented party never
+      issues: the clerk issues on a court blank and writes the date, the
+      clerk's name and "Deputy Clerk" there, so those lines stay blank);
     - every page-2 proof-of-service field and checkbox (pos_*) — the
       server completes them after service, and the copy served on the
       witness carries page 2 blank.
