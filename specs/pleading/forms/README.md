@@ -64,6 +64,21 @@ of programming.
    --- measures the face actually drawn, so a wider face cannot clip
    silently; an unknown face fails the fill. *(tested: the fill-font
    tests in pleading/tests/test_forms.py)*
+10. **A form can be printed onto preprinted stock.** `--ink-only`
+    writes only what the fill draws --- values and checkbox marks ---
+    on empty pages the size of the blank's, one per blank page and in
+    the blank's order (so a stack of blanks loaded in the printer
+    lines up page for page; `--pages` and `filed_pages` subset it the
+    same way). Nothing of the printed form is reproduced: no rules,
+    labels or whiteouts. The values sit exactly where the ordinary
+    fill puts them, so the two outputs overlay to the point.
+    `--offset DX,DY` (points, right and up) shifts every value to
+    compensate for a printer's feed, and nothing else. An ink-only
+    fill writes no e-sign sidecar (the stock is wet-signed), and
+    overflow attachments, being full forms of their own, go to a
+    separate `<name>.attachments.pdf` for plain paper rather than
+    into the stack meant for blanks. *(tested: the ink-only tests in
+    pleading/tests/test_forms.py)*
 
 ## Non-obvious constraints
 

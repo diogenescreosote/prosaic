@@ -24,6 +24,12 @@ code path (ADR-0006).
    `front_matter_defaults`, or `--font` is passed. Courier is wider:
    after switching, re-look at every form for new shrink, wrap or
    overflow. Column fields under printed headings take `align: center`.
+6. Preprinted stock: `--ink-only` emits only the values, on empty
+   pages the size of the blank's, for printing onto printed blank forms
+   (subpoenas especially). Print at 100%; calibrate a printer with a
+   plain-paper test and `--offset DX,DY` (points). Overflow then lands
+   in `<name>.attachments.pdf`. See `docs/forms.md`, "Printing onto
+   preprinted blanks."
 
 ## The verification discipline (non-negotiable)
 

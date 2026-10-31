@@ -856,3 +856,111 @@ def test_ra020_columns_center_under_their_headings_and_stay_level(tmp_path, font
         assert abs((n_rect.x0 + n_rect.x1) / 2 - name_x) < 1.5, name
         assert abs((r_rect.x0 + r_rect.x1) / 2 - role_x) < 1.5, role
         assert abs(n_rect.y1 - r_rect.y1) < 0.5, f"{name} not level with {role}"
+
+
+# ---------------------------------------------------------------------------
+# Ink-only output, for printing onto preprinted stock (forms promise 10)
+# ---------------------------------------------------------------------------
+
+
+def _placed_words(pdf: Path) -> list[list[tuple[str, tuple[float, ...]]]]:
+    """Every word per page with its box, rounded so equal placements
+    compare equal."""
+    import fitz
+
+    with fitz.open(str(pdf)) as doc:
+        return [
+            sorted((w[4], tuple(round(v, 1) for v in w[:4])) for w in page.get_text("words"))
+            for page in doc
+        ]
+
+
+def _without(words: list, minus: list) -> list:
+    rest = list(words)
+    for w in minus:
+        if w in rest:
+            rest.remove(w)
+    return rest
+
+
+@pytest.mark.parametrize("form_id", FORMS)
+def test_ink_only_draws_exactly_the_fills_values_on_empty_pages(form_id, tmp_path):
+    """Same pages and page sizes as the ordinary fill, the same values at
+    the same coordinates, and nothing of the printed form: no vector
+    rules, no printed words, no form layer, no e-sign sidecar."""
+    import fitz
+
+    desc = form_fill.load_descriptor(form_id)
+    data = form_fill._sample_data(desc)
+    full, ink = tmp_path / "full.pdf", tmp_path / "ink.pdf"
+    form_fill.fill(form_id, full, meta=dict(FIXTURE_META), data=data)
+    form_fill.fill(form_id, ink, meta=dict(FIXTURE_META), data=data, ink_only=True)
+
+    base = len(PdfReader(str(form_fill.blank_path(desc))).pages)
+    pages_spec = desc.get("filed_pages")
+    keep = form_fill.parse_page_spec(pages_spec, base) if pages_spec else list(range(base))
+    full_pages, ink_pages = PdfReader(str(full)).pages, PdfReader(str(ink)).pages
+    # The ordinary fill may carry MC-025 pages after the form; ink-only
+    # never does (they go to a separate file).
+    assert len(ink_pages) == len(keep), f"{form_id}: one ink page per emitted blank page"
+    for f, i in zip(full_pages, ink_pages):
+        assert (f.mediabox.width, f.mediabox.height) == (i.mediabox.width, i.mediabox.height)
+
+    blank_words = _placed_words(form_fill.blank_path(desc))
+    full_words, ink_words = _placed_words(full), _placed_words(ink)
+    assert any(ink_words), f"{form_id}: ink-only output drew nothing"
+    for out_idx, blank_idx in enumerate(keep):
+        values = _without(full_words[out_idx], blank_words[blank_idx])
+        assert sorted(ink_words[out_idx]) == sorted(values), (
+            f"{form_id} page {out_idx + 1}: ink-only words differ from the fill's values"
+        )
+
+    with fitz.open(str(ink)) as doc:
+        assert not any(page.get_drawings() for page in doc), f"{form_id}: printed rules leaked"
+    assert probe.has_no_form_layer(ink)
+    assert not ink.with_name(ink.name + ".fields.json").exists()
+
+
+@pytest.mark.skipif("subp010" not in FORMS, reason="subp010 descriptor not present")
+def test_ink_only_offset_shifts_every_value_and_nothing_else(tmp_path):
+    data = form_fill._sample_data(form_fill.load_descriptor("subp010"))
+    plain, moved = tmp_path / "plain.pdf", tmp_path / "moved.pdf"
+    form_fill.fill("subp010", plain, meta=dict(FIXTURE_META), data=data, ink_only=True)
+    form_fill.fill(
+        "subp010", moved, meta=dict(FIXTURE_META), data=data, ink_only=True, offset=(5.0, -3.0)
+    )
+    # PDF "up" is fitz "down": DY -3 moves every box 3 pt lower on the page.
+    shifted = [
+        sorted((t, tuple(round(v, 1) for v in (b[0] + 5, b[1] + 3, b[2] + 5, b[3] + 3)))
+               for t, b in page)
+        for page in _placed_words(plain)
+    ]
+    got = _placed_words(moved)
+    assert len(got) == len(shifted)
+    for want_page, got_page in zip(shifted, got):
+        assert len(want_page) == len(got_page)
+        for (wt, wb), (gt, gb) in zip(want_page, got_page):
+            assert wt == gt and all(abs(a - b) <= 0.15 for a, b in zip(wb, gb))
+    assert PdfReader(str(moved)).pages[0].mediabox == PdfReader(str(plain)).pages[0].mediabox
+
+
+def test_offset_without_ink_only_is_refused(tmp_path):
+    with pytest.raises(ValueError, match="ink-only"):
+        form_fill.fill("mc030", tmp_path / "x.pdf", meta=dict(FIXTURE_META), offset=(1.0, 0.0))
+
+
+@pytest.mark.skipif("mc025" not in FORMS, reason="mc025 descriptor not present")
+def test_ink_only_overflow_goes_to_a_separate_attachments_file(tmp_path):
+    out = tmp_path / "mc030_ink.pdf"
+    huge = "This declaration body is deliberately far too long for the box. " * 80
+    res = form_fill.fill(
+        "mc030", out, meta=dict(FIXTURE_META), data={"body": huge}, ink_only=True
+    )
+    base = len(PdfReader(str(form_fill.blank_path(form_fill.load_descriptor("mc030")))).pages)
+    assert len(PdfReader(str(out)).pages) == base, "attachments must not join the blank stack"
+    assert "See Attachment 1." in probe.all_text(out).replace("\n", " ")
+    attachments = tmp_path / "mc030_ink.attachments.pdf"
+    assert attachments.exists()
+    assert len(PdfReader(str(attachments)).pages) >= 1
+    assert "deliberately far too long" in probe.all_text(attachments)
+    assert any("attachments.pdf" in w for w in res.warnings)

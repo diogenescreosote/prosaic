@@ -46,7 +46,11 @@ subcommand's real promises live in that component's spec.
   fill one, dump its fields — and `sc form info <id>` prints enough
   (the descriptor's fields, checkboxes, and agent guide) for an
   agent that has never seen the form to fill it correctly without
-  reading the registry source. *(untested)* `sc form preview <id> -o
+  reading the registry source. *(untested)* `sc form fill <id>
+  --ink-only [--offset DX,DY]` emits only the drawn values, for
+  printing onto blank preprinted forms
+  ([forms promise 10](pleading/forms/README.md)). *(tested:
+  pleading/tests/test_forms.py ink-only tests)* `sc form preview <id> -o
   out.pdf` renders the blank with a translucent labeled box over every
   fillable and e-sign area (party-colored, type-labeled, with a
   legend) — the geometry sanity check that precedes trusting a new

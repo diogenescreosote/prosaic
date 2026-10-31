@@ -12,6 +12,7 @@ sc form list                 # registered forms
 sc form info subp010         # a form's agent guide + field schema
 sc form fill mc030 --meta caption.yaml --data values.yaml -o out.pdf
 sc form fill mc030 ... --font courier   # draw the values in Courier
+sc form fill subp010 ... --ink-only -o ink.pdf   # values only, to print onto preprinted blanks
 sc form fields blank.pdf     # introspect a new blank → descriptor skeleton
 sc form preview mc040 -o preview.pdf   # geometry check: colored boxes over every fillable/e-sign area
 sc form check                # fill + preview every registered form; exit 1 on any failure
@@ -268,6 +269,35 @@ and is left out of the sidecar when that key is empty. The converse,
 or among the form's own values: MC-040's mail proof-of-service declarant
 fields carry `unless: pos_service_note`, so a notice served electronically
 never asks anyone to sign the mail declaration.
+
+## Printing onto preprinted blanks (`--ink-only`)
+
+Some offices want the values typed onto the clerk's own printed
+stock --- an issued subpoena with the seal already on it, say --- rather
+than a full page printed from the PDF. `sc form fill <id> ... --ink-only
+-o ink.pdf` writes exactly what the ordinary fill draws (values and
+checkbox X's) and nothing else, at the same coordinates, on empty pages
+the size of the blank's. There is one page per blank page, in the
+blank's order, so a stack of blanks in the tray lines up page for page;
+`--pages` and `filed_pages` subset it just as they subset a normal fill.
+
+- **Print at actual size.** 100%, never "fit to page" or "shrink
+  oversized pages": scaling moves every value.
+- **Calibrate once per printer.** Print the ink-only page on plain
+  paper, lay it over a blank and hold both to a light. If the text sits
+  off its boxes by a constant amount, measure it and refill with
+  `--offset DX,DY` (points; 72 pt = 1 inch; positive is right and up,
+  negative left and down; write `--offset=-3,2` when DX is negative, or
+  the shell argument reads as a flag). The offset moves the values only.
+- **Two-sided stock.** A blank whose page 2 is printed on the back of
+  page 1 needs the ink-only output printed duplex the same way, or
+  fed through twice. Check with a plain-paper test which side and edge
+  the printer flips.
+- **What changes.** No e-sign sidecar is written (preprinted stock is
+  signed in ink), and text that overflows to MC-025 goes to a separate
+  `<name>.attachments.pdf`: those attachment pages are whole forms for
+  plain paper, and putting them in the same file would feed them onto
+  blanks.
 
 ## Two signing paths, and the date trap
 

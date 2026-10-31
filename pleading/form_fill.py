@@ -71,7 +71,7 @@ from typing import Any, Optional
 import yaml
 
 try:
-    from pypdf import PdfReader, PdfWriter
+    from pypdf import PageObject, PdfReader, PdfWriter
     from pypdf.generic import ArrayObject, NameObject
 except ImportError as exc:  # pragma: no cover
     raise SystemExit("form_fill requires 'pypdf' (pip install pypdf)") from exc
@@ -1000,9 +1000,18 @@ def fill(
     verbose: bool = False,
     pages: Optional[str] = None,
     font: Optional[str] = None,
+    ink_only: bool = False,
+    offset: tuple[float, float] = (0.0, 0.0),
 ) -> FillResult:
     """Fill a form per its descriptor. See module docstring. ``verbose``
     prints each single-line field's layout decision to stderr.
+
+    ``ink_only`` writes only what the fill draws, on empty pages the
+    size of the blank's and one per blank page, for printing onto
+    preprinted stock; ``offset`` (points, right and up) shifts it to
+    match a printer's feed. No e-sign sidecar is written, and MC-025
+    overflow pages go to ``<name>.attachments.pdf`` for plain paper
+    (specs/pleading/forms/README.md, promise 10).
 
     ``font`` chooses the overlay text font (:data:`FILL_FONTS`);
     without it the meta's ``form_fill_font``, then the descriptor's
@@ -1022,6 +1031,8 @@ def fill(
     decides: a blank whose trailing pages are its own instructions
     ("this page need not be filed") emits only the pages that are
     filed, on every path --- standalone fill and cover sheet alike."""
+    if any(offset) and not ink_only:
+        raise ValueError("offset applies only to an ink-only fill")
     desc = load_descriptor(form_id)
     if pages is None:
         pages = desc.get("filed_pages")
@@ -1192,9 +1203,12 @@ def fill(
     # rectangles first — the tool for static page junk that survives
     # widget removal, like the gray under-rectangles of stripped
     # privacy banners.
+    # Ink-only output reproduces nothing of the printed form, so the
+    # whiteouts that tidy the blank have nothing to cover.
     whiteouts: dict[int, list] = {}
-    for w in desc.get("whiteouts") or []:
+    for w in [] if ink_only else desc.get("whiteouts") or []:
         whiteouts.setdefault(int(w.get("page", 1)) - 1, []).append(w["rect"])
+    overlay_reader: Optional[PdfReader] = None
     if overlay_ops or whiteouts:
         import io
 
@@ -1202,6 +1216,8 @@ def fill(
         c = rl_canvas.Canvas(buf, pagesize=letter)
         max_page = max([*overlay_ops, *whiteouts])
         for i in range(max_page + 1):
+            c.saveState()
+            c.translate(*offset)
             for rect in whiteouts.get(i, []):
                 c.setFillColorRGB(1, 1, 1)
                 c.rect(
@@ -1244,10 +1260,30 @@ def fill(
                     ),
                 ):
                     c.drawString(x, y, line)
+            c.restoreState()
             c.showPage()
         c.save()
         buf.seek(0)
         overlay_reader = PdfReader(buf)
+
+    if ink_only:
+        # One empty page per blank page, same boxes and rotation, so the
+        # drawn values land where they would on the blank itself and a
+        # stack of blanks in the tray lines up page for page.
+        ink = PdfWriter()
+        for i, src in enumerate(writer.pages):
+            page = PageObject.create_blank_page(
+                width=float(src.mediabox.width), height=float(src.mediabox.height)
+            )
+            page.mediabox = src.mediabox
+            page.cropbox = src.cropbox
+            if overlay_reader is not None and i in overlay_ops and i < len(overlay_reader.pages):
+                page.merge_page(overlay_reader.pages[i])
+            if src.rotation:
+                page.rotate(src.rotation)
+            ink.add_page(page)
+        writer = ink
+    elif overlay_reader is not None:
         for i, page in enumerate(writer.pages):
             if (i in overlay_ops or i in whiteouts) and i < len(overlay_reader.pages):
                 page.merge_page(overlay_reader.pages[i])
@@ -1263,6 +1299,22 @@ def fill(
     output_path.parent.mkdir(parents=True, exist_ok=True)
     with open(output_path, "wb") as fh:
         writer.write(fh)
+
+    if ink_only:
+        # Attachments are whole forms for plain paper; kept out of the
+        # stack meant for blanks. The stock is wet-signed: no sidecar.
+        attachments = output_path.with_name(output_path.stem + ".attachments.pdf")
+        if result.overflows:
+            _append_mc025_attachments(attachments, meta or {}, result, fill_font, standalone=True)
+            result.warnings.append(
+                f"overflow attachments written to {attachments.name} --- print on plain paper"
+            )
+        elif attachments.exists():
+            attachments.unlink()
+        stale = output_path.with_name(output_path.name + ".fields.json")
+        if stale.exists():
+            stale.unlink()
+        return result
 
     # Materialize overflow attachments (MC-025), appended in order.
     if result.overflows:
@@ -1364,17 +1416,22 @@ def _chunk_for_mc025(text: str, rect: list[float], spec: dict) -> list[str]:
 
 
 def _append_mc025_attachments(
-    main_pdf: Path, meta: dict, result: FillResult, font: str = DEFAULT_FONT
+    main_pdf: Path,
+    meta: dict,
+    result: FillResult,
+    font: str = DEFAULT_FONT,
+    standalone: bool = False,
 ) -> None:
     """Append filled MC-025 page(s) per overflow to the output PDF.
 
     Text longer than one attachment page spans several MC-025s with
     "page N of M" filled — never silent truncation (spec:
     specs/pleading/forms/mc025.md). The attachments use the parent
-    fill's ``font``, and are chunked by measuring with it."""
+    fill's ``font``, and are chunked by measuring with it.
+    ``standalone`` writes the attachments alone to ``main_pdf``."""
     import tempfile
 
-    readers = [PdfReader(str(main_pdf))]
+    readers = [] if standalone else [PdfReader(str(main_pdf))]
     with tempfile.TemporaryDirectory() as td:
         for i, ov in enumerate(result.overflows):
             try:
@@ -1398,8 +1455,9 @@ def _append_mc025_attachments(
                 fill("mc025", att, meta=meta, data=data, font=font)
                 readers.append(PdfReader(str(att)))
         writer = PdfWriter()
-        writer.clone_document_from_reader(readers[0])
-        for r in readers[1:]:
+        if not standalone:
+            writer.clone_document_from_reader(readers.pop(0))
+        for r in readers:
             for page in r.pages:
                 writer.add_page(page)
         with open(main_pdf, "wb") as fh:
@@ -1860,6 +1918,20 @@ def main() -> int:
         help="overlay text font (default: the meta's form_fill_font, else "
         "the descriptor's font, else helvetica)",
     )
+    sp.add_argument(
+        "--ink-only",
+        action="store_true",
+        help="write only the values, on empty pages sized like the blank's, "
+        "for printing onto preprinted blank forms (print at 100%%, no "
+        "fit-to-page); overflow attachments go to <name>.attachments.pdf",
+    )
+    sp.add_argument(
+        "--offset",
+        metavar="DX,DY",
+        help="with --ink-only: shift every value DX points right and DY up "
+        "(negative for left/down) to match a printer's feed; 72 pt = 1 inch; "
+        "write --offset=-3,2 when DX is negative",
+    )
 
     sp = sub.add_parser("info",help="show a form's agent guide + field schema")
     sp.add_argument("form_id")
@@ -1936,6 +2008,15 @@ def main() -> int:
     if args.cmd == "fill":
         data = yaml.safe_load(Path(args.data).read_text()) if args.data else {}
         meta = yaml.safe_load(Path(args.meta).read_text()) if args.meta else {}
+        offset = (0.0, 0.0)
+        if args.offset:
+            if not args.ink_only:
+                p.error("--offset applies only with --ink-only")
+            try:
+                dx, dy = (float(v) for v in args.offset.split(","))
+            except ValueError:
+                p.error(f"--offset wants DX,DY in points, got {args.offset!r}")
+            offset = (dx, dy)
         res = fill(
             args.form_id,
             Path(args.output),
@@ -1944,6 +2025,8 @@ def main() -> int:
             verbose=bool(getattr(args, "verbose", False)),
             pages=getattr(args, "pages", None),
             font=getattr(args, "font", None),
+            ink_only=args.ink_only,
+            offset=offset,
         )
         for w in res.warnings:
             print(f"warning: {w}", file=sys.stderr)
