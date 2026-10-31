@@ -135,17 +135,34 @@ fields:
     fit: shrink
 
   # ---- Page 1: the witness ---------------------------------------------
+  # The People box (FillText1, 476-517) is three lines tall. Name and
+  # address stack in its left part; the phone sits in a column to the
+  # right, level with the name (size_group keeps the two one size).
   witness:
-    map: "SUBP-001[0].Page1[0].People[0].FillText1[0]"
+    rect: [72, 476, 360, 517]
     page: 1
     doc: >-
       "THE PEOPLE OF THE STATE OF CALIFORNIA, TO (name, address, and
       telephone number of witness, if known)" — the person commanded to
-      appear. One single-line box: keep it to one line (it shrinks to
-      6 pt) and abbreviate rather than newline it.
+      appear, written STACKED, one line each: name, street address,
+      city/state/ZIP ("Mavis Example\n500 Market Street\nExample City,
+      CA 90000"). The phone goes in witness_phone, not here.
     default: ""
-    fit: shrink
+    multiline: true
+    fit: shrink_wrap
     min_font_size: 6
+    size_group: witness_block
+  witness_phone:
+    rect: [372, 476, 575, 517]
+    page: 1
+    doc: >-
+      The witness's telephone number, if known: drawn in its own column
+      to the right of the stacked address, level with the name line.
+    default: ""
+    align: left
+    valign: top
+    fit: shrink
+    size_group: witness_block
 
   # ---- Page 1, Item 1: the appearance ----------------------------------
   hearing_date:
@@ -442,9 +459,11 @@ agent_guide: |
   USUAL INVOCATION — standalone fill:
 
       sc form fill subp001 out.pdf --meta case.yaml --data - <<'YAML'
-      witness: >-
-        Mavis Example, 500 Market Street, Example City, CA 90000,
-        (555) 555-0199
+      witness: |-
+        Mavis Example
+        500 Market Street
+        Example City, CA 90000
+      witness_phone: "(555) 555-0199"
       hearing_date: "October 15, 2026"
       hearing_time: "9:00 a.m."
       dept_checkbox: true

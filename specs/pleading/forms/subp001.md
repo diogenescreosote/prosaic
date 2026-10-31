@@ -49,3 +49,11 @@ SUBP-010/015/020.
   on-state `/Yes`, while the page-2 proof-of-service boxes use `/1`
   except the registered-photocopier and § 22451 boxes, which use `/3`
   — the same family quirk as SUBP-002 and SUBP-010.
+- **The witness is addressed stacked, with the phone in its own
+  column.** The People box is three lines tall: name, street address
+  and city/state/ZIP stack at its left, and `witness_phone` sits to
+  the right, level with the name and drawn at the same size. A
+  one-line value still fits (it wraps in the left column).
+  *(tested: test_subpoena_addressee_stacks_with_phone_in_its_own_column)*
+  SUBP-002 and SUBP-010 leave room for one line only, so their
+  addressee stays on one line.

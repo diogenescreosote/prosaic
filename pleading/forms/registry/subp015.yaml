@@ -132,16 +132,34 @@ fields:
     fit: shrink
 
   # ---- Page 1: the deponent -------------------------------------------
+  # The People box (FillText1) leaves 487-519 clear between the heading
+  # and item 1: name and address stack on the left, the phone sits in a
+  # column to the right, level with the name (one size via size_group).
   deponent:
-    map: "SUBP-015[0].Page1[0].People[0].FillText1[0]"
+    rect: [72, 487, 360, 519]
     page: 1
     doc: >-
       "THE PEOPLE OF THE STATE OF CALIFORNIA, TO (name, address, and
       telephone number of deponent, if known)" — the person commanded
-      to appear, e.g. "Mavis Example, 500 Market Street, Example City,
-      CA 90000, (555) 555-0199". Multiline box.
+      to appear, written STACKED, one line each: name, street address,
+      city/state/ZIP ("Mavis Example\n500 Market Street\nExample City,
+      CA 90000"). The phone goes in deponent_phone, not here.
     default: ""
+    multiline: true
     fit: shrink_wrap
+    min_font_size: 6
+    size_group: deponent_block
+  deponent_phone:
+    rect: [372, 487, 575, 519]
+    page: 1
+    doc: >-
+      The deponent's telephone number, if known: drawn in its own column
+      to the right of the stacked address, level with the name line.
+    default: ""
+    align: left
+    valign: top
+    fit: shrink
+    size_group: deponent_block
 
   # ---- Page 1, Item 1: the deposition ----------------------------------
   deposition_date:
@@ -474,9 +492,11 @@ agent_guide: |
   USUAL INVOCATION — standalone fill:
 
       sc form fill subp015 out.pdf --meta case.yaml --data - <<'YAML'
-      deponent: >-
-        Mavis Example, 500 Market Street, Example City, CA 90000,
-        (555) 555-0199
+      deponent: |-
+        Mavis Example
+        500 Market Street
+        Example City, CA 90000
+      deponent_phone: "(555) 555-0199"
       deposition_date: "October 15, 2026"
       deposition_time: "9:00 a.m."
       deposition_address: >-

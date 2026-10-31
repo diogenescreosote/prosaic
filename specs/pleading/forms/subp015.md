@@ -71,3 +71,9 @@ witness is SUBP-010; trial or hearing process is SUBP-001/002.
   on the deponent's **residence**, not the address printed in the
   deponent box; a filler that knows only a business address should say
   so in the notice rather than assume the residence is nearby.
+- **The deponent is addressed stacked, with the phone in its own
+  column,** exactly as on SUBP-001: name, street address and
+  city/state/ZIP stack at the left of the 32-pt clear band between the
+  heading and item 1, and `deponent_phone` sits to the right, level
+  with the name. *(tested:
+  test_subpoena_addressee_stacks_with_phone_in_its_own_column)*

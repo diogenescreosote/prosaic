@@ -964,3 +964,34 @@ def test_ink_only_overflow_goes_to_a_separate_attachments_file(tmp_path):
     assert len(PdfReader(str(attachments)).pages) >= 1
     assert "deliberately far too long" in probe.all_text(attachments)
     assert any("attachments.pdf" in w for w in res.warnings)
+
+
+@pytest.mark.parametrize("form_id,block,phone", [
+    ("subp001", "witness", "witness_phone"),
+    ("subp015", "deponent", "deponent_phone"),
+])
+def test_subpoena_addressee_stacks_with_phone_in_its_own_column(form_id, block, phone, tmp_path):
+    """Name, street and city/state/ZIP stack one per line at the left;
+    the phone sits to their right, on the name's baseline, at one size."""
+    import fitz
+
+    if form_id not in FORMS:
+        pytest.skip(f"{form_id} descriptor not present")
+    out = tmp_path / f"{form_id}.pdf"
+    form_fill.fill(form_id, out, meta=dict(FIXTURE_META), data={
+        block: "Mavis Example\n500 Market Street\nExample City, CA 90000",
+        phone: "(555) 555-0199",
+    })
+    with fitz.open(str(out)) as doc:
+        lines = {
+            " ".join(s["text"] for s in ln["spans"]).strip(): (ln["bbox"], ln["spans"][0]["size"])
+            for b in doc[0].get_text("dict")["blocks"] for ln in b.get("lines", [])
+        }
+    name, street, city = (lines[t] for t in
+                          ("Mavis Example", "500 Market Street", "Example City, CA 90000"))
+    tel = lines["(555) 555-0199"]
+    assert name[0][0] == street[0][0] == city[0][0], "address lines share a left edge"
+    assert name[0][3] < street[0][3] < city[0][3], "address lines stack downward"
+    assert tel[0][0] > name[0][2] + 10, "phone sits in a column to the right"
+    assert abs(tel[0][3] - name[0][3]) < 0.5, "phone is level with the name"
+    assert tel[1] == name[1], "phone and address draw at one size"
