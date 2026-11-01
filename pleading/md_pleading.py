@@ -5629,22 +5629,26 @@ def main() -> None:
         # Anything registered in forms/registry/ is handled generically
         # by form_fill.py (descriptor-driven fill; see docs/forms.md).
         import form_fill
-        if exhibits:
-            # \exhibit{shortname} works in cover-sheet form field text
-            # too (e.g. a short MC-030 body that cites its own
-            # attached exhibit), not just in a pleading's main body.
-            forms_block = dict(meta.get("forms") or {})
-            form_block = dict(forms_block.get(cover_sheet) or {})
-            substituted = {
-                k: (substitute_exhibit_refs(v, exhibit_map, doctype=doctype,
-                                           label_override=meta.get("exhibit_label"))
-                    if isinstance(v, str) else v)
-                for k, v in form_block.items()
-            }
-            if substituted != form_block:
-                forms_block[cover_sheet] = substituted
-                meta = dict(meta)
-                meta["forms"] = forms_block
+        # \redact{} and \exhibit{shortname} work in cover-sheet form
+        # field text too (e.g. a declaration written entirely on the
+        # MC-030 body), not just in a pleading's main body. Redaction
+        # runs unconditionally: a macro left literal in a form field
+        # would print its sealed argument in the public variant.
+        forms_block = dict(meta.get("forms") or {})
+        form_block = dict(forms_block.get(cover_sheet) or {})
+        substituted = {}
+        for k, v in form_block.items():
+            if isinstance(v, str):
+                v = substitute_redaction_macros(v, meta, variant)
+                if exhibits:
+                    v = substitute_exhibit_refs(
+                        v, exhibit_map, doctype=doctype,
+                        label_override=meta.get("exhibit_label"))
+            substituted[k] = v
+        if substituted != form_block:
+            forms_block[cover_sheet] = substituted
+            meta = dict(meta)
+            meta["forms"] = forms_block
         try:
             descriptor = form_fill.load_descriptor(cover_sheet)
             pages_attached_field = descriptor.get("pages_attached_field")
