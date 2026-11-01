@@ -59,6 +59,7 @@ CLI
 from __future__ import annotations
 
 import argparse
+import hashlib
 import json
 import re
 import os
@@ -1749,8 +1750,20 @@ def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
         for p in (REPO_ROOT / "local" / "config.yaml", find_case_dir(input_md) / "matter.yaml")
         if p.exists()
     ]
+    # The fill's own inputs are part of the key: one source builds a
+    # public and a sealed variant whose form text differs (\redact in a
+    # form field), and both share this cache path. Mtimes alone would
+    # hand the second variant the first one's fill --- sealed text into
+    # a public packet.
+    key_file = cache.with_name(cache.name + ".fillkey")
+    fill_key = hashlib.sha256(
+        json.dumps({"form": form_id, "meta": meta}, sort_keys=True,
+                   default=str).encode("utf-8")
+    ).hexdigest()
     fresh = (
         cache.exists()
+        and key_file.exists()
+        and key_file.read_text(encoding="utf-8").strip() == fill_key
         and cache.stat().st_mtime >= input_md.stat().st_mtime
         and cache.stat().st_mtime >= blank.stat().st_mtime
         and cache.stat().st_mtime >= descriptor_file.stat().st_mtime
@@ -1763,6 +1776,7 @@ def ensure_cached(form_id: str, meta: dict, input_md: Path) -> Path:
         res = fill(form_id, cache, meta=meta)
         for w in res.warnings:
             print(f"  [form {form_id}] {w}", file=sys.stderr)
+        key_file.write_text(fill_key + "\n", encoding="utf-8")
     return cache
 
 

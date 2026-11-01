@@ -34,3 +34,6 @@ node_modules/
 
 # The matter harness bundle has a skill named build; the rule above is for build outputs.
 !templates/matter/.claude/skills/build/
+
+# Cover-sheet fill cache keys (form_fill.ensure_cached)
+*.fillkey
