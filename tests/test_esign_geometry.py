@@ -141,7 +141,20 @@ def test_proof_of_service_pages_carry_signature_geometry(form_id: str, tmp_path:
     out = fill(form_id, tmp_path)
     sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
     got = {f["name"]: f["type"] for f in sidecar["fields"]}
-    assert got == {"pos_sig_date": "date", "pos_signature": "signature"}
+    pos = {k: v for k, v in got.items() if k.startswith("pos_")}
+    assert pos == {"pos_sig_date": "date", "pos_signature": "signature"}
+    assert client_module().sidecar_geometry_problems(out, sidecar) == []
+
+
+def test_subp002_declaration_is_signable_before_service(tmp_path: Path) -> None:
+    """SUBP-002's page-2 declaration is signed by the subpoenaing party
+    before service; built without the proof of service (pages 1-2), the
+    sidecar carries only the declarant's date and signature, on page 2,
+    resting on the blank's rules."""
+    out = fill("subp002", tmp_path, pages="1-2")
+    sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
+    got = {f["name"]: (f["type"], f["page"]) for f in sidecar["fields"]}
+    assert got == {"decl_date": ("date", 2), "decl_signature": ("signature", 2)}
     assert client_module().sidecar_geometry_problems(out, sidecar) == []
 
 

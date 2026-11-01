@@ -47,10 +47,13 @@ blank: subp002.pdf
 # a service copy (ADR-0046).
 technology: overlay
 
-# The proof of service is signed by whoever served the papers ---
-# never by the clerk who issued the form. One party, so the roster
-# for `sc docuseal send` is a single --to.
-esign_parties: [server]
+# Two signers, on different occasions. The FILER (subpoenaing party
+# or counsel) signs the page-2 declaration before service; whoever
+# SERVED the papers signs the page-3 proof afterwards --- never the
+# clerk who issued the form. Build `--pages 1-2` for the pre-service
+# signing (the sidecar then carries only the filer's areas, so the
+# roster is a single --to) and page 3 alone for the server.
+esign_parties: [filer, server]
 
 # UI chrome under SUBP-002[0].#pageSet[0].LastPage[0].P3Footer[0].
 # FooterButtons[0] — Print/Save/Clear buttons and the privacy banner,
@@ -349,8 +352,23 @@ fields:
     page: 2
     doc: >-
       Declaration "Date:" — LEAVE BLANK; the declarant dates the
-      perjury declaration by hand when signing.
+      perjury declaration when signing (by hand, or the e-sign date
+      field DocuSeal places here).
     default: ""
+    esign: {type: date, party: filer}
+  decl_signature:
+    page: 2
+    # No widget for the signature stroke. The blank's rule under it
+    # runs x 318.8--576.0 at 613.1 pt from the top (178.9 pt from the
+    # bottom), measured from the page's vector drawings; the box rests
+    # just above that rule, clear of the "(SIGNATURE OF" label below
+    # and of the arrow marker at its left end.
+    rect: [321, 180, 574, 205]
+    doc: >-
+      The declarant's signature on the page-2 declaration (the
+      subpoenaing party or counsel) --- reserved; never machine-filled.
+    default: ''
+    esign: {type: signature, party: filer}
   decl_print_name:
     map: "SUBP-002[0].Page2[0].Sign[0].SigName[0]"
     page: 2
