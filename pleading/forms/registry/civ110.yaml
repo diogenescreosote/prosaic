@@ -35,6 +35,11 @@ technology: overlay            # draw at each widget's rect and flatten (ADR-004
 # (XFA leaf widget names carry an "[0]" index suffix.)
 chrome_fields: ["Warning[0]", "Print[0]", "Save[0]", "Reset[0]", "CourtLink[0]"]
 
+# E-signature: the requesting party signs and dates item 2. Item 3
+# (consent) is for a defendant only when a cross-complaint or affirmative
+# relief is pending; it stays a wet-ink space.
+esign_parties: [requester]
+
 fields:
   # -- Page 1: attorney/party block ------------------------------------
   # This form has a granular attorney block (separate name / bar-number /
@@ -182,6 +187,16 @@ fields:
     page: 1
     doc: "Item 2 date — LEAVE BLANK for hand-dating at signature"
     default: ""
+    esign: {type: date, party: requester}
+  item2_signature:
+    page: 1
+    rect: [356, 324.5, 575, 349.5]
+    # No widget exists for the signature stroke; the blank draws only a
+    # rule (x 353.3--575.8, 467.9 pt from the top, read from the blank's
+    # vector geometry). The rect sits on that rule.
+    doc: "Item 2 (SIGNATURE) of the requesting attorney/party --- reserved; never machine-filled"
+    default: ''
+    esign: {type: signature, party: requester}
   item2_print_name:
     map: "CIV-110[0].Page1[0].List2[0].Sig1Name[0]"
     page: 1
