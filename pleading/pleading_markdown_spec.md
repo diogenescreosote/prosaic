@@ -137,6 +137,7 @@ NOT full Markdown:
 | `\doclink{path}{text}` | the display text in the body face, dark blue and underlined, carrying the same relative-file link annotation (/GoToR) as `\filelink`; for working documents whose cross-references open companion files beside the PDF. A path beginning `#` (`\doclink{#exhibit_A}{Exhibit A}`) jumps to that destination inside the PDF instead, same ink |
 | `[^id]` | footnote reference marker |
 | `\newline` (or two trailing spaces at the end of a source line) | hard line break: the paragraph continues on the next grid line, with no blank line and no new paragraph number (see **Hard line breaks** under **Block quotes**) |
+| `\pagebreak` (alone on a line) | what follows starts a new page (PDF: next page; DOCX: page break; TXT: dropped). A no-op at the top of a page. Use it to put an operative paragraph on a proposed order's signature page |
 | `\newline{skip}` | hard line break plus one empty grid line, still inside the same paragraph |
 | `\newline{keep}` | hard line break whose paragraph stays whole on one page whenever it fits on one (it starts on the next page if it cannot finish on this one; a paragraph longer than a page never splits at the break) |
 | `\newline{skip,keep}` | the flags are independent and combine in either order |

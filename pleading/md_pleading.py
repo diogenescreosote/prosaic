@@ -2825,6 +2825,10 @@ def parse_markdown_blocks(body: str, doctype: str = "pleading") -> List[Block]:
                                 typographic_subs(m_lr.group(1).strip()),
                                 spans=[TextSpan(typographic_subs(m_lr.group(2).strip()))]))
             continue
+        if re.match(r"^\\pagebreak\s*$", line):
+            flush_para()
+            blocks.append(Block("pagebreak", ""))
+            continue
         m_ctr = re.match(r"^\\center\{(.*?)\}\s*$", line)
         if m_ctr:
             flush_para()
@@ -4739,6 +4743,15 @@ class PleadingPDF:
                     and current_line + grp - 1 > self.lines_per_page - self._fn_area_lines):
                 self.start_page()
                 current_line = 1
+            if block.kind == "pagebreak":
+                # \pagebreak: what follows starts the next page (e.g. so a
+                # proposed order's signature page carries an operative
+                # paragraph, not just the signature). A no-op at the top
+                # of a page, so it never produces a blank page.
+                if current_line != 1:
+                    self.start_page()
+                    current_line = 1
+                continue
             if block.kind in ("signblock", "declsignblock"):
                 current_line = self._emit_signblock(block, current_line)
                 continue

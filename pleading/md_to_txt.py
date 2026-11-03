@@ -303,6 +303,8 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
             pad = max(2, 72 - len(left_p) - len(right_p))
             items.append((left_p + " " * pad + right_p, False))
             continue
+        if block.kind == "pagebreak":
+            continue  # plain text has no pages
         if block.kind == "centerline":
             plain = "".join(sp.text for sp in mp.parse_inline_styles(block.text))
             items.append((plain.center(72).rstrip(), False))

@@ -28,7 +28,7 @@ from typing import List, Tuple
 
 from docx import Document
 from docx.shared import Pt, Inches, RGBColor
-from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_COLOR_INDEX
+from docx.enum.text import WD_ALIGN_PARAGRAPH, WD_BREAK, WD_COLOR_INDEX
 from docx.oxml.ns import qn
 from docx.oxml import OxmlElement
 from docx.opc.part import Part
@@ -1041,6 +1041,9 @@ def build_body(doc: Document, body: str, meta: dict,
         m = _LEFTRIGHT_RE.match(text)
         if m:
             _emit_leftright(doc, m.group(1).strip(), m.group(2).strip())
+            continue
+        if re.match(r"^\\pagebreak\s*$", text):
+            doc.add_paragraph().add_run().add_break(WD_BREAK.PAGE)
             continue
         m = _CENTER_RE.match(text)
         if m:
