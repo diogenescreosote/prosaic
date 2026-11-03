@@ -38,10 +38,54 @@ subcommand's real promises live in that component's spec.
   `--final`, and signer, date, or variant changes also rebuild
   (ADR-0039). *(tested:
   tests/scenarios/pleading_exhibits/test_single_document_build.py)*
-- **`sc ocr <pdf> <outdir>`** OCR-supplements one PDF under the
-  originals-are-sacred rules (adds text only to pages lacking it,
-  never modifies the input, skips already-searchable files).
-  *(untested)*
+- **`sc ocr <pdf> [outdir] [--force]`** OCR-supplements one PDF under
+  the originals-are-sacred rules (adds text only to pages lacking it,
+  never modifies the input, skips already-searchable files). It is one
+  of the script pass-throughs below. *(untested)*
+- **Every Python tool runs under the project environment**
+  (ADR-0050). `sc` re-executes itself under the interpreter
+  `pleading/project_python.py` chooses (`$PROSAIC_PYTHON`, else
+  `<checkout>/.venv/bin/python`, else the running one) before parsing
+  arguments, so every subcommand below runs with PyMuPDF, pypdf and
+  the rest, whichever `python3` launched it. *(tested:
+  tests/test_tool_routing.py)*
+- **Script pass-throughs**: **`sc highlight`**, **`sc redact`**,
+  **`sc verify-redactions`**, **`sc check-redaction-schedule`**,
+  **`sc pleadings-manifest`**, **`sc pleadings-scan`**,
+  **`sc read-coverage`**, **`sc phone-logs`** (and `sc ocr`) run
+  `pleading/highlight_pdf.py`, `redact_pdf.py`, `verify_redactions.py`,
+  `check_redaction_schedule.py`, `pleadings_manifest.py`,
+  `pleadings_scan.py`, `triage/read_coverage.py` and
+  `triage/phone_logs.py` under the project interpreter. Arguments,
+  `--help` included, pass through verbatim; the exit status is the
+  script's. The table is `SCRIPT_COMMANDS` in `cli/sc`. *(tested:
+  tests/test_tool_routing.py)*
+- **`sc run <script> [args]`** runs any other prosaic Python script
+  under the project interpreter: a path relative to the checkout, or a
+  bare file name searched in `pleading/`, `triage/`, `crypto/`,
+  `signing/`, `flows/`, `connectors/gmail/` and the tools directories.
+  An unknown script exits 2. *(tested: tests/test_tool_routing.py)*
+- **`sc python [args]`** is the project interpreter itself, for
+  one-off work that needs the project's packages (`sc python -c
+  'import fitz'`), in place of a bare `python3` that lacks them.
+  *(tested: tests/test_tool_routing.py)*
+- **`sc doctor [-v]`** checks the project environment (interpreter and
+  the packages the tools import), every program in
+  `system-dependencies.yaml` that applies to the host, the stock
+  programs that file assumes, and the connectors' `node_modules`. Each
+  gap is printed with the exact command that fixes it for the host's
+  package manager (Homebrew on macOS, apt on Debian/Ubuntu), followed
+  by one combined install line. It exits 1 when the environment, a
+  package, a required program or a stock program is missing.
+  *(tested: tests/test_tool_routing.py)*
+- **`sc setup [--no-dev] [--node]`** creates or updates the project
+  environment: `uv sync --locked` when uv is installed, otherwise a
+  `python3 -m venv .venv` plus `pip install -r
+  pleading/requirements.txt` (saying how to get uv, and on Debian
+  that `python3-venv` is needed if the venv cannot be made). `--node`
+  also runs `npm ci` in `connectors/`. It finishes by running
+  `sc doctor` inside the new environment and returns its status.
+  *(untested: it installs packages)*
 - **`sc form …`** exposes the JC form engine: list registered forms,
   fill one, dump its fields — and `sc form info <id>` prints enough
   (the descriptor's fields, checkboxes, and agent guide) for an

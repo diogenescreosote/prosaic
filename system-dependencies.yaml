@@ -269,3 +269,78 @@ dependencies:
     apt: null
     brew: whisper-cpp
     in_container: false
+
+  - binary: uv
+    why: creates the project environment from uv.lock (sc setup); without it setup falls back to python3 -m venv and the unpinned requirements
+    used_by: [cli/sc setup, .githooks/pre-push, .github/workflows/ci.yml]
+    required: false
+    platforms: [darwin, linux]
+    # Not in Debian or Ubuntu's archives; Astral's installer is the
+    # supported route there (sc doctor prints it). The image installs
+    # the requirements with pip instead.
+    apt: null
+    brew: uv
+    install: "curl -LsSf https://astral.sh/uv/install.sh | sh"
+    in_container: false
+
+  - binary: xdg-open
+    why: sc open hands built PDFs to the desktop viewer on Linux (macOS uses its stock `open`)
+    used_by: [cli/sc open]
+    required: false
+    platforms: [linux]
+    # Present on any Debian/Ubuntu desktop; a minimal server install
+    # lacks it, and `sc open --print-only` works without it.
+    apt: xdg-utils
+    brew: null
+    in_container: false
+
+# Programs assumed present on a stock install of each supported
+# platform: macOS, and Debian/Ubuntu (the Linux prosaic designs
+# around). Nothing installs them and nothing above needs to declare
+# them; `sc doctor` confirms they are there and says what to do if a
+# minimal image lacks one. Where the two platforms name a tool
+# differently, the code picks per platform rather than assuming the
+# macOS name: `open` vs `xdg-open` (cli/sc open), `shasum -a 256` vs
+# `sha256sum` (use `sc attest hash` instead of either in instructions),
+# Keychain `security` vs the env credential backend (ADR-0012).
+#
+# Fields: binary, platforms, why, and optionally fix.<manager> for the
+# rare minimal image that strips one.
+stock:
+  - binary: sh
+    platforms: [darwin, linux]
+    why: every shell helper under sync/ and the git hooks
+  - binary: bash
+    platforms: [darwin, linux]
+    why: "sync/*.sh; macOS 3.2 is enough, the scripts avoid bash-4 features"
+  - binary: env
+    platforms: [darwin, linux]
+    why: the `#!/usr/bin/env python3` shebangs
+  - binary: sed
+    platforms: [darwin, linux]
+    why: shell helpers; written to the BSD/GNU common subset
+  - binary: awk
+    platforms: [darwin, linux]
+    why: shell helpers
+  - binary: grep
+    platforms: [darwin, linux]
+    why: shell helpers
+  - binary: find
+    platforms: [darwin, linux]
+    why: shell helpers
+  - binary: curl
+    platforms: [darwin, linux]
+    why: installing uv; fetching models for local transcription
+    fix: {apt: sudo apt install curl}
+  - binary: open
+    platforms: [darwin]
+    why: sc open on macOS
+  - binary: shasum
+    platforms: [darwin]
+    why: hashes in hand-run checks on macOS (sha256sum on Linux)
+  - binary: sha256sum
+    platforms: [linux]
+    why: hashes in hand-run checks on Linux (coreutils)
+  - binary: launchctl
+    platforms: [darwin]
+    why: sc schedule installs the standby supervisor as launchd jobs

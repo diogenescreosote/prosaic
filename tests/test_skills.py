@@ -85,7 +85,7 @@ def test_index_promises_only_skills_that_exist() -> None:
 @pytest.mark.parametrize("skill", skill_dirs(), ids=lambda p: p.name)
 def test_every_sc_subcommand_a_skill_names_exists(skill: Path) -> None:
     source = (REPO_ROOT / "cli" / "sc").read_text(encoding="utf-8")
-    commands = set(re.findall(r'add_parser\("([a-z-]+)"', source))
+    commands = set(re.findall(r'(?:add_parser|script_parser)\("([a-z-]+)"', source))
     text = (skill / "SKILL.md").read_text(encoding="utf-8")
     named = set(re.findall(r"(?:cli/)?\bsc ([a-z][a-z-]*)", text))
     ghosts = sorted(named - commands)

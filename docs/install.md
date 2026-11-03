@@ -1,5 +1,40 @@
 # Installing the dependencies
 
+## The short version
+
+```bash
+cli/sc setup        # the Python environment, from uv.lock
+cli/sc doctor       # what else is missing, and the command that installs it
+```
+
+Then run everything through `sc`. **Never run a project tool with bare
+`python3`, and never `pip install` into a system Python to make one
+work** ([ADR-0050](../design/adr/0050-project-tools-run-through-sc.md)).
+The stock `python3` on macOS is Apple's, without PyMuPDF or pypdf; the
+project's interpreter is `<checkout>/.venv/bin/python`, and `sc`
+always runs under it:
+
+| Instead of | Run |
+|---|---|
+| `python3 pleading/ocr_supplement.py a.pdf out/` | `sc ocr a.pdf out/` |
+| `python3 pleading/highlight_pdf.py ...` | `sc highlight ...` |
+| `python3 pleading/redact_pdf.py cfg.json` | `sc redact cfg.json` |
+| `python3 pleading/verify_redactions.py ...` | `sc verify-redactions ...` |
+| `python3 pleading/check_redaction_schedule.py ...` | `sc check-redaction-schedule ...` |
+| `python3 pleading/pleadings_manifest.py <matter>` | `sc pleadings-manifest <matter>` |
+| `python3 pleading/pleadings_scan.py <matter>` | `sc pleadings-scan <matter>` |
+| `python3 triage/read_coverage.py ...` | `sc read-coverage ...` |
+| `python3 triage/phone_logs.py ...` | `sc phone-logs ...` |
+| `python3 <any other script>.py ...` | `sc run <script>.py ...` |
+| `python3 -c 'import fitz; ...'` | `sc python -c 'import fitz; ...'` |
+| `pip install <pkg>` | add it to `pyproject.toml`, `uv lock`, `sc setup` |
+
+A script run the old way still works: it notices it is under the wrong
+interpreter, re-executes under the project's, and prints one line
+naming the `sc` command to use next time.
+
+## The three layers
+
 prosaic has three layers of dependency and one file for each:
 
 | Layer | Declared in | Installed with |
@@ -45,6 +80,44 @@ To install everything at once:
 brew install $(sc deps --format brew)          # macOS
 sudo apt install $(sc deps --format apt)       # Debian/Ubuntu
 ```
+
+`sc doctor` is the fuller check: the project environment and its
+packages first, then the same programs as `sc deps`, then the stock
+programs prosaic assumes, then the connectors' Node modules. It prints
+the fix for every gap in the host's terms and exits non-zero until
+nothing required is missing.
+
+## What prosaic assumes, and what it provides
+
+Two lists, both in `system-dependencies.yaml`:
+
+- **`stock:`** --- programs a fresh install of macOS or Debian/Ubuntu
+  already has, which prosaic never installs: `sh`, `bash`, `env`,
+  `sed`, `awk`, `grep`, `find`, `curl`; on macOS `open`, `shasum`,
+  `launchctl` (and `security`, `osascript`); on Linux `sha256sum`.
+  Instructions and code stay inside that set, and where the platforms
+  spell a tool differently the code chooses (`sc open` runs `open` or
+  `xdg-open`). For a hash in an instruction, use `sc attest hash`
+  rather than either `shasum -a 256` or `sha256sum`.
+- **`dependencies:`** --- everything else, each with its Homebrew and
+  apt package. `sc doctor` checks them; nothing else should be assumed.
+
+### Debian and Ubuntu
+
+Debian/Ubuntu is the Linux prosaic designs around. The differences
+from macOS that matter, all handled in the manifest or the code:
+
+| | macOS | Debian/Ubuntu |
+|---|---|---|
+| Python venv support | built in | `sudo apt install python3-venv` (only without uv) |
+| uv | `brew install uv` | not in the archive: `curl -LsSf https://astral.sh/uv/install.sh \| sh` |
+| npm | with `node` | separate `npm` package |
+| poppler (`pdftotext`, `pdftoppm`, `pdfinfo`) | `poppler` | `poppler-utils` |
+| tesseract + English data | `tesseract` | `tesseract-ocr-eng` |
+| open a file in the viewer | `open` (stock) | `xdg-open` from `xdg-utils` |
+| SHA-256 on the command line | `shasum -a 256` (stock) | `sha256sum` (coreutils) |
+| credentials | Keychain (`security`) | the `env` backend (ADR-0012) |
+| scheduling | `launchd` via `sc schedule` | not yet supported |
 
 ## The container
 

@@ -30,7 +30,7 @@ already have. The machinery stays local and is never shared.
 
 **Spec-first, tested always.** Every component has a contract in
 [specs/](specs/); every decision that constrains later work is an ADR in
-[design/](design/); 1113 tests, with `ruff` and `mypy --strict` clean.
+[design/](design/); 1124 tests, with `ruff` and `mypy --strict` clean.
 
 ## Security, in technical terms
 
@@ -139,9 +139,13 @@ source:
 ```sh
 git clone https://github.com/diogenescreosote/prosaic.git
 cd prosaic
-uv sync
-./cli/sc deps                              # which system tools are present
+./cli/sc setup                             # the Python environment, from uv.lock
+./cli/sc doctor                            # what else is missing, and how to install it
 ```
+
+Every tool then runs through `sc` (`sc ocr`, `sc highlight`, `sc run
+<script>`, `sc python`), never bare `python3`: the stock interpreter
+lacks the packages (ADR-0050).
 
 ```sh
 ./cli/sc init ~/cases/smith-v-smith        # the directory, its git repo, its hooks

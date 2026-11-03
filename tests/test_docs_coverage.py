@@ -40,7 +40,7 @@ def read(rel: str) -> str:
 def test_every_subcommand_has_a_promise_in_the_spec():
     """`specs/cli.md` states what each subcommand promises."""
     source = read("cli/sc")
-    commands = set(re.findall(r'sub\.add_parser\("([a-z-]+)"', source))
+    commands = set(re.findall(r'(?:sub\.add_parser|script_parser)\("([a-z-]+)"', source))
     assert commands, "could not find any subcommands — has cli/sc changed shape?"
     spec = read("specs/cli.md")
     missing = sorted(c for c in commands if f"`sc {c}" not in spec)
@@ -53,7 +53,7 @@ def test_every_subcommand_has_a_promise_in_the_spec():
 def test_spec_does_not_promise_commands_that_do_not_exist():
     """The reverse: a removed command must not linger as a promise."""
     source = read("cli/sc")
-    commands = set(re.findall(r'sub\.add_parser\("([a-z-]+)"', source))
+    commands = set(re.findall(r'(?:sub\.add_parser|script_parser)\("([a-z-]+)"', source))
     spec = read("specs/cli.md")
     promised = set(re.findall(r"\*\*`sc ([a-z-]+)", spec))
     stale = sorted(promised - commands)

@@ -20,10 +20,34 @@ details. Commands:
   hooks <dir>             install the matter git hooks
   deps                    report which system dependencies are present
   schedule <dir>          install the 12-hourly background sync (macOS)
+
+Setup and project tools (ADR-0050: never bare python3 for these):
+
+  setup                   create/update the project environment, then doctor
+  doctor                  check environment, packages, programs; how to fix each
+  highlight|redact|verify-redactions|check-redaction-schedule|
+  pleadings-manifest|pleadings-scan|read-coverage|phone-logs  ...
+                          the project scripts, arguments passed through
+  run <script> [args]     any other prosaic Python script
+  python [args]           the project interpreter itself
 """
 
 from __future__ import annotations
 
+# Every Python tool runs under the project's environment (ADR-0050): sc
+# re-executes itself under <repo>/.venv (or $PROSAIC_PYTHON) first, so
+# each subcommand's sys.executable is an interpreter that has PyMuPDF,
+# pypdf and the rest, whatever python3 happened to launch it.
+import os as _os0
+import sys as _sys0
+_sys0.path.insert(0, _os0.path.join(_os0.path.dirname(_os0.path.realpath(__file__)), "..", "pleading"))
+import project_python as _project_python  # noqa: E402
+_sys0.path.pop(0)
+if __name__ == "__main__":  # never when a test loads this file as a module
+    _project_python.ensure(_os0.path.realpath(__file__), quiet=True)
+
+# No project environment and no PROSAIC_PYTHON (a fresh clone before
+# `sc setup`): fall back to the first interpreter that has PyYAML.
 # launchd runs with a minimal PATH whose python3 often lacks PyYAML, and
 # every subcommand that reads matter.yaml needs it. Rather than fail in a
 # log nobody reads until morning, re-exec under the first interpreter
@@ -298,10 +322,73 @@ def cmd_list(_args: argparse.Namespace) -> int:
     return _build(["--list"])
 
 
-def cmd_ocr(args: argparse.Namespace) -> int:
-    return subprocess.run(
-        [sys.executable, str(ROOT / "pleading" / "ocr_supplement.py"), args.pdf, args.outdir]
-    ).returncode
+#: The project tools an agent or a person runs by hand, each reachable as
+#: `sc <name> ...` under the project interpreter (ADR-0050). Arguments
+#: and --help pass straight through to the script; the subcommand adds
+#: nothing but the right Python. A script not listed here is still
+#: reachable as `sc run <path>`.
+SCRIPT_COMMANDS = {
+    "ocr": "pleading/ocr_supplement.py",
+    "highlight": "pleading/highlight_pdf.py",
+    "redact": "pleading/redact_pdf.py",
+    "verify-redactions": "pleading/verify_redactions.py",
+    "check-redaction-schedule": "pleading/check_redaction_schedule.py",
+    "pleadings-manifest": "pleading/pleadings_manifest.py",
+    "pleadings-scan": "pleading/pleadings_scan.py",
+    "read-coverage": "triage/read_coverage.py",
+    "phone-logs": "triage/phone_logs.py",
+}
+
+#: Directories `sc run` searches for a bare script name, in order.
+RUN_SEARCH_DIRS = ("pleading", "triage", "crypto", "signing", "flows",
+                   "connectors/gmail", "pleading/tools", "local/pleading/tools")
+
+
+def _strip_dashdash(rest: list[str]) -> list[str]:
+    return rest[1:] if rest[:1] == ["--"] else rest
+
+
+def cmd_script(args: argparse.Namespace) -> int:
+    script = ROOT / SCRIPT_COMMANDS[args.command]
+    return subprocess.run([sys.executable, str(script), *_strip_dashdash(args.rest)]).returncode
+
+
+def _resolve_script(name: str) -> Path | None:
+    """A repo script by path (relative to the checkout) or bare file name."""
+    cand = Path(name)
+    if cand.is_absolute():
+        return cand if cand.is_file() else None
+    if (ROOT / cand).is_file():
+        return ROOT / cand
+    if cand.parent == Path("."):
+        stem = cand.name if cand.suffix else cand.name + ".py"
+        for d in RUN_SEARCH_DIRS:
+            if (ROOT / d / stem).is_file():
+                return ROOT / d / stem
+    return None
+
+
+def cmd_run(args: argparse.Namespace) -> int:
+    rest = _strip_dashdash(args.rest)
+    if not rest or rest[0] in ("-h", "--help"):
+        print("usage: sc run <script> [args...]\n\n"
+              "Run a prosaic Python script under the project interpreter.\n"
+              "<script> is a path relative to the checkout (pleading/md_pleading.py)\n"
+              f"or a bare name searched in: {', '.join(RUN_SEARCH_DIRS)}.\n"
+              f"Interpreter: {sys.executable}")
+        return 0 if rest else 2
+    script = _resolve_script(rest[0])
+    if script is None:
+        print(f"sc run: no script {rest[0]!r} in {ROOT}", file=sys.stderr)
+        return 2
+    return subprocess.run([sys.executable, str(script), *rest[1:]]).returncode
+
+
+def cmd_python(args: argparse.Namespace) -> int:
+    """The project interpreter itself, for one-off work that needs its packages."""
+    rest = _strip_dashdash(args.rest)
+    os.execv(sys.executable, [sys.executable, *rest])
+    return 0  # not reached
 
 
 #: Directories whose contents are regenerable or disposable by age: rendered
@@ -599,11 +686,16 @@ def cmd_deps(args: argparse.Namespace) -> int:
         binary, required = dep["binary"], dep.get("required", False)
         found = shutil.which(binary)
         note = ""
+        if binary == "python3":
+            # The interpreter the tools run under is the project's
+            # (ADR-0050), not whichever python3 is first on PATH.
+            found = sys.executable
         if found:
             mark = "ok "
             want = dep.get("minimum_version")
             if want:
-                have = _version_of(binary)
+                have = (tuple(sys.version_info[:3]) if binary == "python3"
+                        else _version_of(binary))
                 wanted = tuple(int(p) for p in str(want).split("."))
                 if have and have[: len(wanted)] < wanted:
                     mark = "OLD"
@@ -626,6 +718,201 @@ def cmd_deps(args: argparse.Namespace) -> int:
         )
         return 1
     return 0
+
+
+#: The Python packages the tools import, as (distribution, import name).
+#: pyproject.toml is the declaration; this is what `sc doctor` probes,
+#: because a distribution name is not what a missing import reports.
+PYTHON_IMPORTS = (
+    ("pyyaml", "yaml"),
+    ("pymupdf", "fitz"),
+    ("pypdf", "pypdf"),
+    ("reportlab", "reportlab"),
+    ("python-docx", "docx"),
+    ("pillow", "PIL"),
+    ("cryptography", "cryptography"),
+    ("opentimestamps-client", "opentimestamps"),
+    ("docuseal", "docuseal"),
+)
+
+#: How to get uv where no package manager carries it.
+UV_INSTALL = "curl -LsSf https://astral.sh/uv/install.sh | sh"
+
+
+def _package_manager() -> str:
+    """The host's package manager, as `sc doctor` should phrase advice."""
+    if _this_platform() == "darwin":
+        return "brew"
+    return "apt" if shutil.which("apt-get") else "other"
+
+
+def _install_hint(dep: dict, manager: str) -> str:
+    pkg = dep.get(manager) if manager in ("brew", "apt") else None
+    if pkg and manager == "brew":
+        return f"brew install {pkg}"
+    if pkg and manager == "apt":
+        return f"sudo apt install {pkg}"
+    if dep.get("npm"):
+        return f"npm install -g {dep['npm']}"
+    other = dep.get("apt") or dep.get("brew")
+    if manager == "other" and other:
+        return f"install {other} (apt) / {dep.get('brew') or '-'} (brew)"
+    if dep.get("install"):
+        return str(dep["install"])
+    return dep.get("no_package_reason") or "not packaged here"
+
+
+def load_stock() -> list[dict]:
+    import yaml
+    return yaml.safe_load(DEPS_FILE.read_text()).get("stock") or []
+
+
+def _python_report() -> tuple[list[tuple[str, str, str]], bool]:
+    """(rows, ok) for the interpreter and its packages."""
+    import importlib.util
+    pp = _project_python
+    rows: list[tuple[str, str, str]] = []
+    ok = True
+    venv = pp.venv_python()
+    ver = ".".join(map(str, sys.version_info[:3]))
+    if os.environ.get("PROSAIC_PYTHON"):
+        rows.append(("ok", "interpreter", f"{sys.executable} ({ver}), from PROSAIC_PYTHON"))
+    elif venv is not None and pp.running_project_python():
+        rows.append(("ok", "interpreter", f"{sys.executable} ({ver}), the project environment"))
+    else:
+        rows.append(("MISSING", "environment",
+                     f"no {pp.venv_dir()} — run `sc setup` (running under {sys.executable})"))
+        ok = False
+    if sys.version_info < (3, 10):
+        rows.append(("OLD", "python", f"have {ver}, need 3.10+ (3.12 is what uv.lock pins)"))
+        ok = False
+    missing = [dist for dist, mod in PYTHON_IMPORTS if importlib.util.find_spec(mod) is None]
+    if missing:
+        rows.append(("MISSING", "packages", ", ".join(missing) + " — run `sc setup`"))
+        ok = False
+    else:
+        rows.append(("ok", "packages", ", ".join(m for _, m in PYTHON_IMPORTS)))
+    return rows, ok
+
+
+def cmd_doctor(args: argparse.Namespace) -> int:
+    """Everything prosaic needs, checked, with the exact fix for each gap."""
+    here = _this_platform()
+    manager = _package_manager()
+    failed: list[str] = []
+
+    print(f"prosaic at {ROOT}")
+    print(f"platform  {here} ({'Homebrew' if manager == 'brew' else 'apt' if manager == 'apt' else 'no apt/brew found'})")
+
+    print("\nPython (run every project tool through `sc`, never bare python3)")
+    rows, py_ok = _python_report()
+    for mark, name, note in rows:
+        print(f"  {mark:<8} {name:<14} {note}")
+    if not py_ok:
+        failed.append("python environment")
+
+    print("\nSystem programs prosaic installs or checks")
+    to_install: list[str] = []
+    for dep in load_dependencies():
+        if not _applies_here(dep):
+            continue
+        binary, required = dep["binary"], dep.get("required", False)
+        if binary == "python3":
+            # The project environment above is what tools run under; the
+            # PATH python3 only bootstraps it, and uv brings its own.
+            continue
+        found = shutil.which(binary)
+        if found:
+            note = found
+            mark = "ok"
+            want = dep.get("minimum_version")
+            if want:
+                have = _version_of(binary)
+                wanted = tuple(int(p) for p in str(want).split("."))
+                if have and have[: len(wanted)] < wanted:
+                    mark, note = "OLD", f"have {'.'.join(map(str, have))}, need {want}+"
+                    if required:
+                        failed.append(binary)
+        else:
+            mark = "MISSING" if required else "--"
+            note = _install_hint(dep, manager)
+            if dep.get(manager):
+                to_install.append(str(dep[manager]))
+            if required:
+                failed.append(binary)
+        if args.verbose or mark != "ok":
+            print(f"  {mark:<8} {binary:<14} {note}")
+        else:
+            print(f"  {mark:<8} {binary}")
+
+    print("\nStock programs assumed present (never installed by prosaic)")
+    for item in load_stock():
+        if here not in (item.get("platforms") or ["darwin", "linux"]):
+            continue
+        binary = item["binary"]
+        found = shutil.which(binary)
+        mark = "ok" if found else "MISSING"
+        note = "" if found else (item.get("fix", {}) or {}).get(manager) or item.get("why", "")
+        print(f"  {mark:<8} {binary:<14} {note}".rstrip())
+        if not found and item.get("required", True):
+            failed.append(binary)
+
+    print("\nConnectors")
+    if (ROOT / "connectors" / "node_modules").is_dir():
+        print("  ok       node_modules")
+    else:
+        print("  --       node_modules   cd connectors && npm ci   (only for portal/mail sync)")
+
+    if to_install:
+        cmd = ("brew install " if manager == "brew" else "sudo apt install ") + " ".join(sorted(set(to_install)))
+        print(f"\nTo install what is missing:\n  {cmd}")
+    if failed:
+        print("\nNot ready: " + ", ".join(failed), file=sys.stderr)
+        return 1
+    print("\nReady.")
+    return 0
+
+
+def cmd_setup(args: argparse.Namespace) -> int:
+    """Create or update the project environment from the lockfile."""
+    pp = _project_python
+    if shutil.which("uv"):
+        cmd = ["uv", "sync", "--locked"]
+        if args.no_dev:
+            cmd.append("--no-dev")
+        print("+ " + " ".join(cmd), flush=True)
+        rc = subprocess.run(cmd, cwd=ROOT).returncode
+    else:
+        # No uv: a plain venv from the requirements file. The lockfile is
+        # uv's; this path gets the same packages, unpinned.
+        base = shutil.which("python3") or sys.executable
+        if pp.venv_python() is None:
+            print(f"+ {base} -m venv {pp.venv_dir()}", flush=True)
+            rc = subprocess.run([base, "-m", "venv", str(pp.venv_dir())]).returncode
+            if rc != 0:
+                hint = ("sudo apt install python3-venv" if _package_manager() == "apt"
+                        else "install uv: " + UV_INSTALL)
+                print(f"sc setup: could not create the environment; {hint}", file=sys.stderr)
+                return rc
+        py = str(pp.venv_python())
+        cmd = [py, "-m", "pip", "install", "-r", str(ROOT / "pleading" / "requirements.txt")]
+        print("+ " + " ".join(cmd), flush=True)
+        rc = subprocess.run(cmd).returncode
+        if rc == 0:
+            print(f"(uv not found; for the locked set install it: {UV_INSTALL})")
+    if rc != 0:
+        return rc
+    if args.node and (ROOT / "connectors" / "package-lock.json").exists():
+        print("+ npm ci (connectors)", flush=True)
+        rc = subprocess.run(["npm", "ci"], cwd=ROOT / "connectors").returncode
+        if rc != 0:
+            return rc
+    venv = pp.venv_python()
+    if venv is None:
+        print("sc setup: the environment was not created", file=sys.stderr)
+        return 1
+    # Report from inside the new environment, which is where tools run.
+    return subprocess.run([str(venv), os.path.realpath(__file__), "doctor"]).returncode
 
 
 #: Commit types for a matter, taken from what a docket records rather
@@ -2510,10 +2797,43 @@ def main() -> int:
     sp = sub.add_parser("list", help="list envelopes (run from the matter dir)")
     sp.set_defaults(func=cmd_list)
 
-    sp = sub.add_parser("ocr", help="OCR-supplement one PDF into an output dir")
-    sp.add_argument("pdf")
-    sp.add_argument("outdir")
-    sp.set_defaults(func=cmd_ocr)
+    # Project scripts, each run under the project interpreter with its
+    # arguments and --help passed straight through (ADR-0050).
+    def script_parser(name: str, help_text: str) -> None:
+        sp = sub.add_parser(name, add_help=False,
+                            help=f"{help_text} ({SCRIPT_COMMANDS[name]}; -h for its options)")
+        sp.add_argument("rest", nargs=argparse.REMAINDER)
+        sp.set_defaults(func=cmd_script)
+
+    # tests/test_docs_coverage.py reads these literal names, like add_parser's.
+    script_parser("ocr", "OCR-supplement a PDF into an _ocr sibling: <pdf> [outdir] [--force]")
+    script_parser("highlight", "highlighted excerpt of a received PDF")
+    script_parser("redact", "build a redacted PDF from a JSON schedule")
+    script_parser("verify-redactions", "prove a redacted PDF withholds its term list")
+    script_parser("check-redaction-schedule", "reconcile a redaction schedule with its configs")
+    script_parser("pleadings-manifest", "check pleadings/MANIFEST.md against disk")
+    script_parser("pleadings-scan", "find court-stamped documents MANIFEST.md does not represent")
+    script_parser("read-coverage", "per-page text coverage of PDFs; --text dumps every page")
+    script_parser("phone-logs", "calls and texts with a number, from SMS Backup & Restore XML")
+
+    sp = sub.add_parser("run", add_help=False,
+                        help="run any prosaic Python script under the project interpreter")
+    sp.add_argument("rest", nargs=argparse.REMAINDER)
+    sp.set_defaults(func=cmd_run)
+
+    sp = sub.add_parser("python", add_help=False,
+                        help="the project interpreter itself (sc python -c '...'), with every package")
+    sp.add_argument("rest", nargs=argparse.REMAINDER)
+    sp.set_defaults(func=cmd_python)
+
+    sp = sub.add_parser("doctor", help="check the environment, packages and programs; say how to fix each gap")
+    sp.add_argument("-v", "--verbose", action="store_true", help="show where each program was found")
+    sp.set_defaults(func=cmd_doctor)
+
+    sp = sub.add_parser("setup", help="create or update the project environment (uv sync --locked), then doctor")
+    sp.add_argument("--no-dev", action="store_true", help="skip the development group (pytest, ruff, mypy)")
+    sp.add_argument("--node", action="store_true", help="also npm ci the connectors")
+    sp.set_defaults(func=cmd_setup)
 
     sp = sub.add_parser("form", help="JC form operations: list, info, fill, fields")
     sp.add_argument("rest", nargs=argparse.REMAINDER,
@@ -2724,8 +3044,19 @@ def main() -> int:
     sp.add_argument("times", nargs="*", help="two HH:MM firing times (default 08:00 20:00)")
     sp.set_defaults(func=cmd_schedule)
 
+    # Pass-through commands take their arguments verbatim, --help
+    # included: argparse would claim a leading option for itself.
+    argv = sys.argv[1:]
+    if argv and argv[0] in PASSTHROUGH:
+        return PASSTHROUGH[argv[0]](argparse.Namespace(command=argv[0], rest=argv[1:]))
+
     args = p.parse_args()
     return args.func(args)
+
+
+#: Subcommands dispatched before argparse sees their arguments.
+PASSTHROUGH = {**{name: cmd_script for name in SCRIPT_COMMANDS},
+               "run": cmd_run, "python": cmd_python}
 
 
 if __name__ == "__main__":
