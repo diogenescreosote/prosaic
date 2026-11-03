@@ -22,10 +22,16 @@ Section headings (``#`` / ``##`` / ``###``) are auto-numbered ``I.`` / ``A.`` /
 ``1.`` exactly like md_pleading.py.
 
 Usage:
-    python md_to_txt.py input.md output.txt [--variant sealed|public]
+    sc run md_to_txt.py input.md output.txt [--variant sealed|public]
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__)
 
 import argparse
 import datetime

@@ -17,13 +17,20 @@ and passes text-bearing pages through unchanged. This is what guarantees
 existing OCR/text is never overwritten.
 
 Usage:
-    python3 ocr_supplement.py <input.pdf> [output_dir] [--force]
+    sc ocr <input.pdf> [output_dir] [--force]
 
   output_dir  where to write <stem>_ocr.pdf (default: alongside input)
   --force     write the _ocr copy even if every page already has text
               (default: skip, and say so, since the copy would be
               text-identical to the original and just waste space)
 """
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "ocr")
+
 import os
 import subprocess
 import sys

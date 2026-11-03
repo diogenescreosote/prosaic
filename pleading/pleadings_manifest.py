@@ -69,10 +69,16 @@ facts about the record, not defects in the manifest.
 
 USAGE
 ─────
-  pleadings_manifest.py <matter-dir> [--json]
+  sc pleadings-manifest <matter-dir> [--json]
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "pleadings-manifest")
 
 import argparse
 import json

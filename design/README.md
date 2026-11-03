@@ -70,6 +70,7 @@ project accretes decisions instead of middleware.
 - [0047](adr/0047-case-names-are-italicized-or-the-build-fails.md) A roman case name in running text fails the build in every renderer; title lines and verbatim text are exempt
 - [0048](adr/0048-phone-store-is-a-derived-index.md) The phone message store is a derived SQLite index of the backups, ingested incrementally by bisecting ordered files; never a record
 - [0049](adr/0049-drafts-are-not-mail.md) Gmail drafts are not mail: never listed, fetched, stored, rendered, counted or reported; legacy captures are audited and moved to `.private/`, never deleted
+- [0050](adr/0050-project-tools-run-through-sc.md) Project tools run through `sc` under the project environment; `sc setup`/`sc doctor`; stock programs declared; bare `python3` scripts hop into the venv
 
 Also:
 

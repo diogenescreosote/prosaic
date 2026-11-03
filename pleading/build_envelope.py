@@ -13,6 +13,12 @@ points and authorities, and proposed order.
 
 from __future__ import annotations
 
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "build")
+
 import argparse
 import json
 import os

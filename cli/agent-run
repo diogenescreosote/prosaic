@@ -70,7 +70,10 @@ resolve_role() {
   [ -n "$ROLE" ] || return 0
   [ -f matter.yaml ] || return 0
   local py out m t
-  for py in python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+  # The project environment first (ADR-0050), then whatever has PyYAML.
+  for py in "$(cd "$(dirname "$0")/.." && pwd)/.venv/bin/python" "${PROSAIC_PYTHON:-}" \
+            python3 /opt/homebrew/bin/python3 /usr/bin/python3; do
+    [ -n "$py" ] || continue
     command -v "$py" >/dev/null 2>&1 || continue
     "$py" -c "import yaml" >/dev/null 2>&1 || continue
     out="$("$py" - "$ROLE" <<'PY'

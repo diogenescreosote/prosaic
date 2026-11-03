@@ -2,8 +2,8 @@
 """RFC 3161 timestamp one or more PDFs using the freetsa.org free TSA.
 
 Usage:
-    python timestamp.py file.pdf [file2.pdf ...]
-    python timestamp.py out/stip_to_seal/*.pdf
+    sc run timestamp.py file.pdf [file2.pdf ...]
+    sc run timestamp.py out/stip_to_seal/*.pdf
 
 For each PDF, produces a <stem>.tsr sidecar file in the same directory.
 If the sidecar already exists and the PDF has not changed since it was
@@ -15,6 +15,12 @@ Log format:
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__)
 
 import hashlib
 import os

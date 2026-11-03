@@ -39,7 +39,7 @@ carrier, exits 1. Unverifiable image-only pages exit 1 too unless
 
 USAGE
 ─────
-  verify_redactions.py <redacted.pdf> --terms <terms.txt> [--config <cfg.json>]
+  sc verify-redactions <redacted.pdf> --terms <terms.txt> [--config <cfg.json>]
                        [--report <out.md>] [--contact-sheet <dir>]
                        [--dpi 60] [--allow-image-only]
 
@@ -48,6 +48,12 @@ USAGE
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "verify-redactions")
 
 import argparse
 import json

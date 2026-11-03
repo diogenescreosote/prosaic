@@ -2,7 +2,7 @@
 """Convert a text-message TSV dump into a cleanly formatted exhibit PDF.
 
 Usage:
-    python tsv_to_exhibit.py input.tsv output.pdf [--title TITLE] [--me NAME] [--them NAME] [--after DATE] [--before DATE]
+    sc run tsv_to_exhibit.py input.tsv output.pdf [--title TITLE] [--me NAME] [--them NAME] [--after DATE] [--before DATE]
 
 The TSV format is: timestamp<TAB>sender<TAB>recipient<TAB>message
 where sender/recipient is either "me" or a phone number.
@@ -16,6 +16,12 @@ Options:
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__)
 
 import argparse
 import sys

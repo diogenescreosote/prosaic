@@ -2,9 +2,9 @@
 """Convert Markdown with YAML front matter into a California-style pleading PDF.
 
 Usage:
-    python md_pleading.py input.md output.pdf
-    python md_pleading.py input.md output.pdf --sign "Jane Roe"
-    python md_pleading.py input.md output.pdf --sign "Jane Roe" --date 2026-03-16
+    sc run md_pleading.py input.md output.pdf
+    sc run md_pleading.py input.md output.pdf --sign "Jane Roe"
+    sc run md_pleading.py input.md output.pdf --sign "Jane Roe" --date 2026-03-16
 
 Dependencies:
     - reportlab
@@ -14,6 +14,12 @@ Dependencies:
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__)
 
 import argparse
 import datetime

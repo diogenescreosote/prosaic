@@ -33,11 +33,17 @@ placed and by which mode, then lists every phrase that matched on no
 selected page. Any such miss exits 2, so a build script can notice.
 
 Usage:
-    python3 highlight_pdf.py <in.pdf> <out.pdf> --phrase "..." [--phrase ...]
-                             [--pages 1,4-6] [--dpi 200] [--mode auto|text|image]
+    sc highlight <in.pdf> <out.pdf> --phrase "..." [--phrase ...]
+                 [--pages 1,4-6] [--dpi 200] [--mode auto|text|image]
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "highlight")
 
 import argparse
 import os

@@ -9,8 +9,8 @@ that; the row looks exactly like a row written after a real read.
 
 So reading is made mechanical and checkable. Two modes:
 
-    read_coverage.py <path...>            # the coverage table
-    read_coverage.py --text <path>        # every page's text, page-marked
+    sc read-coverage <path...>            # the coverage table
+    sc read-coverage --text <path>        # every page's text, page-marked
 
 `--text` is the one you actually read from. It emits the WHOLE document
 with `[[[ page k of N ]]]` markers, so the pages are in context and the
@@ -48,16 +48,16 @@ The coverage table classifies each page:
                 with a caption band, a form with a filled overlay, or a
                 page whose body is an image -- OCR it or look at it
     image-only  no text at all, and drawn content present: a scan. OCR
-                (`ocr_supplement.py`) or rasterize and look
+                (`sc ocr`) or rasterize and look
     blank       no text and nothing drawn: genuinely empty
 
 Exit status is 1 when any page is not fully covered by its text layer,
 so a triage pass can gate on it:
 
-    python3 read_coverage.py inbox/*.pdf || echo "OCR needed first"
+    sc read-coverage inbox/*.pdf || echo "OCR needed first"
 
 Usage:
-    read_coverage.py [--text] [--json] [--min-chars N] <path...>
+    sc read-coverage [--text] [--json] [--min-chars N] <path...>
 
   --text        dump page-marked full text instead of the table
   --json        machine-readable table
@@ -65,6 +65,18 @@ Usage:
   --min-image   fraction of page area a raster must cover to make the
                 page `image-bodied` (default 0.15)
 """
+
+# Run by path under a bare python3, hop into the project environment
+# before any third-party import fails (ADR-0050).
+if __name__ == "__main__":
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "pleading"))
+    import project_python
+
+    project_python.ensure(__file__, "read-coverage")
+    _sys.path.pop(0)
 
 import json
 import sys

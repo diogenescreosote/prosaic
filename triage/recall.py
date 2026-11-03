@@ -37,6 +37,18 @@ searched.
 
 from __future__ import annotations
 
+# Run by path under a bare python3, hop into the project environment
+# before any third-party import fails (ADR-0050).
+if __name__ == "__main__":
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "pleading"))
+    import project_python
+
+    project_python.ensure(__file__, "recall")
+    _sys.path.pop(0)
+
 import argparse
 import json
 import os

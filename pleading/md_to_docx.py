@@ -7,10 +7,16 @@ caption, double spacing, and proper margins, but omits line numbers and
 the vertical rule (courts don't need those in editable documents).
 
 Usage:
-    python md_to_docx.py input.md output.docx
+    sc run md_to_docx.py input.md output.docx
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__)
 
 import argparse
 import datetime

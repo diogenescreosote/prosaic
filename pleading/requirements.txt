@@ -8,6 +8,10 @@ pyyaml
 pypdf[crypto]
 python-docx
 Pillow
+# PDF reading, OCR-sibling checks, highlighting, redaction proofs. Long
+# declared in pyproject.toml and missing here, so a requirements-only
+# install (the container, `sc setup` without uv) could not run them.
+pymupdf
 pytest
 # Trusted timestamps for sc attest (the `ots` CLI). A signature's
 # claimed time is signer-asserted; OpenTimestamps anchors it in a

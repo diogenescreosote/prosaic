@@ -7,7 +7,7 @@ date window), de-duplicates across overlapping daily backups, and
 emits a chronological markdown report. Spec: specs/phone-logs.md.
 
 Usage:
-    python3 triage/phone_logs.py -n +17075551234 \
+    sc phone-logs -n +17075551234 \
         [--after 2026-04-01] [--before 2026-08-22] \
         [--kind calls|sms|both] [-o report.md] <file-or-dir> [...]
 
@@ -15,6 +15,18 @@ Parsing is streaming (xml.etree.iterparse with element clearing), so a
 multi-gigabyte sms backup is fine. Sources are never modified; MMS
 attachments are noted by MIME type, never decoded.
 """
+
+# Run by path under a bare python3, hop into the project environment
+# before any third-party import fails (ADR-0050).
+if __name__ == "__main__":
+    import sys as _sys
+    from pathlib import Path as _Path
+
+    _sys.path.insert(0, str(_Path(__file__).resolve().parent.parent / "pleading"))
+    import project_python
+
+    project_python.ensure(__file__, "phone-logs")
+    _sys.path.pop(0)
 
 import argparse
 import datetime

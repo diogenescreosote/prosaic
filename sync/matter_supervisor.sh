@@ -26,8 +26,12 @@ SC="$PROSAIC_ROOT/cli/sc"
 # sc would run under whatever python3 the minimal PATH finds. That
 # python must carry the deps (pymupdf et al.) -- true on a configured
 # Mac, false on CI. PROSAIC_PYTHON names the interpreter explicitly,
-# same convention as matter_sync.sh.
-SC_PY="${PROSAIC_PYTHON:-python3}"
+# same convention as matter_sync.sh. Absent that, the project
+# environment (ADR-0050), which sc would re-execute under anyway.
+if [ -n "${PROSAIC_PYTHON:-}" ]; then SC_PY="$PROSAIC_PYTHON"
+elif [ -x "$PROSAIC_ROOT/.venv/bin/python" ]; then SC_PY="$PROSAIC_ROOT/.venv/bin/python"
+else SC_PY=python3
+fi
 SYNC="$PROSAIC_ROOT/sync/matter_sync.sh"
 . "$PROSAIC_ROOT/sync/lib.sh"
 LOG_ROOT="$(sc_log_root)"; mkdir -p "$LOG_ROOT"

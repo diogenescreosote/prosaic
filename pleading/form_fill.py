@@ -50,13 +50,19 @@ Fit strategies (``fit:``)
 
 CLI
 ---
-    python form_fill.py fill <form_id> --data data.yaml -o out.pdf
-    python form_fill.py info <form_id>
-    python form_fill.py fields <blank.pdf>       # descriptor skeleton
-    python form_fill.py list
+    sc form fill <form_id> --data data.yaml -o out.pdf
+    sc form info <form_id>
+    sc form fields <blank.pdf>       # descriptor skeleton
+    sc form list
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "form")
 
 import argparse
 import hashlib

@@ -25,10 +25,12 @@ export PATH="/opt/homebrew/bin:/usr/local/bin:$HOME/.local/bin:/usr/bin:/bin:/us
 # The interpreter that parses matter.yaml must have PyYAML. The PATH
 # above is deliberately minimal for launchd, and its python3 often
 # lacks it, so probe candidates and fail loudly rather than silently
-# resolving zero connectors. Override with PROSAIC_PYTHON.
+# resolving zero connectors. Override with PROSAIC_PYTHON. The project
+# environment (<root>/.venv, ADR-0050) comes first: it is what sc itself
+# re-executes under.
 sc_python() {
   local c
-  for c in "${PROSAIC_PYTHON:-}" python3 \
+  for c in "${PROSAIC_PYTHON:-}" "${PROSAIC_ROOT:+$PROSAIC_ROOT/.venv/bin/python}" python3 \
            "$HOME/miniforge3/bin/python3" "$HOME/miniconda3/bin/python3" \
            "$HOME/.local/bin/python3" \
            /opt/homebrew/bin/python3 /usr/local/bin/python3 /usr/bin/python3; do

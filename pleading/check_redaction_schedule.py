@@ -15,7 +15,7 @@ delivered. Both are discovered by the reader, not the author.
 So: every operation carries an `item` naming its schedule identifier, and this
 tool checks that the identifiers on both sides agree.
 
-    check_redaction_schedule.py <schedule.md> <config.json> [<config.json> ...]
+    sc check-redaction-schedule <schedule.md> <config.json> [<config.json> ...]
 
 The schedule is any markdown file whose tables have a first column holding the
 item identifier. Identifiers are matched literally, so use stable ones.
@@ -36,6 +36,12 @@ list and confirm each is one of those.
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "check-redaction-schedule")
 
 import argparse
 import json

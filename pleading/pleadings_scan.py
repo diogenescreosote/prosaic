@@ -54,12 +54,18 @@ copy, a re-export of a damaged thread). Rules, in order:
    similar paper still surfaces.
 
 USAGE
-    python3 pleadings_scan.py <matter_dir>
+    sc pleadings-scan <matter_dir>
 
 Exit 0: nothing unrepresented. Exit 1: candidates need human review.
 """
 
 from __future__ import annotations
+
+# Run by path under a bare python3, hop into the project environment
+# before the third-party imports below fail (ADR-0050).
+if __name__ == "__main__":
+    import project_python
+    project_python.ensure(__file__, "pleadings-scan")
 
 import hashlib
 import re
@@ -239,9 +245,9 @@ def scan(matter: Path) -> int:
 
 
 def main() -> int:
-    if len(sys.argv) != 2:
+    if len(sys.argv) != 2 or sys.argv[1] in ("-h", "--help"):
         print(__doc__)
-        return 2
+        return 0 if sys.argv[1:] in (["-h"], ["--help"]) else 2
     matter = Path(sys.argv[1]).resolve()
     if not (matter / "derived" / "text").is_dir():
         sys.exit(f"{matter}: no derived/text/ -- run `sc text ensure` first")
