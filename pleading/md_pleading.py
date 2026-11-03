@@ -1523,7 +1523,11 @@ def expand_blank_macros(body: str) -> str:
         one = pdfmetrics.stringWidth("_", FONT_NAME, FONT_SIZE)
         return "_" * max(3, round(length / one))
 
-    return BLANK_MACRO.sub(sub, body)
+    # Markdown's escaped underscore (``\_``, which editors and agents write
+    # to keep ``____`` from reading as emphasis) is a plain underscore here:
+    # this renderer never treats ``_`` as emphasis, so the backslash would
+    # otherwise print. Verbatim spans are untouched (caller maps outside them).
+    return BLANK_MACRO.sub(sub, body.replace("\\_", "_"))
 
 
 def enforce_em_dash_spacing(body: str) -> str:
