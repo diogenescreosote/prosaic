@@ -35,13 +35,13 @@ sc phone stats <matter>                   # counts, coverage, backups read
   `docs/phone-logs.md`). It is configuration, but the source paths are
   theirs to name. Add `derived/phone/` to the matter's `.gitignore`.
 
-## 2. Fallback: stream a backup (`phone_logs.py`)
+## 2. Fallback: stream a backup (`sc phone-logs`)
 
 For a backup the store does not cover (a file someone hands you, or
 dates before the store's `since`), use the streaming extractor:
 
 ```bash
-python3 <prosaic>/triage/phone_logs.py \
+<prosaic>/cli/sc phone-logs \
     -n "+1 (555) 000-1234" \
     --after 2026-04-01 --before 2026-08-22 \
     -o report.md  /path/to/backups/

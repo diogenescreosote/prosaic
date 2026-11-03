@@ -18,8 +18,10 @@ Two pipelines, chosen by how many voices matter:
 
 ### Setup
 
-Install `whisper-cpp` (e.g. via Homebrew; Metal-accelerated on macOS,
-fully offline). Download a model, e.g. Whisper medium.en:
+Install `whisper-cpp` and `ffmpeg` with the command `sc doctor` prints
+for them (Homebrew on macOS, where whisper-cpp is Metal-accelerated and
+fully offline; `ffmpeg` from apt on Debian/Ubuntu, whose archive has no
+whisper-cpp, so build it from source there). Download a model, e.g. Whisper medium.en:
 
 ```bash
 curl -L -o ~/.local/share/whisper-models/ggml-medium.en.bin \
@@ -47,6 +49,11 @@ matters, use WhisperX (Whisper transcription + pyannote speaker
 diarization) instead of plain whisper-cpp.
 
 ### One-time setup
+
+WhisperX is the one tool deliberately outside prosaic's environment
+(ADR-0050): its torch stack conflicts with the project's packages and
+it is optional, so it gets a conda environment of its own. Nothing
+else in this repository is installed with `pip` by hand.
 
 ```bash
 conda create -n whisperx python=3.11 -y && conda activate whisperx

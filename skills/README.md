@@ -22,6 +22,13 @@ The discipline:
   enforces the structure, the index below, and that every command a
   skill names still exists. What it cannot check — whether the
   instructions are any good — is on you, same as docs.
+- **Every command is an `sc` command** (ADR-0050). A skill tells an
+  agent never to run `python3 <prosaic>/…`, `pip install`, or `brew`:
+  the stock interpreter lacks the project's packages. Name the
+  `sc` route (`sc ocr`, `sc highlight`, `sc redact`, …), `sc run
+  <script>` for anything without one, `sc python` for ad hoc work, and
+  `sc doctor` when something is missing. `tests/test_tool_routing.py`
+  fails on a bare invocation.
 - **One skill per task-shape**, not per component: "build a filing
   packet" is a skill; "the pleading renderer" is a component with a
   spec.

@@ -20,8 +20,8 @@ real read, and every later draft inherits the gap. So reading is
 mechanical and checkable, not a matter of judgment:
 
 ```bash
-python3 <prosaic>/triage/read_coverage.py inbox/*.pdf          # the table
-python3 <prosaic>/triage/read_coverage.py --text <one.pdf>     # every page
+<prosaic>/cli/sc read-coverage inbox/*.pdf          # the table
+<prosaic>/cli/sc read-coverage --text <one.pdf>     # every page
 ```
 
 `--text` emits the whole document with `[[[ page k of N ]]]` markers.
@@ -32,7 +32,7 @@ python3 <prosaic>/triage/read_coverage.py --text <one.pdf>     # every page
   for. Grep after reading, never instead.
 - **A flagged page is an unread page.** `read_coverage` exits non-zero
   and names the page: `image-only` and `sparse` want OCR
-  (`ocr_supplement.py`) or your eyes; `image-bodied` (a text header
+  (`sc ocr`) or your eyes; `image-bodied` (a text header
   over a screenshot or photographed exhibit) wants the image extracted
   and looked at; `garbled` (clean-looking extraction with no common
   English word — a nonstandard font encoding) wants rasterizing, or
@@ -64,7 +64,7 @@ human review." That is a fine outcome. Silently reading less is not.
    `processed_files/` untouched; everything you produce is a sibling
    or sidecar, never an edit.
 2. **OCR-supplement if any page lacks a text layer:**
-   `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>`
+   `<prosaic>/cli/sc ocr <in.pdf> <assets_dir>`
    — produces `foo_ocr.pdf` beside `foo.pdf`. Already-searchable PDFs
    get no `_ocr` copy (note that in INDEX.md instead); searchable PDFs
    get a `.txt` sidecar. OCR comes **before** the read: you cannot
@@ -99,7 +99,7 @@ subdirectories, dotfiles, archives, files you judged uninteresting.
 Count in equals count out: routed, or deliberately left with a stated
 reason. Unpack archives (`.zip`, `.tar`) and triage the contents; the
 archive itself goes to `processed_files/`. **Duplicates are proved, not
-assumed** — compare bytes (`shasum`) or content; identical bytes prove
+assumed** — compare bytes (`sc attest hash a b`, or stock `shasum -a 256`) or content; identical bytes prove
 only that two files are the same file, never that either came from the
 court. **Say what you could not do**: pages unread, provenance unknown,
 routing unclear, listed for the human by name.

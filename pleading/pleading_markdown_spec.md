@@ -998,7 +998,7 @@ received document, attach an excerpt with those passages highlighted,
 made with `pleading/highlight_pdf.py`:
 
 ```bash
-python3 <prosaic>/pleading/highlight_pdf.py assets/received/long_declaration.pdf \
+sc highlight assets/received/long_declaration.pdf \
     exhibits/long_declaration_pp4_10_excerpt.pdf \
     --pages 4,10 \
     --phrase "asked the school to enforce the order" \
@@ -1588,7 +1588,7 @@ The script emits a PDF file.
 ### Command-line usage
 
 ```bash
-python md_pleading.py input.md output.pdf
+sc run md_pleading.py input.md output.pdf
 ```
 
 ### CLI behavior

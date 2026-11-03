@@ -69,7 +69,7 @@ twin is already in place.
 
 ## Reading every page
 
-`python3 triage/read_coverage.py <pdf...>` prints one line per file and
+`sc read-coverage <pdf...>` prints one line per file and
 names every page that needs OCR or eyes; `--text <pdf>` emits the whole
 document with `[[[ page k of N ]]]` markers and a closing page count.
 The classes, and the failure each one names:

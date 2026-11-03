@@ -55,9 +55,8 @@ git clone https://github.com/diogenescreosote/slopcannon-local.git local
 Three layers, one file each ([docs/install.md](../../docs/install.md)):
 
 ```bash
-uv sync                              # Python
-cd connectors && npm ci && cd ..     # Node
-./cli/sc deps                        # system binaries; non-zero if any required one is missing
+./cli/sc setup --node                # Python env from uv.lock (+ connectors' npm ci), then sc doctor
+./cli/sc doctor                      # re-check: env, packages, programs; prints the fix for each gap
 brew install $(./cli/sc deps --format brew)      # macOS
 sudo apt install $(./cli/sc deps --format apt)   # Debian/Ubuntu
 ```

@@ -22,15 +22,15 @@ the strength of having looked at it.
    basis, and an `item` naming the identifier in the human-facing
    schedule that authorises it. The schedule is the work product; the
    PDF is its output.
-2. **Build.** `python3 <prosaic>/pleading/redact_pdf.py <cfg>.json --force`
+2. **Build.** `<prosaic>/cli/sc redact <cfg>.json --force`
    Every entry must match. If any finds nothing the build writes no
    output and exits nonzero — a success means every listed entry applied.
-3. **Prove.** `python3 <prosaic>/pleading/verify_redactions.py <out>.pdf
+3. **Prove.** `<prosaic>/cli/sc verify-redactions <out>.pdf
    --terms <terms>.txt --config <cfg>.json --report <report>.md
    --contact-sheet <dir>/`
    Exit 0 only when nothing in the term list survives in the text layer,
    the annotations, the metadata, or the raw bytes.
-4. **Reconcile.** `python3 <prosaic>/pleading/check_redaction_schedule.py
+4. **Reconcile.** `<prosaic>/cli/sc check-redaction-schedule
    <the letter or motion>.md src/redactions/*.json`
    Every operation must cite an item the schedule enumerates.
 5. **Show.** Give the human the contact sheet and the report, and say
@@ -94,7 +94,7 @@ What redaction does and does not do, in tool terms, is in
 
 Redact **from the court-filed version**, never from a working copy
 someone has already marked up. Check `pleadings/MANIFEST.md` first and
-run `pleadings_manifest.py <matter>`; if the source is a substitute or
+run `sc pleadings-manifest <matter>`; if the source is a substitute or
 unverified, say so in the config's `_comment` and in what you report.
 
 Two files being byte-identical proves only that they are the same file.

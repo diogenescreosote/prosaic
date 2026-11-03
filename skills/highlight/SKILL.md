@@ -17,7 +17,7 @@ For withholding anything, load `redact`.
 ## The command
 
 ```bash
-python3 <prosaic>/pleading/highlight_pdf.py <in.pdf> <out.pdf> \
+<prosaic>/cli/sc highlight <in.pdf> <out.pdf> \
     --pages 4,10 \
     --phrase "asked the school to enforce the order" \
     --phrase "appearing at the school unannounced"

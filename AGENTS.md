@@ -63,6 +63,7 @@ Every feature addition or substantial modification follows this loop:
    | a front-matter key | `pleading/front_matter_keys.yaml` **and** the markdown spec |
    | a form-descriptor key | the descriptor schema in `pleading/pleading_markdown_spec.md` |
    | a system binary the code shells out to | `system-dependencies.yaml` |
+   | a Python tool people or agents run by hand | an `sc` route (`SCRIPT_COMMANDS` in `cli/sc`, or `sc run`), never a bare `python3` instruction (ADR-0050) |
    | a matter-facing convention | `templates/matter/AGENTS.md`, the contract agents actually read |
    | an agent-facing capability (a task an agent performs) | a `skills/<name>/SKILL.md`, indexed in `skills/README.md` (granularity rules there; ADR-0029) |
    | a decision that constrains later work | an ADR, listed in `design/README.md` |

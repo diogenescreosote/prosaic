@@ -40,11 +40,14 @@ If there is no workspace contract above this directory, copy
 | List envelopes | `<prosaic>/cli/sc list` |
 | Report stale build output | `/clean` (`<prosaic>/cli/sc clean .`; deleting is your own `--apply`) |
 | Fill a Judicial Council form | `<prosaic>/cli/sc form fill <id> …` (`sc form info <id>` first) |
-| OCR-supplement a PDF | `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>` |
+| OCR-supplement a PDF | `<prosaic>/cli/sc ocr <in.pdf> <assets_dir>` |
 | Pull sources + triage now | `<prosaic>/cli/sc sync .` |
-| Redact a PDF | `python3 <prosaic>/pleading/redact_pdf.py …` |
-| Highlight passages of a received PDF (exhibit excerpt) | `python3 <prosaic>/pleading/highlight_pdf.py <in.pdf> <out.pdf> --pages … --phrase "…"` (load the `highlight` skill; `--mode image` for deskewed scans) |
+| Redact a PDF | `<prosaic>/cli/sc redact …`, then `sc verify-redactions …` (load the `redact` skill) |
+| Highlight passages of a received PDF (exhibit excerpt) | `<prosaic>/cli/sc highlight <in.pdf> <out.pdf> --pages … --phrase "…"` (load the `highlight` skill; `--mode image` for deskewed scans) |
 | Back up this matter | `<prosaic>/cli/sc backup push .` |
+| Check provenance of `pleadings/` | `<prosaic>/cli/sc pleadings-manifest .` |
+| Any other prosaic script | `<prosaic>/cli/sc run <script>.py …`; ad hoc Python with the project's packages: `sc python -c '…'` |
+| Something missing or failing to import | `<prosaic>/cli/sc doctor` (never `pip`/`brew` yourself) |
 
 Configuration: `matter.yaml` (case, connectors, backup),
 `envelopes.yaml` (filing envelopes). Connector/sync state lives in

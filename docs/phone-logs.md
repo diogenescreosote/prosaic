@@ -111,7 +111,7 @@ from the phone after a backup was ingested stays in the store.
 ## The one-off extractor
 
 ```sh
-python3 <prosaic>/triage/phone_logs.py -n "+1 555 000 1234" \
+sc phone-logs -n "+1 555 000 1234" \
     --after 2026-04-01 --before 2026-08-22 -o report.md /path/to/backups/
 ```
 

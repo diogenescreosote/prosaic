@@ -35,6 +35,25 @@ Verify before finishing any `src/` edit:
 rg -n ' --- ' path/to/file.md
 ```
 
+## STOP. Project tools run through `sc`, never bare `python3`
+
+`sc` is `<prosaic>/cli/sc` (from a matter, usually `../<prosaic>/cli/sc`).
+It runs every tool under the project's own Python environment, which
+has PyMuPDF, pypdf and the rest; the stock `python3` does not, and
+fails at `import fitz`. So:
+
+- A project script is `sc <name> …`: `sc ocr`, `sc highlight`,
+  `sc redact`, `sc verify-redactions`, `sc check-redaction-schedule`,
+  `sc pleadings-manifest`, `sc pleadings-scan`, `sc read-coverage`,
+  `sc phone-logs`. Any other is `sc run <script>.py …`.
+- One-off Python that needs those packages is `sc python -c '…'`.
+- **Never** `python3 <prosaic>/…`, never `pip install`, never `brew`/
+  `apt` to make a tool work. If something is missing, run `sc doctor`;
+  it names the fix. Installing is the human's call.
+- Other programs (`pdftotext`, `pdfinfo`, `ocrmypdf`, `tesseract`,
+  `ffmpeg`, `rg`) are ones `sc doctor` checks; use them directly.
+  Stock macOS tools (`open`, `shasum`, `sed`, `awk`) need nothing.
+
 ## STOP. A question about the record is answered by searching it
 
 "When did she say X", "is there an email about Y", "where is Z": run
@@ -173,7 +192,7 @@ signed rather than stamped; it is not a substitute, and it says nothing
 about provenance. Check it:
 
 ```bash
-python3 <prosaic>/pleading/pleadings_manifest.py <matter>
+sc pleadings-manifest <matter>
 ```
 
 A PDF carries no sign of its own provenance. A marked-up working copy, a
@@ -233,7 +252,7 @@ document is made with the `highlight` skill, never with boxes placed by
 hand and never with the redaction tools:
 
 ```bash
-python3 <prosaic>/pleading/highlight_pdf.py <in.pdf> <out.pdf> --pages 4,10 --phrase "..." [--mode image]
+sc highlight <in.pdf> <out.pdf> --pages 4,10 --phrase "..." [--mode image]
 ```
 
 The original is never modified. Exit 2 means a phrase landed nowhere:
@@ -312,7 +331,7 @@ TXT.
 Every document moved from `inbox/` into `assets/`:
 
 1. **OCR-supplement it** if any page lacks a text layer:
-   `python3 <prosaic>/pleading/ocr_supplement.py <in.pdf> <assets_dir>`.
+   `sc ocr <in.pdf> <assets_dir>`.
    Supplements, never replaces: `foo.pdf` → `foo_ocr.pdf`, side by
    Already-searchable PDFs get no OCR copy — note that in INDEX.md
    instead. Derived artifacts never sit beside originals (ADR-0042):

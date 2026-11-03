@@ -18,8 +18,8 @@ deployment, and whether the access checks pass.
   complete — and it fails quietly rather than loudly, which is why this
   is first.
 - **git**, **Python 3.12+**, and [**uv**](https://docs.astral.sh/uv/).
-- macOS or Linux. Some system binaries get installed along the way; the
-  tooling tells you which and how.
+- macOS or Debian/Ubuntu. Some system binaries get installed along the way; the
+  tooling tells you which and how (`sc setup`, then `sc doctor`).
 
 ## The one irreversible choice
 

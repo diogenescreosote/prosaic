@@ -9,7 +9,7 @@ prompt exists to prevent is a confident catalog row written after
 reading part of a document. For each file:
 
 ```bash
-python3 <prosaic>/triage/read_coverage.py --text <file.pdf>
+<prosaic>/cli/sc read-coverage --text <file.pdf>
 ```
 
 Read that output end to end and check the closing page count against
