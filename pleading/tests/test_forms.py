@@ -1018,3 +1018,24 @@ def test_subpoena_issuer_lines_are_never_drawn_for_a_self_represented_filer(form
     form_fill.fill(form_id, out2, meta=counsel)
     assert "Roe" in probe.field_text(out2, form_id, "issuer_print_name")
     assert "Attorney" in probe.field_text(out2, form_id, "issuer_title")
+
+
+# FW-020: request for court reporter (specs/pleading/forms/fw020.md)
+
+@pytest.mark.skipif("fw020" not in FORMS, reason="fw020 descriptor not present")
+def test_fw020_fills_one_proceeding_and_leaves_signing_to_the_filer(tmp_path):
+    out = tmp_path / "fw020.pdf"
+    data = {"fee_waiver_granted": True, "hearing": True,
+            "proceeding_date": "November 10, 2026"}
+    form_fill.fill("fw020", out, meta=dict(FIXTURE_META), data=data)
+    assert probe.has_no_form_layer(out)
+    assert len(PdfReader(str(out)).pages) == 1
+    assert probe.field_text(out, "fw020", "requesting_party") == "Jane Roe"
+    assert probe.field_text(out, "fw020", "proceeding_date") == "November 10, 2026"
+    assert probe.checkbox_marked(out, "fw020", "fee_waiver_granted")
+    assert probe.checkbox_marked(out, "fw020", "hearing")
+    assert not probe.checkbox_marked(out, "fw020", "trial")
+    assert not probe.checkbox_marked(out, "fw020", "filing_fw001_with_this")
+    assert not probe.field_text(out, "fw020", "date").strip()
+    sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
+    assert {f["type"] for f in sidecar["fields"]} >= {"signature", "date"}

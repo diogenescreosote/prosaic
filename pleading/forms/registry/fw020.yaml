@@ -1,0 +1,228 @@
+# FW-020 — Request for Court Reporter by Party With Fee Waiver
+# (Judicial Council of California)
+#
+# One page, approved for OPTIONAL use (Cal. Rules of Court, rules 3.55
+# and 2.956(c); Gov. Code § 68086). A party who has a fee waiver, or
+# files an FW-001 with this form, asks the court to provide an official
+# reporter for a hearing or trial the court would not otherwise report.
+# One proceeding date per form: item 2 has a single "on (date)" box.
+#
+# Overlay technology (ADR-0046): values draw at widget rects, output
+# flattens; the Print/Save/Clear buttons and the privacy banner are
+# stripped before the bake. Every mapping below was verified
+# empirically on the shipped blank (fill, rasterize, look).
+
+form: fw020
+title: Request for Court Reporter by Party With Fee Waiver
+domain: ca/general
+revision: "2021-01"           # footer: "FW-020 [New January 1, 2021]"
+source_url: https://courts.ca.gov/documents/fw020.pdf
+blank: fw020.pdf
+technology: overlay
+
+# E-sign roles (ADR-0033): the requesting party signs and dates.
+esign_parties: [filer]
+
+chrome_fields: ["Print[0]", "Save[0]", "Reset[0]", "Warning[0]"]
+
+# Static gray under-rectangle where the stripped privacy banner sat.
+# The Warning widget's rect is [36.3, 12.0, 247.6, 35.2]; this is that
+# with a margin, clear of the footer's form-number line above it.
+whiteouts:
+  - page: 1
+    rect: [35, 10.5, 249, 36.5]
+
+fields:
+  # -- Caption: granular attorney/party block ---------------------------------
+  atty_name:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyName_ft[0]"
+    page: 1
+    doc: "NAME"
+    auto: filer_name_bare
+  atty_bar_no:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyBarNo_dc[0]"
+    page: 1
+    doc: "STATE BAR NO (drawn only when filer_bar_number is set)"
+    auto: filer_bar_number
+  atty_firm:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyFirm_ft[0]"
+    page: 1
+    doc: "FIRM NAME"
+    auto: filer_firm
+  atty_street:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyStreet_ft[0]"
+    page: 1
+    doc: "STREET ADDRESS"
+    auto: filer_street
+  atty_city:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyCity_ft[0]"
+    page: 1
+    doc: "CITY"
+    auto: filer_city
+  atty_state:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyState_ft[0]"
+    page: 1
+    doc: "STATE"
+    auto: filer_state
+  atty_zip:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyZip_ft[0]"
+    page: 1
+    doc: "ZIP CODE"
+    auto: filer_zip
+  phone:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].Phone_ft[0]"
+    page: 1
+    doc: "TELEPHONE NO."
+    auto: phone
+  fax:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].Fax_ft[0]"
+    page: 1
+    doc: "FAX NO."
+    auto: fax
+  email:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].Email_ft[0]"
+    page: 1
+    doc: "EMAIL ADDRESS"
+    auto: email
+  attorney_for:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].AttyInfo[0].AttyFor_ft[0]"
+    page: 1
+    doc: "ATTORNEY FOR (name) --- or the filer's own role if self-represented"
+    auto: attorney_for
+
+  # -- Caption: court, parties, case ------------------------------------------
+  court_county:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].CourtInfo[0].CrtCounty_ft[0]"
+    page: 1
+    doc: "County name only --- the form prints 'SUPERIOR COURT OF CALIFORNIA, COUNTY OF'"
+    auto: court_county
+  court_street_address:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].CourtInfo[0].Street_ft[0]"
+    page: 1
+    doc: "Court STREET ADDRESS"
+    auto: court_street_address
+  court_mailing_address:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].CourtInfo[0].MailingAdd_ft[0]"
+    page: 1
+    doc: "Court MAILING ADDRESS"
+    auto: court_mailing_address
+  court_city_zip:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].CourtInfo[0].CityZip_ft[0]"
+    page: 1
+    doc: "Court CITY AND ZIP CODE"
+    auto: court_city_zip
+  court_branch:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].CourtInfo[0].Branch_ft[0]"
+    page: 1
+    doc: "BRANCH NAME"
+    auto: court_branch
+  plaintiff:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].TitlePartyName[0].Party1_ft[0]"
+    page: 1
+    doc: "Plaintiff/Petitioner caption name"
+    auto: petitioner
+  defendant:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].TitlePartyName[0].Party2_ft[0]"
+    page: 1
+    doc: "Defendant/Respondent caption name"
+    auto: respondent
+  other_party:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].TitlePartyName[0].Party3_ft[0]"
+    page: 1
+    doc: "Other Party --- usually blank"
+    default: ""
+  case_number:
+    map: "FW-020[0].Page1[0].P1Caption_sf[0].CaseNumber[0].CaseNumber_ft[0]"
+    page: 1
+    doc: "CASE NUMBER"
+    auto: case_number
+
+  # -- Item 1: who asks ---------------------------------------------------------
+  requesting_party:
+    map: "FW-020[0].Page1[0].List2[0].LI1[0].TextField1[0]"
+    page: 1
+    doc: "Item 1 '(Name of party making request)'"
+    auto: filer_name_bare
+
+  # -- Item 2: the proceeding ---------------------------------------------------
+  proceeding_date:
+    map: "FW-020[0].Page1[0].List2[0].LI2[0].DateField1[0]"
+    page: 1
+    doc: >-
+      Item 2 'on (date)' --- ONE date. The box is about 107 pt wide:
+      "November 10, 2026" fits; two dates do not. A multi-day trial
+      that is one proceeding may still be named by its first day (rule
+      2.956(c)(2)(C) carries a trial request over a continuance), but
+      the safe practice for non-consecutive days is one form per day.
+    default: ""
+
+  # -- Signature block ----------------------------------------------------------
+  date:
+    map: "FW-020[0].Page1[0].SignSub[0].DateField2[0]"
+    page: 1
+    doc: "Date beside the signature. LEAVE BLANK for signing time."
+    default: ""
+    esign: {type: date, party: filer}
+  print_name:
+    map: "FW-020[0].Page1[0].SignSub[0].PrintName[0]"
+    page: 1
+    doc: "(TYPE OR PRINT NAME OF ATTORNEY OR PARTY WITHOUT ATTORNEY)"
+    auto: filer_name_bare
+  signature:
+    page: 1
+    # Hand-authored rect (no widget): the signature rule runs x 354--576
+    # at 97.9 pt from the bottom; the box rests on it and rises 28 pt.
+    rect: [356, 98, 575, 126]
+    doc: "The requesting party's signature line --- never machine-filled."
+    default: ""
+    esign: {type: signature, party: filer}
+
+checkboxes:
+  fee_waiver_granted:
+    map: "FW-020[0].Page1[0].List2[0].LI1[0].List1[0].LI1[0].Checkbox1[0]"
+    on_value: "/1"
+    doc: "Item 1a --- has received a waiver of court fees and costs in this action"
+  filing_fw001_with_this:
+    map: "FW-020[0].Page1[0].List2[0].LI1[0].List1[0].LI2[0].Checkbox1[0]"
+    on_value: "/2"
+    doc: "Item 1b --- is filing a Request to Waive Court Fees (FW-001 or FW-001-GC) with this form"
+  trial:
+    map: "FW-020[0].Page1[0].List2[0].LI2[0].Checkbox3[0]"
+    on_value: "/1"
+    doc: "Item 2 --- the proceeding is a trial"
+  hearing:
+    map: "FW-020[0].Page1[0].List2[0].LI2[0].Checkbox3[1]"
+    on_value: "/2"
+    doc: "Item 2 --- the proceeding is a hearing"
+
+agent_guide: |
+  FW-020 asks the court to provide an official court reporter, at no
+  cost, for a hearing or trial it would not otherwise report (Cal.
+  Rules of Court, rule 2.956(c)(2); Gov. Code § 68086). Use it when
+  the requesting party has a fee waiver (check item 1a,
+  fee_waiver_granted) or is filing an FW-001 with it (item 1b,
+  filing_fw001_with_this; file the FW-001 in the same envelope). Many
+  courts provide no reporters in civil, family or probate matters, so
+  without this request those proceedings go unreported and no
+  transcript can ever be made.
+
+  Timing (rule 2.956(c)(2)(B)): file 10 calendar days before the
+  proceeding, or as soon as practicable when it was set on shorter
+  notice. A trial request survives a continuance (rule
+  2.956(c)(2)(C)); a hearing request does not say so, so refile for a
+  reset hearing.
+
+  One proceeding per form. Check exactly one of trial / hearing, and
+  put one date in proceeding_date. For non-consecutive trial days,
+  file one form per day so each date is on a form the clerk can
+  calendar. The form names no department or matter; if the court has
+  several matters on one date, the date covers them all.
+
+  The form does not get a free transcript: a transcript is ordered
+  from the reporter afterward and paid for by the party (Jameson v.
+  Desta (2018) 5 Cal.5th 594), subject to the Transcript Reimbursement
+  Fund or an appeal-stage fee waiver.
+
+  Always left blank: the date and the signature (e-sign areas for the
+  filer). Typically not served on other parties, though serving it
+  does no harm; check local practice.

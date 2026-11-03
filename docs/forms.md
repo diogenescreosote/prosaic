@@ -386,6 +386,7 @@ Current registry: `mc030` (declaration), `mc025` (attachment),
 `subp025` (notice to consumer or employee and objection),
 `ra010` (notice of remote appearance; instructions page dropped by
 `filed_pages`), `ra020` (order regarding remote appearance),
+`fw020` (request for court reporter by party with fee waiver),
 `mc040` (notice of change of address — the `technology: overlay`
 pilot).
 
