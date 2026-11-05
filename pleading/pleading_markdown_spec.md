@@ -314,6 +314,7 @@ These fields are expected for a normal pleading-style caption:
 - `judge` — string
 - `concurrent_filings` — list of strings; rendered as a bullet list in the right column under "Filed concurrently with:"
 - `exhibits` — list of exhibit objects; if omitted or empty, no exhibit appendix is generated
+- `exhibit_numbering` — `alpha` (default: A, B, … Z, AA) or `numeric` (1, 2, 3); how this document designates its own exhibits, in cites, the exhibit list, tab sheets and bookmarks alike. Any other value fails the build. A party answering papers whose exhibits are lettered numbers its own (and the reverse), so a cite can name only one side's exhibit. Not inherited: a markdown exhibit numbers its own exhibits from its own front matter, as a signed declaration's text already does. See "Exhibits inside exhibits."
 - `redactions` — mapping from literal sealed text to its public replacement,
   used by one-argument `\redact{...}` in the Markdown body
 - `consumer_notices` — list of mappings; one Notice to Consumer or
@@ -917,6 +918,7 @@ Each exhibit entry in `exhibits` must be a YAML mapping with these fields:
 - `title` — required string; used on the exhibit list and on the exhibit tab sheet
 - `path` — required string (unless `sealed: true`); relative or absolute pathname to the attachment file. This may also be a variant-aware mapping with `sealed` / `public` branches. Bare filenames default to the sibling `exhibits/` directory next to `src/`.
 - `pages` — optional string; page range selector for PDF attachments (see below)
+- `inner_tab_pages` — optional string, page-range syntax over the **file's** pages; for a prebuilt PDF exhibit that carries exhibits of its own (a signed declaration with its Exhibit A behind it), the pages that are those inner exhibits' tab sheets. Each gets the parent-exhibit line stamped on the packet's copy; the file on disk is never touched. A page the `pages:` selection leaves out fails the build, and so does the key on a markdown exhibit (which marks its own tab sheets) or a non-PDF. See "Exhibits inside exhibits."
 - `bates_first` — optional string; the Bates token stamped on page 1 of the file (`CAPINAS00001`). Page *n* of the file carries the same prefix and digit width with the number advanced by *n*−1, whatever `pages:` selects, so a `\bates{TOKEN}` in the body resolves to the attached page carrying that stamp. Ends in the page-1 number or the build refuses it.
 - `sealed` — optional boolean (default `false`); if `true`, the exhibit is listed on the exhibit list page with a "[Lodged Conditionally Under Seal]" annotation but is **not attached** to the PDF. The `\exhibit{}` reference still resolves to the correct letter. No `path` is required for sealed exhibits. This is the direct attachment switch used by the active build variant. Tab sheets are asymmetric by design: in a **public** build the sealed exhibit gets a placeholder tab sheet labeled `LODGED CONDITIONALLY UNDER SEAL` (the public packet must show the gap); in a sealed-variant build the exhibit is skipped entirely — no tab sheet — because the packet is accompanied by the separately-lodged originals.
 - `public_disclosure` — optional string controlling what happens in the **public**
@@ -1151,11 +1153,11 @@ The exhibit appendix consists of:
    - a tab sheet page reading `EXHIBIT A`, `EXHIBIT B`, etc.; then
    - one or more pages containing the associated attachment, scaled and centered.
 
-Exhibit letters are automatic and assigned by list order:
+Exhibit designators are automatic and assigned by list order:
 
-- first exhibit → `A`
-- second exhibit → `B`
-- third exhibit → `C`
+- first exhibit → `A` (or `1` under `exhibit_numbering: numeric`)
+- second exhibit → `B` (`2`)
+- third exhibit → `C` (`3`)
 - and so on
 
 ## Markdown body rules
@@ -1440,7 +1442,7 @@ is replaced during generation with the exhibit letter assigned from the YAML lis
 Exhibit B
 ```
 
-If `jones_texts` is the second exhibit in the YAML list, the substitution result is `Exhibit B`.
+If `jones_texts` is the second exhibit in the YAML list, the substitution result is `Exhibit B` (or `Exhibit 2` under `exhibit_numbering: numeric`).
 
 This allows you to write stable symbolic references in Markdown without hardcoding exhibit letters by hand.
 
@@ -1457,6 +1459,39 @@ and the tab sheets read `ATTACHMENT A` instead of `EXHIBIT A`.
 `\attachment{shortname}` is accepted as a synonym for `\exhibit{shortname}`
 and is preferred in letters. Both macros are interchangeable: each is
 resolved to the doctype's label at render time.
+
+### Exhibits inside exhibits
+
+A document attached as an exhibit (a markdown exhibit, or a prebuilt PDF
+such as a signed declaration) may carry exhibits of its own. Each
+document designates its own list (`exhibit_numbering`), so the usual
+shape is a numbered outer list around a lettered inner one: "Exhibit 7"
+is the declarant's, "Exhibit A" within it is the witness's.
+
+The inner tab sheets would still read, out of context, as the outer
+document's. So each one carries a single line at its foot naming the
+exhibit it is part of:
+
+```
+                EXHIBIT A
+              Search Report
+
+
+   Part of Exhibit 7: Declaration of John Smith
+```
+
+The line is the parent's label and designator and the parent's title
+for that exhibit. It names the **immediate** parent only (a grandchild's
+tab sheet names the child). Only tab sheets carry it; no other page of
+the inner document changes.
+
+- **Markdown exhibit:** automatic. The parent hands the line to the
+  child's build (`PROSAIC_EXHIBIT_PARENT`), and the child prints it on
+  its own tab sheets. Built on its own, the same source prints no line.
+- **Prebuilt PDF:** the renderer cannot tell which pages are tab
+  sheets, so the exhibit entry names them with `inner_tab_pages`, and
+  the line is stamped on those pages of the packet's copy. The file on
+  disk, often a signed original, is untouched.
 
 ## Document layout primitives (plain instruments)
 

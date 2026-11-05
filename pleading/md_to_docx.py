@@ -81,6 +81,8 @@ from md_pleading import (
     Exhibit,
     alpha,
     apply_variant_to_meta,
+    exhibit_designator,
+    exhibit_numbering_style,
     autonumber_list_items,
     draft_banner_text,
     effective_variant,
@@ -179,10 +181,10 @@ def build_citation_exhibit_map(meta: dict, input_path: Path,
     """Build a shortname -> Exhibit map for citation resolution only.
 
     The docx renderer never attaches exhibit files, so exhibit paths are
-    neither resolved nor required to exist — only the letter (positional,
-    like the PDF's) and any ``pages`` spec matter. ``exhibit_source``
-    entries are appended after the file's own exhibits, in source order,
-    so the lettering matches the PDF for the same document.
+    neither resolved nor required to exist — only the designator
+    (positional and in the file's ``exhibit_numbering`` style, like the
+    PDF's) and any ``pages`` spec matter. ``exhibit_source`` entries keep
+    the designators their own file gives them, as the PDF does.
     """
     entries: List[Tuple[str, str | None, str, bool]] = []
     for item in meta.get("exhibits") or []:
@@ -194,22 +196,28 @@ def build_citation_exhibit_map(meta: dict, input_path: Path,
         entries.append((str(item["shortname"]).strip(), pages or None,
                         str(item.get("title") or ""), bool(item.get("sealed"))))
 
+    external: List[Exhibit] = []
     exhibit_source = meta.get("exhibit_source")
     if exhibit_source:
         source_path = Path(exhibit_source)
         if not source_path.is_absolute():
             source_path = (input_path.parent / source_path).resolve()
         own = {e[0] for e in entries}
-        for ex in load_external_exhibits(source_path, variant):
-            if ex.shortname not in own:
-                entries.append((ex.shortname, ex.pages, ex.title, ex.sealed))
+        external = [ex for ex in load_external_exhibits(source_path, variant)
+                    if ex.shortname not in own]
 
+    style = exhibit_numbering_style(meta)
     mapping: dict = {}
     for idx, (shortname, pages, title, sealed) in enumerate(entries, start=1):
         if shortname:
             mapping[shortname] = Exhibit(shortname=shortname, title=title,
-                                         path=None, letter=alpha(idx),
+                                         path=None,
+                                         letter=exhibit_designator(idx, style),
                                          pages=pages, sealed=sealed)
+    # Another file's exhibits keep the designators that file gives them,
+    # as in the PDF (its own numbering style, its own positions).
+    for ex in external:
+        mapping[ex.shortname] = ex
     return mapping
 
 

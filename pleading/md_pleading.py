@@ -625,13 +625,20 @@ class Exhibit:
     shortname: str
     title: str
     path: Optional[Path]
-    letter: str
+    letter: str        # the designator, "C" or "3" (see exhibit_numbering)
     sealed: bool = False
     pages: Optional[str] = None
     # First Bates token stamped on page 1 of the file ("CAPINAS00001"):
     # page n carries the same prefix and width with the number advanced
     # by n-1, so \bates{} references resolve to attached pages.
     bates_first: Optional[str] = None
+    # Pages of a prebuilt PDF exhibit (1-based, page-range syntax) that
+    # are the tab sheets of the exhibit's OWN exhibits -- a signed
+    # declaration with its Exhibit A behind it. Each gets the
+    # parent-exhibit line stamped on the packet's copy (see
+    # PARENT_EXHIBIT_NOTE). A markdown exhibit needs no such list: its
+    # own build draws the line on its tab sheets.
+    inner_tab_pages: Optional[str] = None
 
 
 _BATES_TOKEN_RE = re.compile(r"^(?P<prefix>.*?)(?P<num>\d+)$")
@@ -709,6 +716,35 @@ def alpha(num: int) -> str:
         out.append(chr(ord("A") + (num % 26)))
         num //= 26
     return "".join(reversed(out))
+
+
+# How a document designates its exhibits: letters (A, B, ... Z, AA) or
+# numbers (1, 2, 3). Front matter `exhibit_numbering` picks one; the
+# default is letters. A party answering papers whose exhibits are
+# lettered numbers its own, so a cite can never name the wrong side's
+# exhibit. Each document numbers its own list: a declaration attached
+# as an exhibit keeps its own scheme (and its signed text).
+EXHIBIT_NUMBERING_STYLES = ("alpha", "numeric")
+DEFAULT_EXHIBIT_NUMBERING = "alpha"
+
+
+def exhibit_numbering_style(meta: Dict) -> str:
+    value = meta.get("exhibit_numbering", DEFAULT_EXHIBIT_NUMBERING)
+    style = str(value).strip().lower()
+    if style not in EXHIBIT_NUMBERING_STYLES:
+        raise ValueError(
+            f"exhibit_numbering: {value!r} is not one of "
+            f"{', '.join(EXHIBIT_NUMBERING_STYLES)}")
+    return style
+
+
+def exhibit_designator(idx: int, style: str = DEFAULT_EXHIBIT_NUMBERING) -> str:
+    """The 1-based idx-th exhibit's designator: "C" (alpha) or "3" (numeric)."""
+    if style == "numeric":
+        if idx < 1:
+            raise ValueError("exhibit numbering starts at 1")
+        return str(idx)
+    return alpha(idx)
 
 
 def _ordinal(n: int) -> str:
@@ -1667,8 +1703,25 @@ def _derive_public_redacted_path(path: Path) -> Path:
 # carries its ancestry in PROSAIC_EXHIBIT_RENDER_STACK (os.pathsep-
 # joined resolved paths) and a document appearing twice in its own
 # chain is a hard error naming the cycle.
+#
+# An exhibit's own exhibits must not be mistaken for the parent's: the
+# child's "EXHIBIT A" tab sheet, inside the parent's Exhibit 7, would
+# otherwise read as the parent's Exhibit A. So the parent hands the
+# child the line to print on its tab sheets (PROSAIC_EXHIBIT_PARENT,
+# formatted from PARENT_EXHIBIT_NOTE), and the same line is stamped on
+# the inner tab pages of a prebuilt PDF exhibit (`inner_tab_pages`).
+# Only tab sheets carry it; the child's own pages are untouched.
 
 _EXHIBIT_STACK_ENV = "PROSAIC_EXHIBIT_RENDER_STACK"
+_EXHIBIT_PARENT_ENV = "PROSAIC_EXHIBIT_PARENT"
+PARENT_EXHIBIT_NOTE = "Part of {label} {designator}: {title}"
+PARENT_EXHIBIT_NOTE_SIZE = 12
+PARENT_EXHIBIT_NOTE_BASELINE = 72   # points above the page's bottom edge
+
+
+def parent_exhibit_note(label: str, exhibit: "Exhibit") -> str:
+    return PARENT_EXHIBIT_NOTE.format(label=label, designator=exhibit.letter,
+                                      title=exhibit.title)
 _CURRENT_DOC_PATH: Optional[Path] = None
 
 
@@ -1683,14 +1736,16 @@ def _exhibit_render_chain() -> List[str]:
     return chain
 
 
-def _render_markdown_exhibit(md_path: Path, variant: str, parent_meta: Dict) -> Path:
+def _render_markdown_exhibit(md_path: Path, variant: str, parent_meta: Dict,
+                             parent_note: Optional[str] = None) -> Path:
     """Render another markdown source to PDF for attachment as an exhibit.
 
     Runs in a subprocess so the child gets the full pipeline (cover
     sheets included) without this process's document state. Always
     rebuilds: an exhibit may have its own exhibits and form
     dependencies, and a stale cached PDF inside a fresh parent is the
-    kind of defect nobody sees until it is served.
+    kind of defect nobody sees until it is served. ``parent_note`` is
+    the line the child prints on its own tab sheets.
     """
     md_path = md_path.resolve()
     chain = _exhibit_render_chain()
@@ -1703,7 +1758,8 @@ def _render_markdown_exhibit(md_path: Path, variant: str, parent_meta: Dict) -> 
     out_dir = Path(tempfile.gettempdir()) / "prosaic_exhibit_builds"
     out_dir.mkdir(parents=True, exist_ok=True)
     digest = hashlib.sha1(
-        f"{md_path}|{variant}|{'final' if parent_meta.get('_final') else 'draft'}".encode()
+        f"{md_path}|{variant}|{'final' if parent_meta.get('_final') else 'draft'}"
+        f"|{parent_note or ''}".encode()
     ).hexdigest()[:12]
     out_pdf = out_dir / f"{md_path.stem}.{digest}.pdf"
     cmd = [sys.executable, str(Path(__file__).resolve()), str(md_path), str(out_pdf),
@@ -1712,6 +1768,9 @@ def _render_markdown_exhibit(md_path: Path, variant: str, parent_meta: Dict) -> 
         cmd.append("--final")
     env = dict(os.environ)
     env[_EXHIBIT_STACK_ENV] = os.pathsep.join(chain)
+    env.pop(_EXHIBIT_PARENT_ENV, None)
+    if parent_note:
+        env[_EXHIBIT_PARENT_ENV] = parent_note
     result = subprocess.run(cmd, env=env, capture_output=True, text=True)
     if result.stderr:
         sys.stderr.write(result.stderr)
@@ -1851,9 +1910,13 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
     if not isinstance(exhibits_raw, list):
         raise ValueError("exhibits must be a YAML list if provided")
 
+    style = exhibit_numbering_style(meta)
+    label = exhibit_label_for_doctype(meta.get("doctype", "pleading"),
+                                      meta.get("exhibit_label"))
     exhibits: List[Exhibit] = []
     seen: set = set()
     for idx, item in enumerate(exhibits_raw, start=1):
+        designator = exhibit_designator(idx, style)
         if not isinstance(item, dict):
             raise ValueError(f"exhibits[{idx}] must be a mapping/object")
         raw_has_variant_path = _is_variant_mapping(item.get("path"))
@@ -1884,20 +1947,30 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
         if bates_first is not None:
             bates_first = str(bates_first).strip()
             bates_page_tokens(bates_first, [1])  # validate the shape now
+        inner_tab_pages = item_resolved.get("inner_tab_pages")
+        if inner_tab_pages is not None:
+            inner_tab_pages = str(inner_tab_pages).strip()
         if is_sealed:
             exhibits.append(Exhibit(shortname=shortname, title=title,
-                                    path=None, letter=alpha(idx), sealed=True,
+                                    path=None, letter=designator, sealed=True,
                                     bates_first=bates_first))
         else:
             if "path" not in item_resolved or not isinstance(item_resolved["path"], str) or not item_resolved["path"].strip():
                 raise ValueError(f"exhibits[{idx}] missing required string field: path")
             raw_path = item_resolved["path"]
             if raw_path.strip().lower().endswith(".md"):
+                if inner_tab_pages:
+                    raise ValueError(
+                        f"exhibits[{idx}] ({shortname}): inner_tab_pages is for a "
+                        f"prebuilt PDF; a markdown exhibit marks its own tab sheets")
                 path = _resolve_markdown_exhibit_path(raw_path, base_dir)
                 if not path.exists():
                     raise ValueError(f"Markdown exhibit not found for {shortname}: {path}")
                 if render_md:
-                    path = _render_markdown_exhibit(path, variant, meta)
+                    note = PARENT_EXHIBIT_NOTE.format(
+                        label=label, designator=designator, title=title)
+                    path = _render_markdown_exhibit(path, variant, meta,
+                                                    parent_note=note)
             else:
                 path = _resolve_exhibit_path(raw_path, base_dir)
                 if (
@@ -1911,9 +1984,13 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
                     raise ValueError(f"Unsupported exhibit type for {shortname}: {path.suffix}")
                 if not path.exists():
                     raise ValueError(f"Exhibit file not found for {shortname}: {path}")
+                if inner_tab_pages and ext != ".pdf":
+                    raise ValueError(
+                        f"exhibits[{idx}] ({shortname}): inner_tab_pages needs a PDF exhibit")
             exhibits.append(Exhibit(shortname=shortname, title=title,
-                                    path=path, letter=alpha(idx), pages=pages_spec,
-                                    bates_first=bates_first))
+                                    path=path, letter=designator, pages=pages_spec,
+                                    bates_first=bates_first,
+                                    inner_tab_pages=inner_tab_pages))
     return exhibits
 
 
@@ -4979,9 +5056,33 @@ class LineGridPDF:
 # Exhibit tab sheets and attachments
 # ---------------------------------------------------------------------------
 
+def draw_parent_exhibit_note(c, note: str) -> None:
+    """The parent-exhibit line, centered near the foot of a tab sheet."""
+    c.setFont(FONT_NAME, PARENT_EXHIBIT_NOTE_SIZE)
+    for i, line in enumerate(wrap_text(note, PAGE_WIDTH - 144, FONT_NAME,
+                                       PARENT_EXHIBIT_NOTE_SIZE)):
+        w = pdfmetrics.stringWidth(line, FONT_NAME, PARENT_EXHIBIT_NOTE_SIZE)
+        c.drawString((PAGE_WIDTH - w) / 2,
+                     PARENT_EXHIBIT_NOTE_BASELINE - i * PARENT_EXHIBIT_NOTE_SIZE * 1.25,
+                     line)
+
+
+def stamp_parent_exhibit_note(writer: PdfWriter, page_idx: int, note: str,
+                              temp_dir: Path) -> None:
+    """Stamp the parent-exhibit line onto one page of the packet's copy of
+    a prebuilt exhibit (never the file on disk)."""
+    overlay = temp_dir / f"parent_note_{page_idx}.pdf"
+    c = canvas.Canvas(str(overlay), pagesize=letter)
+    c.setFillColor(black)
+    draw_parent_exhibit_note(c, note)
+    c.save()
+    writer.pages[page_idx].merge_page(PdfReader(str(overlay)).pages[0])
+
+
 def build_tab_sheet_pdf(exhibit: Exhibit, out_path: str,
                         status_note: Optional[str] = None,
-                        label: str = "Exhibit") -> None:
+                        label: str = "Exhibit",
+                        parent_note: Optional[str] = None) -> None:
     c = canvas.Canvas(out_path, pagesize=letter)
     c.setTitle(f"{label} {exhibit.letter}")
     c.setFillColor(black)
@@ -5023,6 +5124,9 @@ def build_tab_sheet_pdf(exhibit: Exhibit, out_path: str,
             line_w = pdfmetrics.stringWidth(line, FONT_NAME_BOLD, note_size)
             c.drawString((PAGE_WIDTH - line_w) / 2, y, line)
             y -= note_size * 1.25
+
+    if parent_note:
+        draw_parent_exhibit_note(c, parent_note)
 
     c.save()
 
@@ -5361,7 +5465,10 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
                   exhibits: List[Exhibit], output_pdf: Path,
                   link_rects: Optional[List[LinkRect]] = None,
                   variant: str = DEFAULT_VARIANT,
-                  label: str = "Exhibit") -> None:
+                  label: str = "Exhibit",
+                  parent_note: Optional[str] = None) -> None:
+    """``parent_note``: set when this document is itself another
+    document's exhibit; printed on each of its tab sheets."""
     writer = PdfWriter()
     append_pdf_direct(writer, main_pdf)
     writer.add_outline_item("Document", 0)
@@ -5393,7 +5500,8 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
             if exhibit.sealed:
                 status_note = SEALED_EXHIBIT_TAB_NOTE
             build_tab_sheet_pdf(exhibit, str(tab_pdf),
-                                status_note=status_note, label=label)
+                                status_note=status_note, label=label,
+                                parent_note=parent_note)
             tab_page_idx = len(writer.pages)
             tab_page_map[f"exhibit_{exhibit.letter}"] = tab_page_idx
             append_pdf_scaled(writer, tab_pdf)
@@ -5402,12 +5510,23 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
                 continue
             first_idx = len(writer.pages)
             append_exhibit_attachment(writer, exhibit, temp_dir)
-            if exhibit.bates_first and exhibit.path.suffix.lower() == ".pdf":
+            if exhibit.path.suffix.lower() == ".pdf" and (
+                    exhibit.bates_first or exhibit.inner_tab_pages):
                 total = len(PdfReader(str(exhibit.path)).pages)
                 if exhibit.pages:
                     numbers = [i + 1 for i in parse_page_ranges(exhibit.pages, total)]
                 else:
                     numbers = list(range(1, total + 1))
+            if exhibit.inner_tab_pages:
+                note = parent_exhibit_note(label, exhibit)
+                for i in parse_page_ranges(exhibit.inner_tab_pages, total):
+                    if i + 1 not in numbers:
+                        raise ValueError(
+                            f"{label} {exhibit.letter}: inner_tab_pages names page "
+                            f"{i + 1}, which its `pages:` selection leaves out")
+                    stamp_parent_exhibit_note(
+                        writer, first_idx + numbers.index(i + 1), note, temp_dir)
+            if exhibit.bates_first and exhibit.path.suffix.lower() == ".pdf":
                 for token, page_no in bates_page_tokens(exhibit.bates_first, numbers).items():
                     bates_page_map[token] = first_idx + numbers.index(page_no)
 
@@ -5590,6 +5709,8 @@ def main() -> None:
     doctype = meta.get("doctype", "pleading")
     attachment_label = exhibit_label_for_doctype(doctype, meta.get("exhibit_label"))
     list_mode = exhibit_list_mode(meta)
+    # Set only when a parent document is rendering this one as its exhibit.
+    parent_note = os.environ.get(_EXHIBIT_PARENT_ENV) or None
     cover_sheet = meta.get("cover_sheet")
     cover_sheet_only = bool(meta.get("cover_sheet_only"))
     pleading = None
@@ -5645,7 +5766,7 @@ def main() -> None:
 
             merge_outputs(main_pdf, exhibit_list_pdf, exhibits, output_path,
                           link_rects=pleading.link_rects, variant=variant,
-                          label=attachment_label)
+                          label=attachment_label, parent_note=parent_note)
 
     cover_path: Optional[Path] = None
     if cover_sheet:
@@ -5715,10 +5836,12 @@ def main() -> None:
                         ).build_exhibit_list(exhibits, label=attachment_label)
                         merge_outputs(cover_path, exhibit_list_pdf, exhibits,
                                       output_path, variant=variant,
-                                      label=attachment_label)
+                                      label=attachment_label,
+                                      parent_note=parent_note)
                 else:
                     merge_outputs(cover_path, None, exhibits, output_path,
-                                  variant=variant, label=attachment_label)
+                                  variant=variant, label=attachment_label,
+                                  parent_note=parent_note)
                 print(f"Wrote {form_display_id(cover_sheet)} plus "
                       f"{len(exhibits)} exhibit(s) as the entire output "
                       f"({output_path})")

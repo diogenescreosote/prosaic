@@ -76,6 +76,15 @@ sent to a court.
    pages-spec, tab-sheet, link-annotation, exhibit_source, and
    out-of-range/reversed pages-spec failure checks in the
    pleading_exhibits scenario)*
+   Designators are letters by default; `exhibit_numbering: numeric`
+   numbers them, identically in the PDF, DOCX and TXT, and an unknown
+   style fails the build. Each document designates its own list, and
+   an exhibit's own exhibits say which exhibit they are part of: every
+   inner tab sheet, and only those, carries "Part of <Label> <n>:
+   <title>" naming the immediate parent, drawn by a markdown child's
+   build and stamped on the packet's copy of a prebuilt PDF's
+   `inner_tab_pages` without touching the file. *(tested:
+   pleading/tests/test_exhibit_numbering.py)*
 6. **Cover forms are part of the build.** A `cover_sheet:` key on a
    source prepends the named JC form (MC-030, CIV-110, EFS-020),
    filled from the same front matter the pleading

@@ -13,9 +13,12 @@ with a single newline. Bullets render as plain lines with no marker, so a
 tight, unmarked list is authored as consecutive ``-`` lines with any desired
 enumerator (e.g. "(a)") written into the text.
 
-Exhibits are auto-numbered from the YAML ``exhibits:`` list, in list order:
+Exhibits are designated from the YAML ``exhibits:`` list, in list order. A
+file that sets ``exhibit_numbering`` gets that style, as in the PDF; one that
+does not keeps this renderer's historical numbers (its attachments travel as
+numbered files, ``Exhibit_01_...``):
 
-  * ``\\exhibit{shortname}``  -> "Exhibit N" (optionally with a page cite)
+  * ``\\exhibit{shortname}``  -> "Exhibit 3" or "Exhibit C" (optionally with a page cite)
   * ``\\exhibitindex``        -> a numbered attachment index built from the list
 
 Section headings (``#`` / ``##`` / ``###``) are auto-numbered ``I.`` / ``A.`` /
@@ -46,11 +49,19 @@ from typing import Dict, List, Tuple
 import md_pleading as mp
 
 
+def txt_exhibit_style(meta: Dict) -> str:
+    """The file's explicit ``exhibit_numbering``, else numbers (see module doc)."""
+    if "exhibit_numbering" in meta:
+        return mp.exhibit_numbering_style(meta)
+    return "numeric"
+
+
 def build_exhibit_map(meta: Dict, label: str) -> Dict[str, str]:
     """Map each exhibit shortname to its auto-numbered citation string."""
     exhibits = meta.get("exhibits") or []
     if not isinstance(exhibits, list):
         raise ValueError("exhibits must be a YAML list if provided")
+    style = txt_exhibit_style(meta)
     mapping: Dict[str, str] = {}
     seen: set = set()
     for idx, ex in enumerate(exhibits, start=1):
@@ -62,7 +73,7 @@ def build_exhibit_map(meta: Dict, label: str) -> Dict[str, str]:
         if shortname in seen:
             raise ValueError(f"Duplicate exhibit shortname: {shortname}")
         seen.add(shortname)
-        cite = f"{label} {idx}"
+        cite = f"{label} {mp.exhibit_designator(idx, style)}"
         pages = ex.get("pages")
         if isinstance(pages, str) and pages.strip():
             # Shared page-cite formatter (en-dash ranges, p./pp.) so the
@@ -96,10 +107,11 @@ def substitute_exhibit_index(body: str, meta: Dict, label: str) -> str:
     if "\\exhibitindex" not in body:
         return body
     exhibits = meta.get("exhibits") or []
+    style = txt_exhibit_style(meta)
     entries: List[str] = []
     for idx, ex in enumerate(exhibits, start=1):
         title = mp.typographic_subs(str(ex.get("title", "")).strip())
-        entry = f"{label} {idx}: {title}"
+        entry = f"{label} {mp.exhibit_designator(idx, style)}: {title}"
         if str(ex.get("path", "")).strip():
             entry += f" (file: {attachment_filename(idx, ex)})"
         entries.append(entry)
