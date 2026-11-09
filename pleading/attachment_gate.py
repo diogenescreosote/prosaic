@@ -120,7 +120,8 @@ def checked_attachment_boxes(
     managed = _engine_managed_boxes(desc, texts)
     return sorted(
         name for name, on in checks.items()
-        if on and ATTACHMENT_BOX_RE.match(name) and name not in managed
+        # str(): a descriptor key spelled yes:/no: loads as a YAML boolean.
+        if on and ATTACHMENT_BOX_RE.match(str(name)) and name not in managed
     )
 
 

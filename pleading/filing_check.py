@@ -64,7 +64,8 @@ def attachment_bearing_forms() -> dict:
             desc = form_fill.load_descriptor(form)
         except Exception:
             continue
-        if not any(ATTACHMENT_BOX_RE.match(b) for b in (desc.get("checkboxes") or {})):
+        # str(): a descriptor key spelled yes:/no: loads as a YAML boolean.
+        if not any(ATTACHMENT_BOX_RE.match(str(b)) for b in (desc.get("checkboxes") or {})):
             continue
         display = re.sub(r"^([A-Za-z]+)-?(\d+)$", r"\1-\2", form).upper()
         try:

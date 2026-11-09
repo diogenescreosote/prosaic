@@ -31,6 +31,7 @@ DESC: dict[str, Any] = {
         "attachment_9": {"default": True},
         "attachment_7": {"default": False},
         "other_top": {"default": True},
+        True: {"default": True},  # a key spelled yes: loads as a boolean
     },
 }
 
