@@ -247,6 +247,17 @@ exhibit letters ("Exhibit A", "Attachment B", etc.) in body text: the
 letter changes whenever the exhibit order changes; the symbolic macro
 does not.
 
+**Letters or numbers: answer the other side's scheme with the other
+one.** A paper that answers, opposes or replies to papers whose
+exhibits are lettered sets `exhibit_numbering: numeric` (Exhibit 1,
+2, 3), and the reverse, so "Exhibit A" in any brief can mean only
+one side's exhibit. Decide it when the source is created, by looking
+at the papers being answered, not after the exhibits are cited. The
+macros follow the key in cites, the exhibit list, tab sheets and
+bookmarks; nothing in the body changes. A markdown exhibit keeps its
+own scheme (`pleading/pleading_markdown_spec.md`, "Exhibits inside
+exhibits").
+
 In letters (`doctype: letter`), `\attachment{}` is preferred; in
 pleadings (`doctype: pleading`, the default), `\exhibit{}` is
 preferred. Both macros are accepted in either context and resolve to

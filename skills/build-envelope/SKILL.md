@@ -25,7 +25,9 @@ drives the build (ADR-0039).
      (`text---text`, never `text --- text`).
    - `no --variant specified` — output landed in `out/<envelope>/`
      instead of a variant subdirectory.
-4. Verify the output PDF: page count, caption, exhibit letters, the
+4. Verify the output PDF: page count, caption, exhibit designators
+   (letters, or numbers under `exhibit_numbering: numeric`; a paper
+   answering lettered exhibits should number its own), the
    draft banner. An unfiled document must carry its `notreal:` banner
    on every page (ADR-0015, ADR-0017).
 

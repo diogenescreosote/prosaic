@@ -150,6 +150,14 @@ cite whose page is attached as an exhibit is `\bates{ACME00017}` (or
 to the stamped page; the exhibit carries `bates_first:`. Full markup
 inventory: `<prosaic>/pleading/pleading_markdown_spec.md`.
 
+## Exhibits: cite by macro; answer letters with numbers
+
+Cite exhibits only through `\exhibit{shortname}`, never a typed
+"Exhibit A". A paper answering, opposing or replying to papers whose
+exhibits are lettered sets `exhibit_numbering: numeric` at creation
+(Exhibit 1, 2, 3), and the reverse, so a cite names only one side's
+exhibit. Detail: `<prosaic>/docs/writing-style.md`.
+
 ## STOP. A form attachment is not a standalone pleading
 
 An "Attachment 3 to Deposition Subpoena…" continues SUBP-010 item 3.
