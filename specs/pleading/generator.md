@@ -160,6 +160,22 @@ sent to a court.
     mandatory blanks, and every failure path in
     pleading/tests/test_forms_adversarial.py)*
 
+13. **A form and its attachment leave as one document.** A Judicial
+    Council form whose "Attachment N" box is checked is filed as one
+    PDF, form first, attachment appended; a clerk rejects the whole
+    envelope when the attachment is uploaded beside it. An envelope
+    source may be drafted as a separate attachment, but its entry then
+    names its form (`attachment_of: <form source>` in envelopes.yaml).
+    A `--final` build (envelope or `build-doc`) refuses an envelope in
+    which a form-only source's resolved values check an attachment box
+    (descriptor defaults included; an engine-managed overflow box
+    excepted) with nothing declared `attachment_of:` it, or in which a
+    source titled "ATTACHMENT N TO ..." has neither a `cover_sheet:`
+    nor an `attachment_of:`. A draft build prints the same findings as
+    warnings. The assembled, signed folder is checked by
+    `sc filing-check <folder>`, which fails on any attachment that is
+    its own PDF. *(tested: tests/test_attachment_gate.py)*
+
 - **An envelope renders its documents in parallel.** Planning
   (staleness checks, ordering, log lines) is cheap and
   order-dependent; rendering is expensive and embarrassingly parallel,

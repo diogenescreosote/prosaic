@@ -59,6 +59,11 @@ class SourceEntry:
     docx: bool = False
     fmt: str = "pdf"
     copy_attachments: bool = False
+    # The source of the form this source is an attachment to (a request
+    # form's Attachment 9 and the like). The two are filed as ONE PDF, form
+    # first; attachment_gate.py refuses a --final build that leaves a
+    # checked attachment box or an attachment-titled source unpaired.
+    attachment_of: Optional[str] = None
 
     @classmethod
     def from_yaml(cls, raw) -> "SourceEntry":
@@ -74,6 +79,8 @@ class SourceEntry:
             docx=raw.get("docx", False),
             fmt=fmt,
             copy_attachments=bool(raw.get("copy_attachments", False)),
+            attachment_of=(str(raw["attachment_of"])
+                           if raw.get("attachment_of") else None),
         )
 
     @property
@@ -742,6 +749,32 @@ def _run_render_jobs(jobs: List[RenderJob], workers: Optional[int] = None) -> bo
     return ok
 
 
+def attachment_gate_passes(name: str, sources: List[SourceEntry]) -> bool:
+    """Run the attachment gate on one envelope (attachment_gate.py).
+
+    A --final build is the declaration that the papers are ready to
+    file, so findings refuse it; a draft build prints them as warnings.
+    """
+    pleading_dir = str(PLEADING_GEN.parent)
+    if pleading_dir not in sys.path:
+        sys.path.insert(0, pleading_dir)
+    import attachment_gate
+    problems = attachment_gate.envelope_problems(
+        [(e.file, e.attachment_of) for e in sources if not e.is_txt],
+        Path("src"),
+    )
+    if not problems:
+        return True
+    level = "ERROR" if FINAL_BUILD else "WARNING"
+    for p in problems:
+        print(f"{level}: [{name}] {p}", file=sys.stderr, flush=True)
+    if FINAL_BUILD:
+        print(f"ERROR: [{name}] refusing --final: a form and its attachment "
+              f"are filed as one PDF.", file=sys.stderr, flush=True)
+        return False
+    return True
+
+
 def build_envelope(
     name: str,
     sources: List[SourceEntry],
@@ -759,6 +792,9 @@ def build_envelope(
     if variant:
         out_dir = out_dir / variant
     out_dir.mkdir(parents=True, exist_ok=True)
+
+    if not attachment_gate_passes(name, sources):
+        return False
 
     ok = True
     render_jobs: List[RenderJob] = []
@@ -872,6 +908,9 @@ def build_doc_source(
     if entry.is_txt:
         print(f"Error: {source_rel} is a txt-format source; "
               "build its envelope instead", file=sys.stderr)
+        return False
+
+    if not attachment_gate_passes(name, cfg.sources):
         return False
 
     out_dir = Path("out") / name

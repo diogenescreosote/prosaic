@@ -185,6 +185,22 @@ declaration behind a motion's own cover form — that is captioned normally.
 
 ---
 
+## STOP. A form and its attachment are filed as ONE PDF
+
+A form whose "Attachment N" box is checked (a request form's item 9,
+SUBP-010 item 3) goes to the court as one PDF: the form, then the
+attachment. Never upload the attachment as its own document; the clerk
+rejects the whole envelope. Separate sources are fine; the attachment's
+envelopes.yaml entry then says `attachment_of: <form source>`, and a
+`--final` build refuses an unpaired one. Before any staging folder is
+handed over for filing:
+
+```bash
+sc filing-check staging/<date>_<topic>/
+```
+
+It must report no errors.
+
 ## STOP. `pleadings/` is the court's copy, and provenance is never inferred
 
 `pleadings/` holds the **court-filed version** of each document and

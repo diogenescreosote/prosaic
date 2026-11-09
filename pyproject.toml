@@ -104,7 +104,7 @@ exclude = ["^tests/(harness|scenarios)/", "^tests/test_(docs_coverage|platform_s
 # pleading/ tree; mypy cannot resolve them as packages and must not
 # try. Native triage modules are NOT listed: they resolve normally
 # and are held to the same bar as the tests.
-module = ["form_fill", "jc_common", "md_pleading", "project_python"]
+module = ["attachment_gate", "filing_check", "form_fill", "jc_common", "md_pleading", "project_python"]
 ignore_missing_imports = true
 follow_imports = "skip"
 

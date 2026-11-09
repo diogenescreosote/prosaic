@@ -40,6 +40,15 @@ drives the build (ADR-0039).
   `no_caption: true` and its own two-line opener (the build fails
   without it — add the key, never remove `cover_sheet:` to silence
   it).
+- **A form and its attachment are filed as ONE PDF**, form first
+  (a request form + its Attachment 9, SUBP-010 + Attachment 3). Clerks reject the whole envelope when the attachment
+  is uploaded as its own document. If they are separate sources, the
+  attachment's envelopes.yaml entry says `attachment_of: <form
+  source>`; `--final` refuses an envelope that leaves a checked
+  attachment box or an "ATTACHMENT N TO" source unpaired. After
+  signing, join the pair (`qpdf --empty --pages form.pdf att.pdf --
+  joined.pdf`) and run **`sc filing-check <staging folder>`** before
+  handing the folder over for upload; it must report no errors.
 - Stale output is a hazard, not clutter: `<prosaic>/cli/sc clean .`
   reports files the config can no longer produce; only `--apply`
   deletes, and only a human decides.

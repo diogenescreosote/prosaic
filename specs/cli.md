@@ -52,10 +52,11 @@ subcommand's real promises live in that component's spec.
 - **Script pass-throughs**: **`sc highlight`**, **`sc redact`**,
   **`sc verify-redactions`**, **`sc check-redaction-schedule`**,
   **`sc pleadings-manifest`**, **`sc pleadings-scan`**,
+  **`sc filing-check`**,
   **`sc read-coverage`**, **`sc phone-logs`** (and `sc ocr`) run
   `pleading/highlight_pdf.py`, `redact_pdf.py`, `verify_redactions.py`,
   `check_redaction_schedule.py`, `pleadings_manifest.py`,
-  `pleadings_scan.py`, `triage/read_coverage.py` and
+  `pleadings_scan.py`, `filing_check.py`, `triage/read_coverage.py` and
   `triage/phone_logs.py` under the project interpreter. Arguments,
   `--help` included, pass through verbatim; the exit status is the
   script's. The table is `SCRIPT_COMMANDS` in `cli/sc`. *(tested:

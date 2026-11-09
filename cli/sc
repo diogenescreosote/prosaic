@@ -26,7 +26,7 @@ Setup and project tools (ADR-0050: never bare python3 for these):
   setup                   create/update the project environment, then doctor
   doctor                  check environment, packages, programs; how to fix each
   highlight|redact|verify-redactions|check-redaction-schedule|
-  pleadings-manifest|pleadings-scan|read-coverage|phone-logs  ...
+  pleadings-manifest|pleadings-scan|filing-check|read-coverage|phone-logs  ...
                           the project scripts, arguments passed through
   run <script> [args]     any other prosaic Python script
   python [args]           the project interpreter itself
@@ -335,6 +335,7 @@ SCRIPT_COMMANDS = {
     "check-redaction-schedule": "pleading/check_redaction_schedule.py",
     "pleadings-manifest": "pleading/pleadings_manifest.py",
     "pleadings-scan": "pleading/pleadings_scan.py",
+    "filing-check": "pleading/filing_check.py",
     "read-coverage": "triage/read_coverage.py",
     "phone-logs": "triage/phone_logs.py",
 }
@@ -2813,6 +2814,7 @@ def main() -> int:
     script_parser("check-redaction-schedule", "reconcile a redaction schedule with its configs")
     script_parser("pleadings-manifest", "check pleadings/MANIFEST.md against disk")
     script_parser("pleadings-scan", "find court-stamped documents MANIFEST.md does not represent")
+    script_parser("filing-check", "preflight a folder of PDFs before upload: no attachment filed apart from its form")
     script_parser("read-coverage", "per-page text coverage of PDFs; --text dumps every page")
     script_parser("phone-logs", "calls and texts with a number, from SMS Backup & Restore XML")
 
