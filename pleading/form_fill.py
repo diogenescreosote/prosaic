@@ -348,6 +348,83 @@ def skeleton_yaml(pdf_path: Path) -> str:
 # ---------------------------------------------------------------------------
 
 
+# ---------------------------------------------------------------------------
+# Inline bold: **...** in a value draws those words in the face's bold
+# variant. Spans are normalized to per-word markers so wrapping, fitting
+# and alignment can measure each word on its own.
+# ---------------------------------------------------------------------------
+
+BOLD_MARK = "**"
+_BOLD_FACES = {
+    "Helvetica": "Helvetica-Bold",
+    "Courier": "Courier-Bold",
+    "Times-Roman": "Times-Bold",
+}
+
+
+def _bold_of(font: str) -> str:
+    return _BOLD_FACES.get(font, font)
+
+
+def _normalize_bold(text: str) -> str:
+    """Rewrite **bold spans** as per-word markers ("**a** **b**")."""
+    if BOLD_MARK not in text:
+        return text
+    out_lines = []
+    bold = False
+    for line in text.split("\n"):
+        words = []
+        for word in line.split(" "):
+            parts = word.split(BOLD_MARK)
+            chunks = []
+            for k, part in enumerate(parts):
+                if k:
+                    bold = not bold
+                if part:
+                    chunks.append((part, bold))
+            if not chunks:
+                continue
+            # A word that mixes faces keeps its first chunk's face.
+            body = "".join(c for c, _ in chunks)
+            words.append(f"{BOLD_MARK}{body}{BOLD_MARK}" if chunks[0][1] else body)
+        out_lines.append(" ".join(words))
+    return "\n".join(out_lines)
+
+
+def _is_bold_word(word: str) -> bool:
+    return len(word) > 2 * len(BOLD_MARK) and word.startswith(BOLD_MARK) and word.endswith(BOLD_MARK)
+
+
+def _text_width(text: str, font: str, size: float) -> float:
+    if BOLD_MARK not in text:
+        return stringWidth(text, font, size)
+    words = text.split(" ")
+    total = stringWidth(" ", font, size) * (len(words) - 1)
+    for w in words:
+        if _is_bold_word(w):
+            total += stringWidth(w[len(BOLD_MARK) : -len(BOLD_MARK)], _bold_of(font), size)
+        else:
+            total += stringWidth(w, font, size)
+    return total
+
+
+def _draw_line(c, x: float, y: float, line: str, font: str, size: float) -> None:
+    if BOLD_MARK not in line:
+        c.drawString(x, y, line)
+        return
+    space = stringWidth(" ", font, size)
+    for w in line.split(" "):
+        if _is_bold_word(w):
+            w = w[len(BOLD_MARK) : -len(BOLD_MARK)]
+            face = _bold_of(font)
+        else:
+            face = font
+        c.setFont(face, size)
+        c.drawString(x, y, w)
+        x += stringWidth(w, face, size) + space
+    c.setFont(font, size)
+
+
 def _wrap_to_width(text: str, font: str, size: float, width: float) -> list[str]:
     lines: list[str] = []
     for para in text.split("\n"):
@@ -357,7 +434,7 @@ def _wrap_to_width(text: str, font: str, size: float, width: float) -> list[str]
             continue
         cur = words[0]
         for w in words[1:]:
-            if stringWidth(f"{cur} {w}", font, size) <= width:
+            if _text_width(f"{cur} {w}", font, size) <= width:
                 cur = f"{cur} {w}"
             else:
                 lines.append(cur)
@@ -588,7 +665,7 @@ def text_origins(
     multi = len(lines) > 1
     if not multi and layout is not None and not align and not valign:
         [line] = lines
-        w = stringWidth(line, font, size)
+        w = _text_width(line, font, size)
         if layout.kind == "labeled":
             return [(x0 + TEXT_INSET, (y0 + y1) / 2.0 - size * 0.36)]
         if layout.kind == "line" and layout.rule:
@@ -618,7 +695,7 @@ def text_origins(
 
     origins = []
     for j, line in enumerate(lines):
-        w = stringWidth(line, font, size)
+        w = _text_width(line, font, size)
         if align == "left":
             x = x0 + TEXT_INSET
         elif align == "right":
@@ -676,6 +753,7 @@ class FitResult:
 
 def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     """Apply the field's fit strategy; report whether the text fits."""
+    text = _normalize_bold(text)
     pad = 4.0
     width = abs(rect[2] - rect[0]) - pad
     height = abs(rect[3] - rect[1]) - 2.0
@@ -699,7 +777,7 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
 
     while True:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
-        widest = max((stringWidth(l, font, size) for l in lines), default=0.0)
+        widest = max((_text_width(l, font, size) for l in lines), default=0.0)
         if len(lines) > 1:
             # We draw the lines ourselves (first baseline one size below
             # the top, then leading_ratio per line), so the extent is
@@ -1276,7 +1354,7 @@ def fill(
                         spec.get("leading_ratio"),
                     ),
                 ):
-                    c.drawString(x, y, line)
+                    _draw_line(c, x, y, line, font, fitted.font_size)
             c.restoreState()
             c.showPage()
         c.save()

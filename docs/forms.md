@@ -51,6 +51,15 @@ engine's countermeasures:
 | Silent form revisions by the JC | Field names change; everything above, silently | `test_descriptor_matches_blank` fails loudly; descriptors record the verified `revision` |
 | Geometry that is simply wrong | The right value drawn in the wrong box | `sc form preview` — look before trusting any fill |
 
+## Inline bold
+
+A value may mark words to draw in the face's bold variant with
+`**double asterisks**`, as in the pleading dialect: `"Hearing requested
+**December 18, 2026, in place of the September 9 request.**"`. Spans
+may cross words and wrapped lines; fitting, wrapping and alignment
+measure the bold words in the bold face. Nothing else of Markdown is
+interpreted in form values.
+
 ## Overflow: the legally correct escape hatch
 
 When text can't fit even after shrinking, truncating it would change

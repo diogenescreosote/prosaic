@@ -1039,3 +1039,21 @@ def test_fw020_fills_one_proceeding_and_leaves_signing_to_the_filer(tmp_path):
     assert not probe.field_text(out, "fw020", "date").strip()
     sidecar = json.loads(out.with_name(out.name + ".fields.json").read_text())
     assert {f["type"] for f in sidecar["fields"]} >= {"signature", "date"}
+
+
+# Inline bold in form values (docs/forms.md, "Inline bold")
+
+def test_inline_bold_is_normalized_measured_and_drawn_bold(tmp_path):
+    assert form_fill._normalize_bold("a **b c** d") == "a **b** **c** d"
+    assert form_fill._normalize_bold("plain") == "plain"
+    regular = form_fill._text_width("Order now", "Helvetica", 10)
+    bold = form_fill._text_width("**Order** **now**", "Helvetica", 10)
+    assert bold > regular
+    out = tmp_path / "mc030.pdf"
+    form_fill.fill("mc030", out, meta=dict(FIXTURE_META),
+                   data={"body": "Plain words then **bold words here** end."})
+    import fitz
+    fonts = {f[3] for page in fitz.open(str(out)) for f in page.get_fonts()}
+    assert any("Bold" in f for f in fonts)
+    text = "".join(page.get_text() for page in fitz.open(str(out)))
+    assert "**" not in text and "bold words here" in text
