@@ -576,3 +576,22 @@ def test_centered_text_never_leaves_its_box():
     for line, (x, y) in zip(fit.lines, _origin(fit.lines, rect, fit.font_size)):
         assert rect[0] <= x and x + stringWidth(line, form_fill.DEFAULT_FONT, fit.font_size) <= rect[2]
         assert rect[1] <= y <= rect[3] - fit.font_size * 0.72
+
+
+def test_courier_text_block_defaults_two_points_larger():
+    """A Courier field whose box holds three or more lines starts at
+    11 pt; a one-line Courier cell, a Helvetica block, and an explicit
+    font_size are unchanged."""
+    block = [37.5, 100.0, 560.0, 400.0]
+    cell = [37.5, 100.0, 560.0, 112.0]
+    courier = {"fit": "shrink_wrap", "multiline": True, "font": "Courier"}
+    assert form_fill.fit_text("A short body.", block, courier).font_size == 11.0
+    assert form_fill.fit_text("One line", cell, courier).font_size == 9.0
+    helv = {"fit": "shrink_wrap", "multiline": True}
+    assert form_fill.fit_text("A short body.", block, helv).font_size == 9.0
+    pinned = {**courier, "font_size": 10}
+    assert form_fill.fit_text("A short body.", block, pinned).font_size == 10.0
+    # A two-line box is not a block.
+    two = [37.5, 100.0, 560.0, 100.0 + 2.0 + 9.0 * (1 + 1.15) + 1.0]
+    assert form_fill.block_capacity(two, 9.0) == 2
+    assert form_fill.fit_text("x", two, courier).font_size == 9.0

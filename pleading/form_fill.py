@@ -148,6 +148,14 @@ DEFAULT_FONT_SIZE = 9.0
 # ``min_font_size:`` is the explicit choice to go smaller for one field.
 DEFAULT_MIN_FONT_SIZE = 8.0
 LEADING_RATIO = 1.15
+# Courier text blocks start larger. Courier sets wide and light, so a
+# box of it at 9 pt reads as fine print; a field drawn in Courier whose
+# box holds BLOCK_MIN_LINES or more lines at the default size (a
+# declaration body, a response box) starts at DEFAULT_FONT_SIZE +
+# COURIER_BLOCK_BUMP unless the descriptor or source sets font_size.
+# It still shrinks to fit like any field; one-line cells are unchanged.
+COURIER_BLOCK_BUMP = 2.0
+BLOCK_MIN_LINES = 3
 
 # E-sign field taxonomy: the least common multiple of DocuSeal,
 # DocuSign, and Dropbox Sign field types — every type here maps onto a
@@ -751,6 +759,31 @@ class FitResult:
     fits: bool
 
 
+def block_capacity(rect: list[float], size: float, leading_ratio: float = LEADING_RATIO) -> int:
+    """How many lines of ``size`` the box holds, measured as fit_text does."""
+    height = abs(rect[3] - rect[1]) - 2.0
+    if height < size:
+        return 0
+    return 1 + int((height - size) // (size * leading_ratio))
+
+
+def default_font_size(rect: list[float], spec: dict) -> float:
+    """The starting size for a field with no explicit ``font_size``.
+
+    DEFAULT_FONT_SIZE, except a Courier text block (a wrapping field
+    whose box holds BLOCK_MIN_LINES or more lines at that size), which
+    starts COURIER_BLOCK_BUMP larger.
+    """
+    strategy = str(spec.get("fit") or "none")
+    wraps = "wrap" in strategy or strategy == "overflow_attachment" or spec.get("multiline")
+    font = str(spec.get("font") or DEFAULT_FONT)
+    leading = float(spec.get("leading_ratio") or LEADING_RATIO)
+    if (font == "Courier" and wraps
+            and block_capacity(rect, DEFAULT_FONT_SIZE, leading) >= BLOCK_MIN_LINES):
+        return DEFAULT_FONT_SIZE + COURIER_BLOCK_BUMP
+    return DEFAULT_FONT_SIZE
+
+
 def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     """Apply the field's fit strategy; report whether the text fits."""
     text = _normalize_bold(text)
@@ -758,7 +791,11 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     width = abs(rect[2] - rect[0]) - pad
     height = abs(rect[3] - rect[1]) - 2.0
     strategy = str(spec.get("fit") or "none")
-    size = float(spec.get("font_size") or DEFAULT_FONT_SIZE)
+    font = str(spec.get("font") or DEFAULT_FONT)
+    can_shrink = "shrink" in strategy or strategy == "overflow_attachment"
+    can_wrap = "wrap" in strategy or strategy == "overflow_attachment" or spec.get("multiline")
+    leading_ratio = float(spec.get("leading_ratio") or LEADING_RATIO)
+    size = float(spec.get("font_size") or default_font_size(rect, spec))
     # overflow_attachment fields do NOT shrink below full size by
     # default: microscopic-but-technically-fitting text is worse for a
     # court filing than a clean "See Attachment N." + MC-025. Authors
@@ -770,10 +807,6 @@ def fit_text(text: str, rect: list[float], spec: dict) -> FitResult:
     # floor never forces text taller than the cell that holds it.
     if "min_font_size" not in spec:
         min_size = max(1.0, min(min_size, abs(rect[3] - rect[1])))
-    font = str(spec.get("font") or DEFAULT_FONT)
-    can_shrink = "shrink" in strategy or strategy == "overflow_attachment"
-    can_wrap = "wrap" in strategy or strategy == "overflow_attachment" or spec.get("multiline")
-    leading_ratio = float(spec.get("leading_ratio") or LEADING_RATIO)
 
     while True:
         lines = _wrap_to_width(text, font, size, width) if can_wrap else text.split("\n")
@@ -1499,7 +1532,7 @@ def _chunk_for_mc025(text: str, rect: list[float], spec: dict) -> list[str]:
     # Chunk at the size the field will actually RENDER (not the shrink
     # floor): pre-broken lines measured at a smaller size than the
     # render size re-wrap in the viewer into orphan fragments.
-    size = float(spec.get("font_size") or DEFAULT_FONT_SIZE)
+    size = float(spec.get("font_size") or default_font_size(rect, spec))
     font = str(spec.get("font") or DEFAULT_FONT)
     leading_ratio = float(spec.get("leading_ratio") or LEADING_RATIO)
     pad = 4.0
