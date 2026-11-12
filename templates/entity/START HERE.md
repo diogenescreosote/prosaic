@@ -37,6 +37,11 @@ agency receipt or confirmation, not the endorsed document),
 copy of something signed elsewhere), or `not-in-hand`. A status is
 recorded by a person from the face of the document, never guessed.
 
+**`JOURNAL.md`**: every official act, in order. Each entry says what
+was done, by whom, on what vote and authority, and which record in
+`assets/` shows it. Entries are added, never erased; a correction is
+a new entry or a note saying what changed and why.
+
 Everything else here is working material: `src/` holds drafts (each
 stamped DRAFT until adopted), `knowledge/` holds notes, `inbox/` is
 where new material arrives before it is filed. None of it is part of

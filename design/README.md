@@ -72,6 +72,7 @@ project accretes decisions instead of middleware.
 - [0049](adr/0049-drafts-are-not-mail.md) Gmail drafts are not mail: never listed, fetched, stored, rendered, counted or reported; legacy captures are audited and moved to `.private/`, never deleted
 - [0050](adr/0050-project-tools-run-through-sc.md) Project tools run through `sc` under the project environment; `sc setup`/`sc doctor`; stock programs declared; bare `python3` scripts hop into the venv
 - [0051](adr/0051-entity-matter-type.md) Entity matter type: `sc init --type entity`; the record book is `assets/` in ten numbered plain-named sections, `START HERE.md` is the front page for readers without prosaic, every INDEX row carries a status
+- [0052](adr/0052-entity-journal-of-acts.md) Entity journal of acts: `JOURNAL.md`, one numbered dated entry per official act; append-only, amendments annotated, checked by `sc journal check` and refused at commit unless the human's `Journal-Override:` footer
 
 Also:
 

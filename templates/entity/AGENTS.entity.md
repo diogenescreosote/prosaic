@@ -34,6 +34,33 @@ secretary, a bank, an agency) will open it in a file browser. So:
 - **Inbox is still the only way in.** Nothing is placed in `assets/`
   directly; it arrives in `inbox/` and is triaged.
 
+### STOP. Every act goes in the journal
+
+`JOURNAL.md` is the entity's journal of acts (ADR-0052): numbered,
+dated entries, one per memorializable act (formation and agency
+filings, adoption or amendment of articles, bylaws and policies,
+board votes and written consents with the vote, elections,
+appointments, resignations, removals, hiring and firing, authorized
+contracts, delegations, approvals or vetoes by a body with that
+power, determinations received). Its preamble gives the entry format.
+
+- **Same commit.** Any change that records an act (triage of an
+  executed or filed record, an act the human reports, an adoption)
+  appends the journal entry in the same commit. An act the human
+  reports with no paper yet gets `Record: pending: <what>`.
+- **Acts, not plans.** A draft, a proposal or a discussion that
+  decided nothing is not an entry. Mark a reported act as reported
+  (`By:` names who told you), never as verified.
+- **Append-only.** Never rewrite, renumber or delete an entry. Correct
+  one with a new "Correction to J-NNNN" entry, or rarely in place
+  with `> **Amended YYYY-MM-DD by <name>:** what --- why.` directly
+  under the changed text, the old wording kept (struck through).
+- **Never add `Journal-Override:` yourself.** The commit hook refuses
+  an unannotated edit; that footer is the human's explicit override.
+- The journal and the commit message say much the same thing; write
+  both. The journal is what a reader without git will read.
+- `sc journal check` validates it; run it before committing.
+
 ### Status, not provenance by inference
 
 `pleadings/` does not exist here. Its rule carries over to the whole

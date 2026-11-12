@@ -17,6 +17,7 @@ details. Commands:
   open-questions <md>     a draft's placeholders, with what is already recorded
   backup <action> [dir]   init/push/status a matter's backup upstream
   commit-check [file]     validate a matter commit message
+  journal check [dir]     an entity's journal of acts: form, append-only
   hooks <dir>             install the matter git hooks
   deps                    report which system dependencies are present
   schedule <dir>          install the 12-hourly background sync (macOS)
@@ -1080,6 +1081,9 @@ def cmd_commit_check(args: argparse.Namespace) -> int:
 
     text = Path(args.message_file).read_text() if args.message_file else sys.stdin.read()
     errors, warnings = _check_commit_message(text)
+    j_errors, j_warnings = _journal_commit_gate(text)
+    errors += j_errors
+    warnings += j_warnings
 
     for w in warnings:
         print(f"commit-check: {w}", file=sys.stderr)
@@ -1091,6 +1095,296 @@ def cmd_commit_check(args: argparse.Namespace) -> int:
             file=sys.stderr,
         )
         return 1
+    return 0
+
+
+# ---------------------------------------------------------------------------
+# The journal of acts (ADR-0052): an entity's numbered, dated, append-only
+# record of what it did. Checked for form by `sc journal check`, and for
+# append-only-ness against git both there and at commit time.
+
+#: The journal's file name, at the matter root.
+JOURNAL_FILE = "JOURNAL.md"
+
+#: Every entry carries these bullets, in this vocabulary
+#: (templates/entity/JOURNAL.md explains each to a lay reader).
+JOURNAL_BULLETS = ("Act", "By", "Vote", "Authority", "Record", "Entered")
+
+#: `## J-0001 · 2026-01-15 · Articles of incorporation filed`. The
+#: middle dot is canonical; ` - ` and ` | ` are accepted because people
+#: type them.
+JOURNAL_HEADING_RE = r"^## J-(?P<num>\d+)\s+[·|\-—]\s+(?P<date>\S+)\s+[·|\-—]\s+(?P<title>.*)$"
+JOURNAL_NUM_WIDTH = 4
+
+#: The annotation an in-place edit carries directly under the changed
+#: text: `> **Amended 2026-02-01 by Jane Roe:** what --- why.`
+JOURNAL_AMENDED_RE = r"^> \*\*Amended (?P<date>\d{4}-\d{2}-\d{2}) by (?P<who>[^:*]+?):\*\*\s+\S"
+
+#: The commit footer by which the human, and only the human, lets a
+#: non-append change to the journal through without an annotation.
+JOURNAL_OVERRIDE_FOOTER = "Journal-Override"
+
+
+def _journal_blank_comments(lines: list[str]) -> list[str]:
+    """Blank out HTML comments and fenced blocks, keeping line numbers.
+
+    The template's worked example lives in a comment, and a preamble may
+    show the format in a fence; neither is an entry.
+    """
+    out: list[str] = []
+    in_comment = in_fence = False
+    for ln in lines:
+        if in_fence:
+            if ln.lstrip().startswith("```"):
+                in_fence = False
+            out.append("")
+            continue
+        if in_comment:
+            if "-->" in ln:
+                in_comment = False
+            out.append("")
+            continue
+        if ln.lstrip().startswith("```"):
+            in_fence = True
+            out.append("")
+            continue
+        if ln.lstrip().startswith("<!--"):
+            if "-->" not in ln:
+                in_comment = True
+            out.append("")
+            continue
+        out.append(ln)
+    return out
+
+
+def _iso_date(s: str):
+    """A strict YYYY-MM-DD date, or None."""
+    import datetime
+    import re
+    if not re.fullmatch(r"\d{4}-\d{2}-\d{2}", s):
+        return None
+    try:
+        return datetime.date.fromisoformat(s)
+    except ValueError:
+        return None
+
+
+def _journal_format_errors(text: str) -> list[str]:
+    """Check a JOURNAL.md for form: headings, numbering, dates, bullets."""
+    import re
+
+    errors: list[str] = []
+    lines = _journal_blank_comments([ln.rstrip() for ln in text.splitlines()])
+    entries: list[tuple[int, re.Match]] = []   # (line index, heading match)
+    for i, ln in enumerate(lines):
+        if ln.startswith("## J-"):
+            m = re.match(JOURNAL_HEADING_RE, ln)
+            if not m:
+                errors.append(
+                    f"line {i + 1}: entry heading must read "
+                    f"`## J-0001 · YYYY-MM-DD · what was done` --- got {ln!r}")
+                continue
+            entries.append((i, m))
+        elif ln.startswith("## ") and entries:
+            errors.append(f"line {i + 1}: after the first entry the journal holds only "
+                          f"entries; {ln!r} is not an entry heading")
+        elif ln.startswith("> **Amended") and not re.match(JOURNAL_AMENDED_RE, ln):
+            errors.append(f"line {i + 1}: an amendment reads "
+                          f"`> **Amended YYYY-MM-DD by <name>:** what changed --- why.` "
+                          f"--- got {ln!r}")
+        elif ln.startswith("> **Amended"):
+            if _iso_date(re.match(JOURNAL_AMENDED_RE, ln).group("date")) is None:
+                errors.append(f"line {i + 1}: amendment date is not a real date")
+
+    for k, (i, m) in enumerate(entries):
+        num = m.group("num")
+        label = f"J-{num} (line {i + 1})"
+        expected = k + 1
+        if int(num) != expected:
+            errors.append(f"{label}: numbering must run contiguously from J-0001; "
+                          f"expected J-{expected:0{JOURNAL_NUM_WIDTH}d}")
+        elif len(num) != JOURNAL_NUM_WIDTH:
+            errors.append(f"{label}: number must be {JOURNAL_NUM_WIDTH} digits "
+                          f"(J-{expected:0{JOURNAL_NUM_WIDTH}d})")
+        act_date = _iso_date(m.group("date"))
+        if act_date is None:
+            errors.append(f"{label}: {m.group('date')!r} is not a YYYY-MM-DD date")
+        if not m.group("title").strip():
+            errors.append(f"{label}: the heading needs a short name for the act")
+        cm = re.match(r"Correction to J-(\d+)", m.group("title"))
+        if cm and int(cm.group(1)) >= expected:
+            errors.append(f"{label}: a correction can only correct an earlier entry")
+
+        end = entries[k + 1][0] if k + 1 < len(entries) else len(lines)
+        found: dict[str, str] = {}
+        for ln in lines[i + 1:end]:
+            bm = re.match(r"^- \*\*(?P<key>[A-Za-z]+):\*\*\s*(?P<val>.*)$", ln)
+            if bm and bm.group("key") in JOURNAL_BULLETS and bm.group("key") not in found:
+                found[bm.group("key")] = bm.group("val").strip()
+        for key in JOURNAL_BULLETS:
+            if key not in found:
+                errors.append(f"{label}: missing `- **{key}:**`")
+            elif not found[key]:
+                errors.append(f"{label}: `- **{key}:**` is empty (write `n/a` or "
+                              f"`pending: <what>` rather than leave it blank)")
+        entered = found.get("Entered", "")
+        if entered:
+            em = re.match(r"^(\S+) by \S", entered)
+            entered_date = _iso_date(em.group(1)) if em else None
+            if entered_date is None:
+                errors.append(f"{label}: `Entered:` reads `YYYY-MM-DD by <name>`")
+            elif act_date is not None and act_date > entered_date:
+                errors.append(f"{label}: the act is dated after the entry was made; "
+                              f"the journal records acts, not plans")
+    return errors
+
+
+def _journal_append_errors(old: str, new: str) -> list[str]:
+    """Check that `new` only appends to `old`, or annotates what it changes.
+
+    Allowed without remark: lines added at the end; blank lines added or
+    removed anywhere; an annotation line added on its own. Any other
+    change inside the existing text (a line rewritten, a line inserted
+    mid-entry) needs a newly added `> **Amended ...**` line in the same
+    entry, at or after the change. Removing text is never allowed:
+    superseded wording stays readable, struck through if need be.
+    """
+    import difflib
+    import re
+
+    a = [ln.rstrip() for ln in old.splitlines()]
+    b = [ln.rstrip() for ln in new.splitlines()]
+    if not any(ln.strip() for ln in a):
+        return []
+    if not any(ln.strip() for ln in b):
+        return [f"{JOURNAL_FILE} was emptied or removed; the journal is never deleted"]
+
+    def is_amend(ln: str) -> bool:
+        return bool(re.match(JOURNAL_AMENDED_RE, ln))
+
+    sm = difflib.SequenceMatcher(None, a, b, autojunk=False)
+    ops = [op for op in sm.get_opcodes() if op[0] != "equal"]
+    added_amends = {j for _t, _i1, _i2, j1, j2 in ops for j in range(j1, j2) if is_amend(b[j])}
+    b_live = _journal_blank_comments(b)
+    starts = [j for j, ln in enumerate(b_live) if ln.startswith("## J-")]
+
+    errors: list[str] = []
+    for tag, i1, i2, j1, j2 in ops:
+        removed = [ln for ln in a[i1:i2] if ln.strip()]
+        content = [ln for ln in b[j1:j2] if ln.strip() and not is_amend(ln)]
+        if tag == "insert" and i1 == len(a):
+            continue                                    # appended
+        if not removed and not content:
+            continue                                    # blank lines, or an annotation alone
+        where = f"line {i1 + 1}" + (f"--{i2}" if i2 - i1 > 1 else "")
+        if len(content) < len(removed):
+            # Fewer lines than were there: something was taken out,
+            # whatever annotation came with it.
+            errors.append(
+                f"{where} of the committed journal deleted ({removed[0][:60]!r}"
+                f"{' ...' if len(removed) > 1 else ''}). Nothing in the journal is "
+                f"deleted: strike it through (~~old~~) under an Amended note, or "
+                f"correct it in a new entry")
+            continue
+        anchor = max(j1, j2 - 1)
+        end = min([s for s in starts if s > anchor], default=len(b))
+        if not any(j1 <= j < end for j in added_amends):
+            before = removed[0][:60] if removed else "(inserted text)"
+            errors.append(
+                f"{where} of the committed journal changed ({before!r}) with no "
+                f"annotation. Append a correcting entry instead, or put "
+                f"`> **Amended YYYY-MM-DD by <name>:** what changed --- why.` "
+                f"directly under the changed text")
+    old_count = sum(1 for ln in _journal_blank_comments(a) if ln.startswith("## J-"))
+    if len(starts) < old_count:
+        errors.append(f"the journal had {old_count} entries and now has {len(starts)}; "
+                      f"entries are never removed")
+    return errors
+
+
+def _git_show(cwd: Path, spec: str) -> str | None:
+    """`git show <spec>` from cwd, or None if it does not exist there."""
+    r = subprocess.run(["git", "show", spec], cwd=cwd, capture_output=True)
+    if r.returncode != 0:
+        return None
+    return r.stdout.decode("utf-8", errors="replace")
+
+
+def _journal_versions(matter: Path, staged: bool) -> tuple[str | None, str | None, bool]:
+    """(committed text, candidate text, in_git) for a matter's journal.
+
+    The candidate is the working-tree file, or the index's with
+    `staged`. The committed text is HEAD's; None when HEAD has none.
+    """
+    in_git = subprocess.run(["git", "rev-parse", "--is-inside-work-tree"], cwd=matter,
+                            capture_output=True, text=True).stdout.strip() == "true"
+    if staged:
+        new = _git_show(matter, f":./{JOURNAL_FILE}") if in_git else None
+    else:
+        p = matter / JOURNAL_FILE
+        new = p.read_text(encoding="utf-8") if p.exists() else None
+    old = _git_show(matter, f"HEAD:./{JOURNAL_FILE}") if in_git else None
+    return old, new, in_git
+
+
+def _journal_commit_gate(message: str) -> tuple[list[str], list[str]]:
+    """The commit-msg half of the journal rule (ADR-0052).
+
+    Runs only when the commit stages JOURNAL.md at the repository root
+    (the hook runs there). A form error fails the commit. A change that
+    is not an append and carries no Amended annotation fails too,
+    unless the message has a `Journal-Override: <reason>` footer, which
+    is the human's word and never an agent's.
+    """
+    import re
+
+    r = subprocess.run(["git", "rev-parse", "--show-toplevel"], capture_output=True, text=True)
+    if r.returncode != 0:
+        return [], []
+    top = Path(r.stdout.strip())
+    staged = subprocess.run(["git", "diff", "--cached", "--name-only", "--", JOURNAL_FILE],
+                            cwd=top, capture_output=True, text=True).stdout.strip()
+    if not staged:
+        return [], []
+    old, new, _ = _journal_versions(top, staged=True)
+    errors: list[str] = []
+    warnings: list[str] = []
+    if new is not None:
+        errors += [f"{JOURNAL_FILE}: {e}" for e in _journal_format_errors(new)]
+    append = _journal_append_errors(old or "", new or "")
+    if append:
+        body = "\n".join(ln for ln in message.splitlines() if not ln.startswith("#"))
+        override = re.search(rf"^{JOURNAL_OVERRIDE_FOOTER}:\s*(\S.*)$", body, re.MULTILINE)
+        if override:
+            warnings += [f"{JOURNAL_FILE} (overridden: {override.group(1).strip()}): {e}"
+                         for e in append]
+        else:
+            errors += [f"{JOURNAL_FILE}: {e}" for e in append]
+            errors.append(
+                f"{JOURNAL_FILE} is append-only (ADR-0052). Only the human may let "
+                f"this through, with a `{JOURNAL_OVERRIDE_FOOTER}: <reason>` footer")
+    return errors, warnings
+
+
+def cmd_journal(args: argparse.Namespace) -> int:
+    """`sc journal check`: the journal's form, and append-only against HEAD."""
+    matter = Path(args.matter_dir).expanduser().resolve()
+    old, new, in_git = _journal_versions(matter, staged=args.staged)
+    if new is None:
+        print(f"journal: no {JOURNAL_FILE}{' staged' if args.staged else ''} in {matter}; "
+              "nothing to check")
+        return 0
+    errors = _journal_format_errors(new)
+    if in_git:
+        errors += _journal_append_errors(old or "", new)
+    for e in errors:
+        print(f"journal: {e}", file=sys.stderr)
+    if errors:
+        return 1
+    import re
+    n = sum(1 for ln in _journal_blank_comments(new.splitlines()) if re.match(JOURNAL_HEADING_RE, ln))
+    against = "append-only against HEAD" if in_git else "not in git; form only"
+    print(f"journal: {n} entr{'y' if n == 1 else 'ies'}, well formed ({against})")
     return 0
 
 
@@ -3106,6 +3400,13 @@ def main() -> int:
     sp.add_argument("--list-types", action="store_true",
                     help="print the commit types and what they mean")
     sp.set_defaults(func=cmd_commit_check)
+
+    sp = sub.add_parser("journal", help="check an entity's journal of acts: form, and append-only against HEAD (ADR-0052)")
+    sp.add_argument("action", choices=("check",))
+    sp.add_argument("matter_dir", nargs="?", default=".")
+    sp.add_argument("--staged", action="store_true",
+                    help="check the staged JOURNAL.md rather than the working tree's")
+    sp.set_defaults(func=cmd_journal)
 
     sp = sub.add_parser("hooks", help="install the matter git hooks")
     sp.add_argument("matter_dir")

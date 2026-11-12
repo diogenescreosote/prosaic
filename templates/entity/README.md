@@ -7,6 +7,7 @@ prosaic entity matter (ADR-0051). Layout:
 
 ```
 START HERE.md     Front page for any reader; current state, with sources
+JOURNAL.md        Journal of acts: every official act, numbered and dated, append-only
 assets/           The record book, in numbered sections; assets/INDEX.md lists every document
 inbox/            Drop zone for new material, unprocessed by definition
 processed_files/  Canonical raw bytes of triaged inbox material

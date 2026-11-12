@@ -167,6 +167,20 @@ browser. Its contract:
 - **No litigation-only directories.** A proceeding involving the
   entity is its own litigation matter, linked by `related_matters:`.
 - **Inbox is still the only way in** (promise 6).
+- **`JOURNAL.md` is the journal of acts** (ADR-0052): one numbered,
+  dated entry per memorializable act (filings, adoptions, votes and
+  consents, elections and removals, hiring and firing, authorized
+  commitments, delegations, exercises of approval or veto rights,
+  determinations received), each naming who acted, the vote, the
+  authority and the record. It is **append-only**: entries are added
+  at the end, numbered without gaps, and never deleted or renumbered;
+  a correction is a new entry, or an in-place edit with an
+  `> **Amended YYYY-MM-DD by <name>:** what --- why.` line under the
+  changed text and the old wording kept readable. This is checked, not
+  hoped for: `sc journal check` validates the form and compares the
+  journal to HEAD, and the commit hook refuses a staged journal that
+  fails either, unless the commit carries the human's
+  `Journal-Override:` footer. *(tested: tests/test_entity_journal.py)*
 
 *(tested: tests/test_entity_matter.py pins the scaffold: sections,
 front page, absent litigation directories, type, contract addendum)*

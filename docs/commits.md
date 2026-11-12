@@ -78,6 +78,7 @@ what this case says?"
 | `Exhibits:` | when exhibit letters shift | the change cascades into every pleading citing them |
 | `Drafted-by:` | on `draft` touching `src/` | `agent`, `human`, or `agent, revised by human` |
 | `Co-Authored-By:` | agent-assisted commits | standard git attribution |
+| `Journal-Override:` | only on the human's explicit word, never added by an agent | lets an unannotated edit of an entity's append-only `JOURNAL.md` through (ADR-0052) |
 
 `Verified:` and `Drafted-by:` are the two that earn their keep over
 time. "Did a human check this transcript before we quoted it?" and
@@ -185,3 +186,10 @@ word to fix. Missing footers and overlong subjects **warn and let the
 commit through**: the moment you are committing during a filing is not
 the moment to be argued with by a hook. `--no-verify` bypasses it
 entirely.
+
+One check is not about the message: when the commit stages an entity
+matter's `JOURNAL.md`, the hook runs `sc journal check --staged` on
+it, and a malformed journal, or an edit that is not an append and
+carries no `> **Amended ...**` note, fails the commit. The human may
+let such an edit through with a `Journal-Override: <reason>` footer
+(ADR-0052).

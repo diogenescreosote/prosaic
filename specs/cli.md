@@ -179,7 +179,24 @@ subcommand's real promises live in that component's spec.
   [docs/commits.md](../docs/commits.md), reading the message from a
   file or stdin. `--list-types` prints the types and what they mean.
   Unknown or missing types are errors; missing footers warn.
-  *(untested)*
+  *(untested)* When the commit stages the repository root's
+  `JOURNAL.md`, it also runs the journal check below on the staged
+  text: a form error fails the commit, and so does a change that is
+  not an append and carries no `> **Amended ...**` annotation, unless
+  the message has a `Journal-Override: <reason>` footer (the human's
+  override; the failures then print as warnings) (ADR-0052). *(tested:
+  tests/test_entity_journal.py)*
+- **`sc journal check [dir] [--staged]`** validates an entity's
+  journal of acts (ADR-0052): entry headings
+  `## J-0001 · YYYY-MM-DD · title`, numbering contiguous from J-0001,
+  real ISO dates, the six bullets (`Act`, `By`, `Vote`, `Authority`,
+  `Record`, `Entered`) present and non-empty, no act dated after its
+  entry, well-formed amendment annotations; and, in a git repository,
+  that the working-tree (or with `--staged`, the index's) journal only
+  appends to HEAD's, any in-place change being covered by a newly added
+  annotation in the same entry and no committed text removed. An absent
+  journal passes. Exit 1 on any failure, each named by line.
+  *(tested: tests/test_entity_journal.py)*
 
 ## The agent seam: `cli/agent-run`
 
