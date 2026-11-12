@@ -132,6 +132,14 @@ as real-but-unclear. Routine test *authoring* (parametrized clones of
 existing patterns, fixture plumbing) may also be delegated to a
 cheaper agent, but you review the diff.
 
+The same holds beyond tests: when a request splits into independent
+pieces (a fix here and a doc there, a research question beside a code
+change), each piece goes to a background agent with a self-contained
+brief while you work the rest; concurrent agents get disjoint files,
+and only the coordinating session commits. The workspace contract's
+"Parallelize" section is the rule for matter work; this is the same
+rule for development.
+
 ## Test selection table (err broader)
 
 | Touched | Tier 0 (inline) | Tier 1 (background) |

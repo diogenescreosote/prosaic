@@ -297,6 +297,31 @@ never modifies received bytes.
 Machine transcripts, OCR text and AI summaries are verified by a human
 before being cited in any filing.
 
+## Parallelize: independent work goes to background agents
+
+When a request contains pieces that do not depend on each other ---
+research and drafting, a fetch and a triage, a code change in prosaic
+and a record update in a matter --- split them. Each independent piece
+goes to a background agent with a self-contained brief (paths, rules
+that bind it, what to leave alone, what to report), and you do the
+rest yourself while they run. Do not wait idle on one task when
+another could proceed.
+
+- **Brief completely.** A background agent starts with none of your
+  context: name the files, the governing rules (authorities read in
+  full, no case material in prosaic, never commit or never touch X),
+  and the shape of the report.
+- **Disjoint files, one committer.** Give concurrent agents disjoint
+  files, and keep commits with the coordinating session, staged by
+  path, so two agents never stage each other's work.
+- **Verify what comes back.** An agent's report is a lead: open the
+  quoted texts and the diff before relying on it or telling the human
+  it is done.
+- **Do not split what is sequential** or so small that briefing costs
+  more than doing it.
+- **Long commands go to the background** too (a full test run, a
+  bulk OCR), with the result read when it lands rather than polled.
+
 ## Change authority
 
 **Proceed, then report** — configuration and project metadata, where
