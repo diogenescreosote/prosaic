@@ -14,10 +14,11 @@ between sessions and a lawyer's attention dies between hearings.
 ## Matter types
 
 `matter.yaml` declares `case.type` — `litigation` (the default when
-absent) or `estate`. The layout above is common to both; an estate
-matter additionally keeps the **share convention** below. Tooling
-must treat an unknown type as `litigation` rather than failing: the
-type gates conventions, not machinery.
+absent), `estate` or `entity`. The layout above is common to all; an
+estate matter additionally keeps the **share convention** below, and
+an entity matter is the **record book** below. Tooling must treat an
+unknown type as `litigation` rather than failing: the type gates
+conventions, not machinery.
 
 ## Configuration lives in the matter
 
@@ -136,3 +137,36 @@ beneficiaries, successor fiduciaries, and counsel. Its contract:
 
 *(tested: tests/test_estate_pack.py pins the scaffold's presence in
 the estate pack)*
+
+## Entity matters: the record book
+
+An entity matter (`case.type: entity`, `sc init --type entity`,
+ADR-0051) is the governance record of an organization: formation,
+governing documents, board acts, directors and officers, tax status,
+government filings, and any litigation. Its readers are mostly people
+who will never run prosaic, so the record must read in a file
+browser. Its contract:
+
+- **`assets/` is the record book, in fixed numbered sections**:
+  `01 Formation`, `02 Governing Documents`, `03 Board Minutes and
+  Consents`, `04 Directors and Officers`, `05 Other Official Acts`,
+  `06 Tax Status`, `07 Government Filings`, `08 Litigation`,
+  `09 Finances`, `10 Correspondence`. Each exists from the scaffold,
+  empty if there is nothing in it. Records are PDFs (or the received
+  format) named `YYYY-MM-DD_what_it_is`; derived text stays under
+  `derived/`.
+- **`START HERE.md` is the front page**: the folder explained in
+  plain language, and a "Where things stand" table of the entity's
+  current facts, each citing its record, updated in the same change
+  as the triage that alters one.
+- **Every INDEX row carries a status** (`filed`, `acknowledged`,
+  `as-submitted`, `executed`, `copy`, `not-in-hand`) recorded by a
+  human from the face of the document. This is promise 7's
+  `pleadings/` discipline applied to the whole book; there is no
+  `pleadings/`.
+- **No litigation-only directories.** A proceeding involving the
+  entity is its own litigation matter, linked by `related_matters:`.
+- **Inbox is still the only way in** (promise 6).
+
+*(tested: tests/test_entity_matter.py pins the scaffold: sections,
+front page, absent litigation directories, type, contract addendum)*

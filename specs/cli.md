@@ -16,6 +16,10 @@ subcommand's real promises live in that component's spec.
   alone unless `--force`, so `init` on a live matter refreshes what
   is missing without clobbering what has been written. `--git`
   initializes the repository with the standard ignores. *(untested)*
+  `--type entity` scaffolds an organization's record book instead
+  (ADR-0051): no litigation-only directories, ten numbered sections
+  under `assets/`, `START HERE.md`, and the entity addendum appended
+  to `AGENTS.md`. *(tested: tests/test_entity_matter.py)*
 - **`sc sync <dir>`** runs configured connectors plus AI triage
   *now*, bypassing the scheduler's interval guard — a manual sync
   means now (see [sync.md](sync.md)). *(untested)*

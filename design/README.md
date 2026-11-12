@@ -71,6 +71,7 @@ project accretes decisions instead of middleware.
 - [0048](adr/0048-phone-store-is-a-derived-index.md) The phone message store is a derived SQLite index of the backups, ingested incrementally by bisecting ordered files; never a record
 - [0049](adr/0049-drafts-are-not-mail.md) Gmail drafts are not mail: never listed, fetched, stored, rendered, counted or reported; legacy captures are audited and moved to `.private/`, never deleted
 - [0050](adr/0050-project-tools-run-through-sc.md) Project tools run through `sc` under the project environment; `sc setup`/`sc doctor`; stock programs declared; bare `python3` scripts hop into the venv
+- [0051](adr/0051-entity-matter-type.md) Entity matter type: `sc init --type entity`; the record book is `assets/` in ten numbered plain-named sections, `START HERE.md` is the front page for readers without prosaic, every INDEX row carries a status
 
 Also:
 

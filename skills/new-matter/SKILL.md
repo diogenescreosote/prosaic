@@ -9,7 +9,11 @@ description: Scaffold a new matter directory - layout, git repo, commit hooks, a
    (`specs/matter.md`), copies the templates (AGENTS.md contract,
    KNOWLEDGE/TODO/QUESTIONS, envelopes.yaml, matter.yaml),
    initializes git, installs the commit hooks. Rerunnable:
-   existing files are kept unless `--force`.
+   existing files are kept unless `--force`. For an organization's
+   governance record rather than a case (a corporation's formation,
+   bylaws, minutes, tax status) add `--type entity` (ADR-0051): the
+   record book is `assets/` in numbered sections with a `START
+   HERE.md` front page, and there is no `pleadings/` or `discovery/`.
 2. **Edit `matter.yaml`**: caption, court, parties, connectors,
    backup. This is configuration the human owns — draft it, then ask.
 3. **Workspace contract**: the matter inherits shared conventions

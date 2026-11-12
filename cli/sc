@@ -96,6 +96,33 @@ MATTER_DIRS = [
     "unfiled",
 ]
 
+#: Matter types `sc init --type` scaffolds (specs/matter.md). An estate
+#: matter starts as litigation's layout and gains its share/ folder
+#: from the estate-plan skill, so it is not offered here.
+INIT_TYPES = ("litigation", "entity")
+
+#: Directories only a lawsuit has. An entity matter leaves them out: a
+#: reader browsing a corporation's records should not meet an empty
+#: `pleadings/` and wonder what was lost (ADR-0051).
+LITIGATION_ONLY_DIRS = {"pleadings", "discovery", "lawyer_drafts", "unfiled"}
+
+#: The entity record book: numbered sections under assets/, named for a
+#: reader who has never heard of prosaic (ADR-0051). Order is the order
+#: a stranger asks the questions: does it exist, what are its rules, who
+#: decided what, who runs it, what is its tax standing.
+ENTITY_SECTIONS = [
+    "01 Formation",
+    "02 Governing Documents",
+    "03 Board Minutes and Consents",
+    "04 Directors and Officers",
+    "05 Other Official Acts",
+    "06 Tax Status",
+    "07 Government Filings",
+    "08 Litigation",
+    "09 Finances",
+    "10 Correspondence",
+]
+
 
 APP = "prosaic"
 
@@ -238,25 +265,61 @@ def cmd_harness(args: argparse.Namespace) -> int:
     return 0
 
 
+def _init_template_files(matter_type: str) -> dict[Path, Path]:
+    """Map each scaffold path (relative to the matter) to its template.
+
+    templates/matter/ is the base for every type. An entity matter
+    overlays templates/entity/: a file there replaces the base file at
+    the same path, except AGENTS.entity.md, which is appended to the
+    base AGENTS.md at copy time (one contract, not two that drift).
+    """
+    base = ROOT / "templates" / "matter"
+    files: dict[Path, Path] = {}
+    for f in base.rglob("*"):
+        if f.is_dir():
+            continue
+        rel = f.relative_to(base)
+        if rel.name == "processed_files_MANIFEST.md":
+            rel = Path("processed_files") / "MANIFEST.md"
+        files[rel] = f
+    if matter_type == "entity":
+        overlay = ROOT / "templates" / "entity"
+        for f in overlay.rglob("*"):
+            if f.is_dir() or f.name == "AGENTS.entity.md":
+                continue
+            files[f.relative_to(overlay)] = f
+    return files
+
+
 def cmd_init(args: argparse.Namespace) -> int:
     dest = Path(args.matter_dir).expanduser().resolve()
     dest.mkdir(parents=True, exist_ok=True)
-    template = ROOT / "templates" / "matter"
-    for d in MATTER_DIRS:
+    matter_type = getattr(args, "type", None) or "litigation"
+    dirs = list(MATTER_DIRS)
+    if matter_type == "entity":
+        dirs = [d for d in dirs if d not in LITIGATION_ONLY_DIRS]
+        dirs += [f"assets/{s}" for s in ENTITY_SECTIONS]
+    for d in dirs:
         (dest / d).mkdir(parents=True, exist_ok=True)
-    for f in template.rglob("*"):
-        if f.is_dir():
-            continue
-        rel = f.relative_to(template)
-        if rel.name == "processed_files_MANIFEST.md":
-            target = dest / "processed_files" / "MANIFEST.md"
-        else:
-            target = dest / rel
+    if matter_type == "entity":
+        # git keeps no empty directory, and an empty section is part of
+        # the book's shape: the reader should see "08 Litigation" and
+        # know there is none, not wonder whether it was never set up.
+        for s in ENTITY_SECTIONS:
+            keep = dest / "assets" / s / ".gitkeep"
+            if not keep.exists():
+                keep.touch()
+    for rel, f in sorted(_init_template_files(matter_type).items()):
+        target = dest / rel
         if target.exists() and not args.force:
             print(f"  keep existing {target.relative_to(dest)}")
             continue
         target.parent.mkdir(parents=True, exist_ok=True)
         _copy_template_file(f, target)
+        if rel == Path("AGENTS.md") and matter_type == "entity":
+            extra = (ROOT / "templates" / "entity" / "AGENTS.entity.md").read_text(encoding="utf-8")
+            with target.open("a", encoding="utf-8") as fh:
+                fh.write("\n" + extra)
         print(f"  wrote {target.relative_to(dest)}")
     if args.git and not (dest / ".git").exists():
         subprocess.run(["git", "init", "-q"], cwd=dest, check=True)
@@ -2014,7 +2077,12 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
         lines.append("")
     name = case.get("name") or matter.name
     head = f"# Matter brief: {name}"
-    bits = [b for b in (case.get("number"), case.get("court")) if b]
+    # An entity has no court; its identity is its form and its state.
+    bits = [
+        b
+        for b in (case.get("number"), case.get("court"), case.get("form"), case.get("jurisdiction"))
+        if b
+    ]
     if bits:
         head += " (" + ", ".join(str(b) for b in bits) + ")"
     lines.append(head)
@@ -2024,6 +2092,11 @@ def render_brief(matter: Path, todo_limit: int = 8, dates_limit: int = 10) -> st
     if case.get("type"):
         meta.append(f"type: {case['type']}")
     lines.append("- " + "; ".join(meta))
+    if case.get("type") == "entity":
+        lines.append(
+            "- entity matter: the record book is `assets/` (numbered sections), "
+            "`START HERE.md` states the entity's current facts; keep both in sync at triage"
+        )
     lines.append(f"- matter dir: `{matter}`; prosaic: `{ROOT}`")
     rel = (cfg.get("related_matters") or [])
     if rel:
@@ -2759,6 +2832,12 @@ def main() -> int:
     sp.add_argument("matter_dir")
     sp.add_argument("--force", action="store_true", help="overwrite existing template files")
     sp.add_argument("--git", action="store_true", help="git init the matter")
+    sp.add_argument(
+        "--type",
+        choices=INIT_TYPES,
+        default="litigation",
+        help="litigation (default) or entity: an organization's governance record (ADR-0051)",
+    )
     sp.set_defaults(func=cmd_init)
 
     sp = sub.add_parser("sync", help="run configured connectors + AI triage now")

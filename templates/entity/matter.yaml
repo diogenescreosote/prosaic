@@ -1,0 +1,76 @@
+# matter.yaml — prosaic matter configuration.
+
+case:
+  type: entity                      # an organization's governance record (ADR-0051)
+  name: "Example Foundation"        # legal name exactly as on the formation filing
+  number: ""                        # state entity number, once the filing is endorsed
+  jurisdiction: ""                  # state of formation, e.g. California
+  form: ""                          # e.g. nonprofit public benefit corporation; LLC
+  role: ""                          # your role: incorporator / director / secretary / counsel
+
+# Where this matter backs itself up. Without this the entire history of
+# the case exists in one place; the threat is `rm -rf`, not disk
+# failure. `sc backup init .` sets the remote up; the post-commit hook
+# keeps it current. See prosaic docs/backup.md.
+backup:
+  kind: local                       # local (no account needed) | github
+  # path: ~/backups/smith.git       # local: defaults under `sc paths data-dir`
+  # repo: youraccount/smith-matter  # github: MUST be a private repo; checked every push
+
+# Matters whose records bear on this one. `sc find` searches them too
+# (a shared party's document may live in either record), and the brief
+# names them. Paths are relative to this directory.
+# related_matters:
+#   - ../other-matter
+
+# Phone backups (SMS Backup & Restore), indexed into a derived store
+# that `sc phone search` answers from. See prosaic docs/phone-logs.md.
+# phone:
+#   sources: ["~/Drive/sms-*.xml", "~/Drive/calls-*.xml"]
+#   since: "2024-05-01"               # nothing older is stored
+#   db: derived/phone/messages.sqlite # default; gitignored
+
+# Agent roles (ADR-0044): which model runs each headless job, and a turn
+# cap. Unset means the harness's default model, uncapped. Triage and
+# refine integrate new material and belong on the strongest model; the
+# judge reads and scores and can be cheaper.
+# agent:
+#   roles:
+#     triage: {max_turns: 80}
+#     refine: {max_turns: 40}
+#     judge:  {model: claude-sonnet-5, max_turns: 20}
+#     second-opinion:                   # a different vendor's mind on a draft (/secondopinion)
+#       cmd: <prosaic>/sync/second_opinion_openai.sh
+#       credential: prosaic.openai      # Keychain item; exported as OPENAI_API_KEY at run time
+#       model: gpt-5
+#       price_per_million: {input: 1.25, output: 10}   # USD; the cost of every call is reported and ledgered
+
+# Source connectors. Only configured connectors run during `sc sync`.
+# See prosaic docs/connectors.md for each connector's options.
+#
+# Credentials are incorporated by REFERENCE (ADR-0031): `credential:`
+# names a Keychain item; the key material never enters the matter.
+# A prosaic-global key is fine, but the matter must still name it.
+#
+# connectors:
+#   docuseal:
+#     credential: prosaic.docuseal      # or a matter-specific item
+#   proof:
+#     credential: prosaic.proof
+#     url: https://api.fairfax.proof.com   # optional per-matter deployment
+connectors: {}
+#  docuseal: {}                        # poll DocuSeal receipts each sync;
+#                                   # completed signatures land in inbox/docuseal/
+#  gmail:
+#    accounts:                      # optional; one OAuth token per mailbox
+#      - jane.roe@example.com       #   the first inherits the existing token
+#      - service@example.com        #   `node auth.js --account <email>`
+#    addresses:                     # plain address, bare domain, or bounded entry
+#      - opposing.party@example.com
+#      - opposingfirm.com           # bare domain matches the whole firm
+#      - address: someone@example.com
+#        after: 2024/04/01          # Gmail search bounds (optional)
+#    quoted: show                   # show (default) | hide, in the rendered PDF
+#  mycase:
+#    portal_url: https://your-firm.mycase.com
+#    credential: prosaic.mycase
