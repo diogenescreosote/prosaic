@@ -25,6 +25,7 @@ dependencies = [
 [dependency-groups]
 dev = [
     "pytest>=8.2",
+    "pytest-xdist>=3.6",
     "mypy>=1.10",
     "ruff>=0.5",
     "types-reportlab>=4.5.1.20260807",
@@ -110,5 +111,11 @@ follow_imports = "skip"
 
 [tool.pytest.ini_options]
 testpaths = ["tests", "pleading/tests", "signing/tests"]
-addopts = "-q"
+# Parallel by default (pytest-xdist): one worker per core (`-n auto`),
+# and tests that must not run concurrently share an xdist_group mark,
+# which loadgroup sends to a single worker. Long option forms so the
+# root conftest.py can accept them when xdist is absent or disabled.
+# `-n0` (or `-p no:xdist`) runs in-process for a debugger; see
+# docs/testing.md.
+addopts = "-q --numprocesses=auto --dist=loadgroup"
 markers = ["ai: judged by a headless LLM; skipped when unavailable"]

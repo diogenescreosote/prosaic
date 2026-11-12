@@ -9,6 +9,8 @@ from the descriptor (``rect:``) or from the blank's widget of the same
 
 from __future__ import annotations
 
+import copy
+import functools
 import subprocess
 import sys
 from pathlib import Path
@@ -46,23 +48,54 @@ def has_no_form_layer(pdf: Path) -> bool:
     return not any(True for _ in form_fill.iter_widgets(reader))
 
 
-def blank_rects(form_id: str) -> dict[str, tuple[int, list[float]]]:
-    """(page index, rect) of every widget on the form's blank, keyed by
-    qualified name and by bare leaf name."""
-    desc = form_fill.load_descriptor(form_id)
+# Probing a form field by field used to re-parse the descriptor YAML and
+# re-read every widget of the blank PDF for each field: a registry-wide
+# sweep spent nearly all its time there. Both are memoized on the file's
+# identity (path, mtime, size) and on the loader in effect, so an edited
+# descriptor, a monkeypatched loader or a different overlay directory
+# is a different key; callers get copies, so nothing they do to a
+# result can reach the cache.
+
+def _file_key(path: Path) -> tuple[str, int, int]:
+    st = path.stat()
+    return str(path), st.st_mtime_ns, st.st_size
+
+
+@functools.lru_cache(maxsize=None)
+def _cached_descriptor(form_id: str, loader, key) -> dict:
+    return loader(form_id)  # `key` only keys the cache
+
+
+def _descriptor(form_id: str) -> dict:
+    path = form_fill._registry_path(form_id)
+    if path is None:
+        return form_fill.load_descriptor(form_id)  # raises, as it always did
+    return copy.deepcopy(
+        _cached_descriptor(form_id, form_fill.load_descriptor, _file_key(path)))
+
+
+@functools.lru_cache(maxsize=None)
+def _cached_widget_rects(key) -> dict[str, tuple[int, list[float]]]:
     out: dict[str, tuple[int, list[float]]] = {}
-    for page_idx, name, obj in form_fill.iter_widgets(
-            PdfReader(str(form_fill.blank_path(desc)))):
+    for page_idx, name, obj in form_fill.iter_widgets(PdfReader(key[0])):
         rect = [float(v) for v in (obj.get("/Rect") or [0, 0, 0, 0])]
         out.setdefault(name, (page_idx, rect))
         out.setdefault(name.split(".")[-1], (page_idx, rect))
     return out
 
 
+def blank_rects(form_id: str) -> dict[str, tuple[int, list[float]]]:
+    """(page index, rect) of every widget on the form's blank, keyed by
+    qualified name and by bare leaf name."""
+    desc = _descriptor(form_id)
+    cached = _cached_widget_rects(_file_key(form_fill.blank_path(desc)))
+    return {name: (page_idx, list(rect)) for name, (page_idx, rect) in cached.items()}
+
+
 def rect_of(form_id: str, logical: str, section: str = "fields") -> tuple[int, list[float]]:
     """Where the fill draws ``logical``: its own ``rect:``, else its
     mapped widget's rectangle on the blank."""
-    desc = form_fill.load_descriptor(form_id)
+    desc = _descriptor(form_id)
     spec = desc[section][logical]
     if spec.get("rect"):
         return int(spec.get("page", 1)) - 1, list(spec["rect"])
@@ -94,7 +127,7 @@ def draw_rect(form_id: str, logical: str) -> tuple[int, list[float]]:
     """Where the fill actually draws ``logical``: its widget rect widened
     to the layout the blank's geometry gives it — the cell's free area
     for a box, the rule's span for a line (ADR-0046)."""
-    desc = form_fill.load_descriptor(form_id)
+    desc = _descriptor(form_id)
     page_idx, rect = rect_of(form_id, logical, "fields")
     lay = form_fill.resolve_layout(rect, desc["fields"][logical],
                                    form_fill.page_geometry(form_fill.blank_path(desc), page_idx))

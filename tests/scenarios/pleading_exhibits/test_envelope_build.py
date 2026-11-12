@@ -20,6 +20,10 @@ import pytest
 
 from tests.scenarios.pleading_exhibits import util
 
+# The module shares one built matter that tests mutate and restore, in
+# file order: under xdist the whole module runs on one worker, in order.
+pytestmark = pytest.mark.xdist_group("pleading_exhibits-envelope_build")
+
 
 @pytest.fixture(scope="module")
 def matter(tmp_path_factory):

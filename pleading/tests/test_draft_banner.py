@@ -23,6 +23,7 @@ the property that makes it worth anything:
 
 from __future__ import annotations
 
+import shutil
 import subprocess
 import sys
 from pathlib import Path
@@ -197,7 +198,29 @@ def test_txt_carries_the_banner(tmp_path):
     assert first.startswith("***"), "banner must be delimited from the document"
 
 
-def test_banner_reaches_the_jc_cover_sheet_and_every_merged_page(tmp_path):
+@pytest.fixture(scope="module")
+def fixture_subpoena(tmp_path_factory):
+    """The form_filling scenario's subpoena, rendered once from a copy.
+
+    Never rendered in place: the render writes its SUBP-010 cover-sheet
+    cache (and e-sign sidecar) beside the source, which would dirty the
+    checked-in fixture and race any concurrent worker doing the same.
+    """
+    fixture = REPO_ROOT / "tests" / "scenarios" / "form_filling" / "matter"
+    if not (fixture / "src" / "Subpoena to Example Bank.md").exists():
+        pytest.skip("form_filling fixture matter not present")
+    matter = tmp_path_factory.mktemp("banner") / "matter"
+    shutil.copytree(fixture, matter)
+    src = matter / "src" / "Subpoena to Example Bank.md"
+    out = matter.parent / "subpoena.pdf"
+    subprocess.run(
+        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)],
+        check=True, capture_output=True, cwd=str(matter),
+    )
+    return out
+
+
+def test_banner_reaches_the_jc_cover_sheet_and_every_merged_page(fixture_subpoena):
     """The stamp covers the whole packet, not just what the renderer drew.
 
     A deposition subpoena is a filled SUBP-010, then the attachment,
@@ -205,15 +228,7 @@ def test_banner_reaches_the_jc_cover_sheet_and_every_merged_page(tmp_path):
     worse than no marking, because it reads as a statement that the
     form is final.
     """
-    matter = REPO_ROOT / "tests" / "scenarios" / "form_filling" / "matter"
-    src = matter / "src" / "Subpoena to Example Bank.md"
-    if not src.exists():
-        pytest.skip("form_filling fixture matter not present")
-    out = tmp_path / "subpoena.pdf"
-    subprocess.run(
-        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)],
-        check=True, capture_output=True, cwd=str(matter),
-    )
+    out = fixture_subpoena
     pages = subprocess.run(
         ["pdftotext", "-layout", str(out), "-"],
         check=True, capture_output=True, text=True,
@@ -228,7 +243,7 @@ def test_banner_reaches_the_jc_cover_sheet_and_every_merged_page(tmp_path):
         )
 
 
-def test_banner_does_not_collide_with_the_form_header(tmp_path):
+def test_banner_does_not_collide_with_the_form_header(fixture_subpoena):
     """The band is reclaimed by scaling, not drawn over the form.
 
     A JC form's own header starts a quarter inch from the paper edge.
@@ -236,15 +251,7 @@ def test_banner_does_not_collide_with_the_form_header(tmp_path):
     ATTORNEY" and makes both unreadable, which is how the first
     attempt at this failed.
     """
-    matter = REPO_ROOT / "tests" / "scenarios" / "form_filling" / "matter"
-    src = matter / "src" / "Subpoena to Example Bank.md"
-    if not src.exists():
-        pytest.skip("form_filling fixture matter not present")
-    out = tmp_path / "subpoena.pdf"
-    subprocess.run(
-        [sys.executable, str(PLEADING_DIR / "md_pleading.py"), str(src), str(out)],
-        check=True, capture_output=True, cwd=str(matter),
-    )
+    out = fixture_subpoena
     # -layout preserves vertical order: the banner must be strictly
     # above the form's first label, on its own line.
     lines = [ln for ln in subprocess.run(

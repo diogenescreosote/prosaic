@@ -50,21 +50,47 @@ FORBIDDEN_PATTERNS = [
 LOCAL_DENYLIST = REPO_ROOT / ".leakguard.local"
 
 
-def _local_patterns() -> list[re.Pattern[bytes]]:
+#: A pattern, paired with a literal that every match of it contains once
+#: ASCII-lowercased (or None when there is no such literal).
+Guarded = tuple[bytes | None, re.Pattern[bytes]]
+
+
+def _local_patterns() -> list[Guarded]:
     if not LOCAL_DENYLIST.exists():
         return []
     lines = LOCAL_DENYLIST.read_text().splitlines()
     # Bounded: a short surname is otherwise a substring of ordinary words
     # ("Ross" inside "across"), and a guard that cries wolf gets muted.
+    #
+    # The literal rides along as a prefilter. A leading \b defeats the
+    # regex engine's literal-prefix search, so running each of a few
+    # hundred bounded names over every tracked byte took most of a
+    # minute; a substring test on the case-folded content takes
+    # milliseconds and rules out nearly every (name, file) pair, and the
+    # regex then decides the rest exactly as before. Bytes IGNORECASE
+    # and bytes.lower() both fold ASCII only, so a regex match always
+    # implies a substring hit: the prefilter can never hide a leak.
+    literals = [
+        line.strip().encode() for line in lines if line.strip() and not line.startswith("#")
+    ]
     return [
-        re.compile(rb"\b" + re.escape(line.strip().encode()) + rb"\b", re.IGNORECASE)
-        for line in lines
-        if line.strip() and not line.startswith("#")
+        (literal.lower(), re.compile(rb"\b" + re.escape(literal) + rb"\b", re.IGNORECASE))
+        for literal in literals
     ]
 
 
-def _all_patterns() -> list[re.Pattern[bytes]]:
-    return FORBIDDEN_PATTERNS + _local_patterns()
+def _all_patterns() -> list[Guarded]:
+    return [(None, pattern) for pattern in FORBIDDEN_PATTERNS] + _local_patterns()
+
+
+def _matching(content: bytes, patterns: list[Guarded]) -> list[re.Pattern[bytes]]:
+    """Every pattern that matches ``content``, in ``patterns`` order."""
+    folded = content.lower()
+    return [
+        pattern
+        for literal, pattern in patterns
+        if (literal is None or literal in folded) and pattern.search(content)
+    ]
 
 
 def _git(*argv: str) -> bytes:
@@ -79,15 +105,14 @@ def _tracked_files() -> list[Path]:
 
 
 def test_tracked_files_contain_no_prior_matter_content() -> None:
+    patterns = _all_patterns()
     violations: list[str] = []
     for path in _tracked_files():
         if path == THIS_FILE:
             continue  # the denylist itself necessarily contains its patterns
-        content = path.read_bytes()
         violations.extend(
             f"{path.relative_to(REPO_ROOT)}: matches {pattern.pattern!r}"
-            for pattern in _all_patterns()
-            if pattern.search(content)
+            for pattern in _matching(path.read_bytes(), patterns)
         )
     assert not violations, "leaked content:\n" + "\n".join(violations)
 
@@ -95,9 +120,7 @@ def test_tracked_files_contain_no_prior_matter_content() -> None:
 def test_commit_messages_contain_no_prior_matter_content() -> None:
     log = _git("log", "--all", "--format=%H%n%B%n---")
     violations = [
-        f"commit log matches {pattern.pattern!r}"
-        for pattern in _all_patterns()
-        if pattern.search(log)
+        f"commit log matches {pattern.pattern!r}" for pattern in _matching(log, _all_patterns())
     ]
     assert not violations, "leaked content:\n" + "\n".join(violations)
 

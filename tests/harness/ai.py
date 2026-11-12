@@ -199,10 +199,14 @@ Respond with ONLY a JSON object, no other text:
     passed = score >= threshold and not fails
     j = Judgment(score, passed, str(d.get("rationale", "")), fails, raw=raw)
 
+    # Written aside and renamed into place: parallel test workers share
+    # this cache, and a reader must never see a half-written verdict.
     CACHE_DIR.mkdir(exist_ok=True)
-    cache_file.write_text(json.dumps({
+    tmp = cache_file.with_name(f"{cache_file.name}.{os.getpid()}.tmp")
+    tmp.write_text(json.dumps({
         "score": j.score, "passed": j.passed, "rationale": j.rationale,
         "hard_failures": j.hard_failures}))
+    os.replace(tmp, cache_file)
     return j
 
 

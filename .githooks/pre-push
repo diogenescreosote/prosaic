@@ -30,6 +30,9 @@ cd "$repo_root"
 # in TECHNICAL.md) go stale on any commit that adds tests, and CI was
 # repeatedly red for exactly that. The whole set runs in seconds.
 CHECKS="tests/test_repo_hygiene.py tests/test_leak_guard.py tests/test_docs_coverage.py"
+# In-process: three files finish before a pool of xdist workers would
+# have started (pyproject's addopts asks for one per core).
+PYTEST_ARGS="-q --no-header -p no:xdist"
 
 # uv owns the environment for this repo; fall back to a python that
 # already has pytest, for clones driven some other way.
@@ -37,14 +40,14 @@ if command -v uv >/dev/null 2>&1; then
   uv run --no-sync ruff check . || exit 1
   uv run --no-sync ruff format --check . || exit 1
   uv run --no-sync mypy tests || exit 1
-  exec uv run --no-sync pytest $CHECKS -q --no-header
+  exec uv run --no-sync pytest $CHECKS $PYTEST_ARGS
 fi
 
 for py in "${PROSAIC_PYTHON:-}" python3 python; do
   [ -n "$py" ] || continue
   command -v "$py" >/dev/null 2>&1 || continue
   if "$py" -c "import pytest" >/dev/null 2>&1; then
-    exec "$py" -m pytest $CHECKS -q --no-header
+    exec "$py" -m pytest $CHECKS $PYTEST_ARGS
   fi
 done
 

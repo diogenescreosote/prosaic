@@ -9,6 +9,42 @@ uv run pytest -m ai                 # only the AI-judged checks
 uv run pytest -q <path>             # a narrow selection
 ```
 
+## Running in parallel
+
+The suite runs on every core by default: pyproject's `addopts` passes
+`--numprocesses=auto --dist=loadgroup` to pytest-xdist (a dev
+dependency; `uv sync` installs it). A full run is minutes serially and
+well under one in parallel.
+
+```bash
+uv run pytest -n0 <path>            # one process: breakpoints, pdb, print debugging
+uv run pytest -p no:xdist <path>    # the same, with xdist not loaded at all
+```
+
+Without xdist installed (an environment not yet synced) the root
+`conftest.py` accepts the two options and ignores them, so the suite
+still runs, serially.
+
+Every test must be safe next to any other test running at the same
+moment in another process. In practice:
+
+- **Write only under `tmp_path` / `tmp_path_factory`.** Never into the
+  repository: not into `pleading/forms/registry/` (a stray descriptor
+  changes what every other worker collects), not into a checked-in
+  scenario matter (a render writes its cover-sheet cache beside the
+  source; copy the matter first, as `scenario.load_scenario` does).
+- **Shared caches write atomically.** The AI verdict cache writes a
+  temporary file and renames it into place.
+- **A module- or session-scoped fixture is built once per worker**
+  that runs a test using it, not once per run. Keep such fixtures
+  pure functions of their inputs, built under `tmp_path_factory`.
+- **Tests that must not overlap share an `xdist_group`.**
+  `@pytest.mark.xdist_group("name")` sends every test with that name
+  to one worker, in order (that is what `--dist=loadgroup` does). The
+  AI-judged tests are grouped automatically (`ai-judge`, in the root
+  `conftest.py`): a burst of concurrent judge sessions trips the rate
+  limits the retry logic exists for.
+
 ## Reproducing CI exactly
 
 CI runs four commands, in this order, and a green `uv run pytest` does

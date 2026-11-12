@@ -183,26 +183,28 @@ def test_multipage_overflow_preserves_every_sentence(tmp_path):
 # Negative control: prove the drift alarm can actually fire
 # ---------------------------------------------------------------------------
 
-def test_negative_control_bogus_map_is_loudly_reported(tmp_path):
-    bogus = form_fill.REGISTRY_DIR / "_negcontrol.yaml"
-    bogus.write_text(
+def test_negative_control_bogus_map_is_loudly_reported(tmp_path, monkeypatch):
+    # The bogus descriptor goes in a throwaway local/ overlay, never the
+    # built-in registry: a file there, even briefly, is seen by every
+    # concurrent test worker that lists or collects forms.
+    local = tmp_path / "local" / "pleading"
+    (local / "forms" / "registry").mkdir(parents=True)
+    (local / "forms" / "registry" / "_negcontrol.yaml").write_text(
         "form: _negcontrol\nblank: mc040.pdf\ntechnology: overlay\n"
         "fields:\n  ghost:\n    map: NoSuchWidget999\n    doc: negative control\n"
         "agent_guide: negative control\n")
-    try:
-        res = form_fill.fill("_negcontrol", tmp_path / "x.pdf", meta={},
-                             data={"ghost": "value"})
-        # Technology-agnostic on purpose. The AcroForm path words this as
-        # "not found — revision drift?" and the overlay path as "needs a
-        # rect, or a map naming a widget in <blank> — form revision
-        # drift?". What must hold either way is that the field is named
-        # and the drift is called drift; since ADR-0037 the overlay
-        # wording is the one that will survive.
-        assert any("drift" in w and "ghost" in w for w in res.warnings), (
-            "a field mapped to a nonexistent widget produced no drift warning — "
-            "the revision alarm is decorative")
-    finally:
-        bogus.unlink()
+    monkeypatch.setattr(form_fill, "LOCAL_PLEADING_DIR", local)
+    res = form_fill.fill("_negcontrol", tmp_path / "x.pdf", meta={},
+                         data={"ghost": "value"})
+    # Technology-agnostic on purpose. The AcroForm path words this as
+    # "not found — revision drift?" and the overlay path as "needs a
+    # rect, or a map naming a widget in <blank> — form revision
+    # drift?". What must hold either way is that the field is named
+    # and the drift is called drift; since ADR-0037 the overlay
+    # wording is the one that will survive.
+    assert any("drift" in w and "ghost" in w for w in res.warnings), (
+        "a field mapped to a nonexistent widget produced no drift warning — "
+        "the revision alarm is decorative")
 
 
 # ---------------------------------------------------------------------------
