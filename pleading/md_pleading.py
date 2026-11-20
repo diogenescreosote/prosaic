@@ -1201,10 +1201,19 @@ def bates_first_token(ref: str) -> str:
     return re.split(r"--|\u2013", ref.strip(), maxsplit=1)[0].strip()
 
 
+def doc_link_is_url(target: Optional[str]) -> bool:
+    """A \\doclink target that is a web address (http:// or https://)
+    rather than a relative file or an in-document #destination."""
+    return bool(target and target.lower().startswith(("http://", "https://")))
+
+
 def _span_link_target(span: TextSpan) -> Optional[str]:
     if span.file_link:
         return f"file:{span.file_link}"
     if span.doc_link:
+        if doc_link_is_url(span.doc_link):
+            # A web address: a /URI link to the exact URL, fragment and all.
+            return f"uri:{span.doc_link}"
         if span.doc_link.startswith("#"):
             # In-document target (an exhibit tab, e.g. "#exhibit_A").
             return f"docint:{span.doc_link[1:]}"
@@ -1364,7 +1373,7 @@ def _link_color(link_target: Optional[str]) -> Optional[Tuple[float, float, floa
         return None
     if link_target.startswith("file:"):
         return FILELINK_COLOR_RGB
-    if link_target.startswith(("doc:", "docint:")):
+    if link_target.startswith(("doc:", "docint:", "uri:")):
         return DOCLINK_COLOR_RGB
     if link_target.startswith("bates:"):
         return BATES_LINK_COLOR_RGB
@@ -5432,6 +5441,37 @@ def _add_file_link_annotation(writer: PdfWriter, page_idx: int,
         page[NameObject("/Annots")] = _AO([writer._add_object(annot)])
 
 
+def _add_uri_link_annotation(writer: PdfWriter, page_idx: int,
+                             rect: Tuple[float, float, float, float],
+                             url: str) -> None:
+    """A \\doclink to a web address: a /URI action carrying the URL
+    exactly as written, fragment included."""
+    from pypdf.generic import (
+        ArrayObject, DictionaryObject, FloatObject, NameObject,
+        NumberObject, TextStringObject,
+    )
+    annot = DictionaryObject({
+        NameObject("/Type"): NameObject("/Annot"),
+        NameObject("/Subtype"): NameObject("/Link"),
+        NameObject("/Rect"): ArrayObject([
+            FloatObject(rect[0]), FloatObject(rect[1]),
+            FloatObject(rect[2]), FloatObject(rect[3]),
+        ]),
+        NameObject("/A"): DictionaryObject({
+            NameObject("/S"): NameObject("/URI"),
+            NameObject("/URI"): TextStringObject(url),
+        }),
+        NameObject("/Border"): ArrayObject([
+            NumberObject(0), NumberObject(0), NumberObject(0),
+        ]),
+    })
+    page = writer.pages[page_idx]
+    if "/Annots" in page:
+        page["/Annots"].append(writer._add_object(annot))
+    else:
+        page[NameObject("/Annots")] = ArrayObject([writer._add_object(annot)])
+
+
 def _add_link_annotation(writer: PdfWriter, page_idx: int, rect: Tuple[float, float, float, float],
                          target_page_idx: int) -> None:
     from pypdf.generic import (
@@ -5534,6 +5574,10 @@ def merge_outputs(main_pdf: Path, exhibit_list_pdf: Optional[Path],
         if link_rects:
             for lr in link_rects:
                 rect = (lr.x, lr.y, lr.x + lr.width, lr.y + lr.height)
+                if lr.dest.startswith("uri:"):
+                    _add_uri_link_annotation(writer, lr.page_index, rect,
+                                             lr.dest[len("uri:"):])
+                    continue
                 if lr.dest.startswith(("file:", "doc:")):
                     _add_file_link_annotation(writer, lr.page_index, rect,
                                               lr.dest.split(":", 1)[1])

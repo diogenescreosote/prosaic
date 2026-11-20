@@ -107,9 +107,18 @@ from md_pleading import (
 )
 
 
+_DOCLINK_TARGET_RE = re.compile(r"(\\doclink\{[^{}\n]*\})")
+
+
 def typographic_subs(text: str) -> str:
     # House style for DOCX: keep ASCII straight quotes and apostrophes; only
-    # convert dashes to their proper glyphs.
+    # convert dashes to their proper glyphs. A \doclink target is skipped:
+    # a dash inside a web address or a companion file's name is data, and
+    # the hyperlink must carry it exactly as written.
+    if _DOCLINK_TARGET_RE.search(text):
+        parts = _DOCLINK_TARGET_RE.split(text)
+        return "".join(part if i % 2 else typographic_subs(part)
+                       for i, part in enumerate(parts))
     text = text.replace("---", "\u2014")
     text = text.replace("--", "\u2013")
     return text
@@ -297,6 +306,21 @@ def _add_spans(p, text: str, base_bold: bool = False,
             run.font.highlight_color = WD_COLOR_INDEX.YELLOW
         if span.bates_ref:
             run.font.color.rgb = RGBColor(0x00, 0x00, 0xEE)
+        if mp.doc_link_is_url(span.doc_link):
+            _wrap_run_in_hyperlink(p, run, span.doc_link)
+
+
+def _wrap_run_in_hyperlink(p, run, url: str) -> None:
+    """Make a \\doclink to a web address a real Word hyperlink: the run,
+    dark blue (the PDF's doclink ink), inside a <w:hyperlink> whose
+    external relationship carries the URL exactly as written."""
+    run.font.color.rgb = RGBColor(0x00, 0x00, 0x8B)
+    r_id = p.part.relate_to(url, RT.HYPERLINK, is_external=True)
+    hyperlink = OxmlElement("w:hyperlink")
+    hyperlink.set(qn("r:id"), r_id)
+    r = run._r
+    r.addprevious(hyperlink)
+    hyperlink.append(r)
 
 
 def _add_styled_para(doc: Document, text: str, bold: bool = False,
@@ -344,6 +368,10 @@ def _spans_to_run_xml(text: str) -> str:
             props.append('<w:highlight w:val="yellow"/>')
         if span.bates_ref:
             props.append('<w:color w:val="0000EE"/>')
+        elif mp.doc_link_is_url(span.doc_link):
+            # Footnotes part keeps no relationships of its own here: the
+            # web link reads as a link (ink + underline) without a target.
+            props.append('<w:color w:val="00008B"/>')
         rpr = "<w:rPr>%s</w:rPr>" % "".join(props) if props else ""
         runs.append('<w:r>%s<w:t xml:space="preserve">%s</w:t></w:r>'
                     % (rpr, escape(span.text)))

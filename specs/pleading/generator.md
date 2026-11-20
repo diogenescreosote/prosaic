@@ -42,7 +42,10 @@ sent to a court.
    \blank{} expansion passes); backticks are a synonym for inline
    `\fixedwidth`, and `\filelink{path}{text}` renders the same
    monospace in a pale low-saturation blue with a thin underline and a
-   relative /GoToR link annotation targeting `path`. The rendered artifact, not
+   relative /GoToR link annotation targeting `path`; a `\doclink` whose
+   target begins `http://` or `https://` carries a /URI annotation to
+   that exact URL over its text (a hyperlink in DOCX, `text (URL)` in
+   TXT), the URL exempt from substitution like any verbatim span. The rendered artifact, not
    the source, is the compliance surface. *(tested: em/en dash and
    no-spaced-dash assertions in both scenarios; dash edges adjacent to
    quotes/numbers, nested smart quotes, possessives (including after an
@@ -54,7 +57,9 @@ sent to a court.
    warning; inline-fixedwidth verbatim content, substitution
    exemption, Courier rendering, the backtick synonym, and the
    \filelink display-text/annotation pair in the pleading_typography
-   scenario)*
+   scenario; the web \doclink's /URI annotation over its text in a
+   pleading and a letter, its DOCX hyperlink and TXT form in
+   pleading/tests/test_doclink_url.py)*
 4. **Block quotes are blocks, not lines.** Consecutive `>` lines merge
    into one block and are rewrapped to the indented measure, so source
    line breaks never survive into the artifact. The block renders 36 pt

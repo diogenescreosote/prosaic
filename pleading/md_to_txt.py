@@ -157,6 +157,14 @@ def substitute_exhibit_refs(body: str, exhibit_map: Dict[str, str]) -> str:
     return _EXHIBIT_REF_RE.sub(repl, body)
 
 
+def _span_text(span: mp.TextSpan) -> str:
+    """A span's plain text; a \\doclink to a web address carries its URL,
+    "text (URL)", since plain text has no link to click."""
+    if mp.doc_link_is_url(span.doc_link):
+        return f"{span.text} ({span.doc_link})"
+    return span.text
+
+
 def block_to_line(block: mp.Block,
                   footnote_numbers: Dict[str, int] | None = None) -> str:
     """Collapse a parsed block into a single plain-text line.
@@ -180,7 +188,7 @@ def block_to_line(block: mp.Block,
                 # the same (unseparated) block.
                 parts.append("\n")
             else:
-                parts.append(span.text)
+                parts.append(_span_text(span))
         text = "".join(parts)
     else:
         text = block.text
@@ -308,7 +316,7 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
         if block.kind == "leftright":
 
             def _plain(s: str) -> str:
-                return "".join(sp.text for sp in mp.parse_inline_styles(s))
+                return "".join(_span_text(sp) for sp in mp.parse_inline_styles(s))
 
             left_p = _plain(block.text)
             right_p = _plain(block.spans[0].text if block.spans else "")
@@ -318,7 +326,7 @@ def render_text(meta: Dict, body: str, variant: str) -> str:
         if block.kind == "pagebreak":
             continue  # plain text has no pages
         if block.kind == "centerline":
-            plain = "".join(sp.text for sp in mp.parse_inline_styles(block.text))
+            plain = "".join(_span_text(sp) for sp in mp.parse_inline_styles(block.text))
             items.append((plain.center(72).rstrip(), False))
             continue
         if block.kind == "sigrow":
