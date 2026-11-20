@@ -275,3 +275,15 @@ def test_sign_date_never_touches_judge_block(tmp_path):
                          "sign_date: today")
     assert final.returncode == 0, final.stderr
     assert "Dated: _________________" in text_of(tmp_path)
+
+
+def test_letter_signblock_carries_a_signature_field(tmp_path):
+    """A \\signblock{letter} rule is a signing area: it lands in the
+    sidecar like every other style, so a letter can go to DocuSeal."""
+    import json
+    proc = build(tmp_path, "\\signblock{letter}{Jane Roe}")
+    assert proc.returncode == 0, proc.stderr
+    sidecar = json.loads((tmp_path / "doc.pdf.fields.json").read_text())
+    fields = {f["name"]: f for f in sidecar["fields"]}
+    assert fields["Signature 1"]["type"] == "signature"
+    assert fields["Signature 1"]["role"] == "Signer 1"

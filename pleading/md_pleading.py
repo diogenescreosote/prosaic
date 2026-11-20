@@ -4377,6 +4377,10 @@ class PleadingPDF:
         self.draw_text_line(current_line, "Sincerely,")
         current_line += 2
         self._draw_signature_line(current_line)
+        # A letter's signature rule is a signing area like any other:
+        # without a field here, `sc docuseal send` had nothing to place.
+        if not self.sign_name:
+            self._tag_signature(current_line, self._next_esign_role())
         current_line += 2
         for nl in name_lines:
             self.draw_text_line(current_line, nl.strip())
