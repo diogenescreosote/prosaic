@@ -387,25 +387,48 @@ def _deduplicate_rects(
     for a single visible phrase (e.g. the text appears in both the image
     layer and the invisible OCR layer, causing search_for to return
     duplicate rects).
+
+    Two separate hits on one line must stay two boxes: merging them would
+    blank every word between them. So rects are first grouped into lines
+    (vertical extents within ``y_tol``), each line is sorted by x0, and a
+    rect merges only into the rect immediately before it in x order, and
+    only when it overlaps or starts within ``x_gap_tol`` of that rect's
+    right edge. Sorting on a rounded y0 alone let a hit far to the right
+    precede a duplicate on the left, and the one-sided ``r.x0 <= cur.x1``
+    test then spanned the gap between them.
+
+    Returns rects in reading order: lines top to bottom, left to right.
     """
     if not rects:
         return []
-    # Sort by y0 then x0.
-    ordered = sorted(rects, key=lambda r: (round(r.y0, 1), r.x0))
+    # Group into lines. A rect joins the current line when its vertical
+    # extent matches the line's first rect within y_tol.
+    by_top = sorted((fitz.Rect(r) for r in rects), key=lambda r: (r.y0, r.x0))
+    lines: list[list[fitz.Rect]] = []
+    for r in by_top:
+        if lines:
+            first = lines[-1][0]
+            if abs(r.y0 - first.y0) < y_tol and abs(r.y1 - first.y1) < y_tol:
+                lines[-1].append(r)
+                continue
+        lines.append([r])
+
     groups: list[fitz.Rect] = []
-    cur = fitz.Rect(ordered[0])
-    for r in ordered[1:]:
-        same_line = abs(r.y0 - cur.y0) < y_tol and abs(r.y1 - cur.y1) < y_tol
-        adjacent = r.x0 <= cur.x1 + x_gap_tol
-        if same_line and adjacent:
-            cur = fitz.Rect(
-                min(cur.x0, r.x0), min(cur.y0, r.y0),
-                max(cur.x1, r.x1), max(cur.y1, r.y1),
-            )
-        else:
-            groups.append(cur)
-            cur = fitz.Rect(r)
-    groups.append(cur)
+    for line in lines:
+        line.sort(key=lambda r: (r.x0, r.x1))
+        cur = line[0]
+        for r in line[1:]:
+            # In x order r.x0 >= cur.x0, so this is a genuine overlap or
+            # touch with the immediately preceding box, never a span.
+            if r.x0 <= cur.x1 + x_gap_tol:
+                cur = fitz.Rect(
+                    min(cur.x0, r.x0), min(cur.y0, r.y0),
+                    max(cur.x1, r.x1), max(cur.y1, r.y1),
+                )
+            else:
+                groups.append(cur)
+                cur = r
+        groups.append(cur)
     return groups
 
 

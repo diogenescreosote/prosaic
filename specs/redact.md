@@ -71,6 +71,12 @@ verification catch the wrapped remnants.
   name sweep, dangerous for a short string: `"plan."` catches "treatment
   plan", "safety plan", and "planned". Check the match count before
   committing to a short clause.
+- **Two hits on one line are two boxes.** Duplicate rects from an OCR
+  layer are merged, but only a rect that overlaps or touches the one
+  immediately before it in x order on the same line; a name at the
+  left margin and again at the right never become one box blanking
+  everything between them (tested:
+  pleading/tests/test_redact_dedup.py::test_redact_clause_leaves_words_between_two_hits).
 - **Ops run in order and each applies immediately.** A later op can find
   nothing because an earlier one already removed its text — which then
   fails the build. Put document-wide sweeps **last**, and page seals
