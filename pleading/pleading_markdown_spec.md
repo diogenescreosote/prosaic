@@ -370,7 +370,9 @@ Additional YAML keys supported by `cover_sheet: mc030`:
 - `filer_attorney_for` — string override for the "Attorney for
   (Name):" field; by default derived from `filer_role`
 - `court_street_address` — string
-- `court_mailing_address` — string
+- `court_mailing_address` — string; a form leaves MAILING ADDRESS blank
+  when it equals `court_street_address` (ignoring case, punctuation and
+  spacing)
 - `court_city_zip` — string
 - `court_branch` — string (e.g. `"Civic Center Courthouse"`)
 - `mc030_body` — string override for the body field content (default

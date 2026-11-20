@@ -254,6 +254,14 @@ the geometry behind it, so decide overrides by looking at a fill.
 a printed heading takes `align: center` and each entry centers under
 the heading; the sibling column shares a `size_group` and `valign: top`
 so entries stay on one baseline row across columns.
+The court box's address lines (fields bound to `auto:
+court_street_address`, `court_mailing_address`, `court_city_zip` or
+`court_branch`) default to `align: left`, so a value sits right after
+its printed label even where the widget starts well past a short label
+("BRANCH NAME:"); a descriptor's own `align:` still wins. The
+`court_mailing_address` binding fills blank when the mailing address
+only repeats the street address (compared ignoring case, punctuation
+and spacing), so the box carries the address once.
 
 **Fill font.** Values draw in Helvetica, the face the forms print in,
 unless something chooses otherwise: the front-matter key

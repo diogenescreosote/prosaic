@@ -101,6 +101,12 @@ of programming.
   its cell; blocks anchor top-left; `layout:`/`align:`/`valign:` pin
   exceptions. *(tested: test_output_carries_no_form_layer,
   test_overlay_forms.test_layout_classifier_reads_the_blank)*
+- **The court box reads like a typed one.** Its address lines
+  (street, mailing, city and ZIP, branch) default to left alignment
+  beside their labels, and a mailing address equal to the street
+  address is left blank rather than printed twice. *(tested:
+  test_overlay_forms.test_court_box_lines_sit_left_beside_labels,
+  test_overlay_forms.test_mailing_address_blank_when_same_as_street)*
 - **The blank is part of the artifact.** Fills run against the blank
   shipped in-repo (pinned revision), never against whatever
   courts.ca.gov serves today.

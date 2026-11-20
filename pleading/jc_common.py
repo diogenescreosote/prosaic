@@ -61,6 +61,22 @@ def strip_county_prefix(county: str) -> str:
     return county
 
 
+def _address_key(text: str) -> str:
+    """An address reduced for comparison: case, punctuation and runs of
+    whitespace do not make two addresses different."""
+    return " ".join(re.sub(r"[^\w\s]", " ", text).casefold().split())
+
+
+def court_mailing_address(meta: dict) -> str:
+    """The court's mailing address, or "" when it normalizes equal to
+    the street address (a court whose mail goes to its building)."""
+    mailing = str(meta.get("court_mailing_address") or "").strip()
+    street = str(meta.get("court_street_address") or "").strip()
+    if mailing and street and _address_key(mailing) == _address_key(street):
+        return ""
+    return mailing
+
+
 def court_name_full(meta: dict) -> str:
     """The full court designation, for forms whose caption prints a bare
     "NAME OF COURT:" label (e.g. SUBP-002) rather than the usual static
@@ -291,7 +307,9 @@ AUTO_BINDINGS = {
     # designation (e.g. SUBP-002), not just the county.
     "court_name_full": court_name_full,
     "court_street_address": lambda m: str(m.get("court_street_address") or "").strip(),
-    "court_mailing_address": lambda m: str(m.get("court_mailing_address") or "").strip(),
+    # Blank when it only repeats the street address: the court box then
+    # carries one address line, not the same line twice.
+    "court_mailing_address": court_mailing_address,
     "court_city_zip": lambda m: str(m.get("court_city_zip") or "").strip(),
     "court_branch": lambda m: str(m.get("court_branch") or "").strip(),
     "petitioner": lambda m: str(m.get("petitioner") or "").strip(),

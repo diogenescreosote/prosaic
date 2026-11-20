@@ -459,6 +459,29 @@ LABEL_GAP = 10.5  # a label ends within this many points of the field's left edg
 RULE_GAP = 5.0  # a signature rule lies within this many points below the field
 RULE_LIFT = 2.0  # baseline sits this far above the rule
 
+# The court box's address lines (STREET ADDRESS:, MAILING ADDRESS:, CITY
+# AND ZIP CODE:, BRANCH NAME:) are typed values beside printed labels.
+# Some blanks place the widget well right of a short label ("BRANCH
+# NAME:" on a widget that starts under the longer labels above), past
+# LABEL_GAP, so the classifier finds no label and a single line would
+# center in a wide rect, far from its label. Fields bound to these
+# auto values default to left; a descriptor's own ``align:`` wins.
+AUTO_ALIGN = {
+    "court_street_address": "left",
+    "court_mailing_address": "left",
+    "court_city_zip": "left",
+    "court_branch": "left",
+}
+
+
+def field_align(spec: dict) -> Optional[str]:
+    """The horizontal alignment a field draws with: its descriptor's
+    ``align:``, else the default for its ``auto:`` binding, else None
+    (placement by layout)."""
+    if spec.get("align"):
+        return str(spec["align"])
+    return AUTO_ALIGN.get(str(spec.get("auto") or ""))
+
 
 # ---------------------------------------------------------------------------
 # Blank geometry: what the page prints around each field
@@ -1381,7 +1404,7 @@ def fill(
                         rect,
                         fitted.font_size,
                         font,
-                        spec.get("align"),
+                        field_align(spec),
                         spec.get("valign"),
                         op.get("layout"),
                         spec.get("leading_ratio"),

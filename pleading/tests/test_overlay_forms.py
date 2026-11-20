@@ -595,3 +595,88 @@ def test_courier_text_block_defaults_two_points_larger():
     two = [37.5, 100.0, 560.0, 100.0 + 2.0 + 9.0 * (1 + 1.15) + 1.0]
     assert form_fill.block_capacity(two, 9.0) == 2
     assert form_fill.fit_text("x", two, courier).font_size == 9.0
+
+
+# ---------------------------------------------------------------------------
+# The court box: address lines beside their labels, the address once
+# ---------------------------------------------------------------------------
+
+COURT_LINES = ("court_street_address", "court_mailing_address", "court_city_zip", "court_branch")
+
+
+def test_court_box_lines_default_left_without_a_detected_label():
+    """A court-box address line whose label the classifier cannot see (a
+    short "BRANCH NAME:" far left of a wide widget) still sits at the
+    left of its rect, not centered in it."""
+    rect = [100.0, 600.0, 400.0, 610.0]
+    for auto in COURT_LINES:
+        align = form_fill.field_align({"auto": auto})
+        [(x, _y)] = form_fill.text_origins(["Civil Division"], rect, 9.0,
+                                           form_fill.DEFAULT_FONT, align, None, None)
+        assert x == pytest.approx(100.0 + form_fill.TEXT_INSET), auto
+    # A descriptor's own align: wins; other bindings keep layout placement.
+    assert form_fill.field_align({"auto": "court_branch", "align": "center"}) == "center"
+    assert form_fill.field_align({"auto": "case_number"}) is None
+    assert form_fill.field_align({}) is None
+
+
+def _court_box_forms():
+    out = []
+    for form_id in form_fill.list_forms():
+        try:
+            desc = form_fill.load_descriptor(form_id)
+        except Exception:
+            continue
+        fields = desc.get("fields") or {}
+        names = {spec.get("auto"): name for name, spec in fields.items()
+                 if spec.get("auto") in COURT_LINES and not spec.get("rect")}
+        if "court_branch" in names:
+            out.append((form_id, names))
+    return out
+
+
+@pytest.mark.parametrize("form_id,names", _court_box_forms(), ids=lambda v: v if isinstance(v, str) else "")
+def test_court_box_lines_sit_left_beside_labels(tmp_path, form_id, names):
+    """On every form with a court box, the branch and address values
+    start at the left of their widgets, right after the printed labels."""
+    desc, rects = _widget_rects(form_id)
+    meta = dict(META, court_mailing_address="PO Box 1")
+    out = tmp_path / f"{form_id}.pdf"
+    form_fill.fill(form_id, out, meta=meta, data={})
+    reader = PdfReader(str(out))
+    values = {"court_street_address": "100 Court Street", "court_mailing_address": "PO Box 1",
+              "court_city_zip": "Example City, CA 90000", "court_branch": "Civil Division"}
+    for auto, name in names.items():
+        spec = desc["fields"][name]
+        if spec.get("map") not in rects:
+            continue
+        page_idx, rect = rects[spec["map"]]
+        x0 = min(rect[0], rect[2])
+        hits = [x for (t, x, _y, _s) in _runs(reader.pages[page_idx]) if values[auto] in t]
+        assert hits, f"{form_id}.{name}: {values[auto]!r} not drawn"
+        assert any(abs(x - (x0 + form_fill.TEXT_INSET)) < 1.0 for x in hits), (
+            f"{form_id}.{name}: drawn at {hits}, widget starts at {x0}")
+
+
+@pytest.mark.parametrize("mailing,street,expect", [
+    ("100 Court Street", "100 Court Street", ""),
+    ("100 court street.", "100  Court Street", ""),
+    ("100 Court St., Room 2", "100 Court Street", "100 Court St., Room 2"),
+    ("PO Box 1", "100 Court Street", "PO Box 1"),
+    ("PO Box 1", "", "PO Box 1"),
+    ("", "100 Court Street", ""),
+])
+def test_mailing_address_blank_when_same_as_street(mailing, street, expect):
+    import jc_common
+    meta = {"court_mailing_address": mailing, "court_street_address": street}
+    assert jc_common.AUTO_BINDINGS["court_mailing_address"](meta) == expect
+
+
+def test_court_box_prints_a_shared_address_once(tmp_path):
+    """MAILING ADDRESS stays blank when it would repeat STREET ADDRESS."""
+    import probe
+    out = tmp_path / "mc040.pdf"
+    meta = dict(META, court_mailing_address="100 Court Street")
+    form_fill.fill("mc040", out, meta=meta, data=dict(DATA))
+    text = probe.page_text(out, 1)
+    assert text.count("100 Court Street") == 1, text
