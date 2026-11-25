@@ -639,6 +639,12 @@ class Exhibit:
     # PARENT_EXHIBIT_NOTE). A markdown exhibit needs no such list: its
     # own build draws the line on its tab sheets.
     inner_tab_pages: Optional[str] = None
+    # A deposition transcript excerpt (Cal. Rules of Court, rule 3.1116):
+    # the deponent as the body cites them ("Doe" for "Doe Dep. 12:3"),
+    # and optionally the ORIGINAL transcript pages the excerpt holds
+    # ("21-24, 62-63"), so a cite to a page left out is caught.
+    deposition: Optional[str] = None
+    transcript_pages: Optional[str] = None
 
 
 _BATES_TOKEN_RE = re.compile(r"^(?P<prefix>.*?)(?P<num>\d+)$")
@@ -929,6 +935,29 @@ def _body_lines_with_numbers(raw: str):
         yield lineno, line
 
 
+def _body_paragraphs(raw: str) -> List[Tuple[int, str]]:
+    """(first line number, joined text) for each paragraph of the body.
+
+    Sources wrap paragraphs at a fixed column, so an italic span or a
+    citation can straddle a physical line break (``*Doe v.`` / ``Roe*``).
+    The renderer joins a paragraph's lines before parsing emphasis; the
+    source checks do the same, over the body as _body_lines_with_numbers
+    leaves it."""
+    paragraphs: List[Tuple[int, str]] = []
+    start, buf = 0, []
+    for lineno, line in _body_lines_with_numbers(raw):
+        if line.strip():
+            if not buf:
+                start = lineno
+            buf.append(line.strip())
+        elif buf:
+            paragraphs.append((start, " ".join(buf)))
+            buf = []
+    if buf:
+        paragraphs.append((start, " ".join(buf)))
+    return paragraphs
+
+
 def find_unitalicized_case_names(raw: str) -> List[Tuple[int, str, str]]:
     """Return (lineno, case-name signal, excerpt) for every case name in
     running text that is not inside an italic or underlined span; lineno
@@ -942,22 +971,7 @@ def find_unitalicized_case_names(raw: str) -> List[Tuple[int, str, str]]:
     " v. " is roman, and the whole name must be set the same way.
     """
     hits: List[Tuple[int, str, str]] = []
-    # Sources wrap paragraphs at a fixed column, so an italic span can
-    # straddle a physical line break (``*Doe v.\nRoe*``). The renderer
-    # joins a paragraph's lines before parsing emphasis; so does this.
-    paragraphs: List[Tuple[int, str]] = []
-    start, buf = 0, []
-    for lineno, line in _body_lines_with_numbers(raw):
-        if line.strip():
-            if not buf:
-                start = lineno
-            buf.append(line.strip())
-        elif buf:
-            paragraphs.append((start, " ".join(buf)))
-            buf = []
-    if buf:
-        paragraphs.append((start, " ".join(buf)))
-    for lineno, stripped in paragraphs:
+    for lineno, stripped in _body_paragraphs(raw):
         if not _CASE_SIGNAL_RE.search(stripped):
             continue
         if _CASE_TITLE_LINE_RE.match(stripped):
@@ -991,6 +1005,193 @@ def require_case_names_italic(raw: str, source_name: str) -> None:
         f"opener of a form attachment) is exempt; so is verbatim text in "
         f"\\fixedwidth{{...}}."
     )
+
+
+# Deposition testimony cited in a paper must be before the court. Cal.
+# Rules of Court, rule 3.1116 says how: the paper attaches the cited
+# pages of the transcript, with (a) a title page naming the deponent and
+# the date of the deposition, (b) only the relevant pages, their
+# original page numbers showing, and (c) the cited testimony marked.
+# Without the pages the court has only the declarant's account of what
+# the witness said, and opposing counsel can object that the testimony
+# is not in evidence at all. So the build looks for deposition cites in
+# the body ("Doe Dep. 62:16-24, 63:5-8", and a bare "(94:20-95:3.)" that
+# continues one) and warns when no exhibit declares `deposition:` for
+# the deponent, or when the excerpt's declared `transcript_pages:` lack
+# a cited page. A warning, like the spaced dash: the drafter may be
+# mid-way through assembling the excerpt, and a missing exhibit is
+# something to say out loud, not a reason to refuse a draft build.
+_DEP_RANGE_SEP = r"\s*(?:-{1,3}|[–—])\s*"
+_DEP_PAGE_LINE = r"\d{1,4}:\d{1,3}(?:" + _DEP_RANGE_SEP + r"\d{1,4}(?::\d{1,3})?)?"
+_DEP_REF_LIST = (_DEP_PAGE_LINE
+                 + r"(?:\s*(?:,|;|,?\s+and|&)\s*" + _DEP_PAGE_LINE + r")*")
+#: A named cite: up to three capitalized words, then "Dep." (optionally
+#: "Dep. Tr." and "at"), then one or more page:line references.
+_DEP_NAMED_CITE_RE = re.compile(
+    r"(?<![\w'’])(?P<name>(?:[A-Z][\w'’\-]*\.?\s+){0,2}[A-Z][\w'’\-]*)"
+    r"\s+Dep\.\s*(?:Tr\.\s*)?(?:at\s+)?(?P<refs>" + _DEP_REF_LIST + r")")
+#: A parenthetical that is nothing but page:line references, optionally
+#: after "see", "cf." or "id. at": it continues the last named cite.
+_DEP_CONTINUATION_RE = re.compile(
+    r"\(\s*(?:(?i:see|cf\.)\s+)?(?:(?i:id\.)\s+at\s+)?(?P<refs>" + _DEP_REF_LIST
+    + r")\s*\.?\s*\)")
+_DEP_PAGE_LINE_RE = re.compile(
+    r"(?P<p1>\d{1,4}):\d{1,3}(?:" + _DEP_RANGE_SEP + r"(?:(?P<p2>\d{1,4}):)?\d{1,3})?")
+#: Citation signals that can precede a deponent's name and are not part
+#: of it ("See Doe Dep." cites Doe).
+_DEP_NAME_SIGNALS = {"see", "cf.", "accord", "compare", "also", "but",
+                     "contra", "and", "e.g.", "the", "with"}
+
+
+@dataclass
+class DepositionCite:
+    lineno: int        # first line of the paragraph carrying the cite
+    deponent: str      # the name as cited ("Doe", "Jane Doe")
+    refs: str          # the page:line references as written
+    pages: List[int]   # transcript pages the references touch
+    continuation: bool = False
+
+
+def _deponent_tokens(name: str) -> List[str]:
+    """The words of a deponent's name, lowercased, with leading citation
+    signals and a possessive dropped: "See Jane Doe's" -> ["jane", "doe"]."""
+    tokens = [t.lower() for t in name.split()]
+    while tokens and tokens[0] in _DEP_NAME_SIGNALS:
+        tokens.pop(0)
+    return [re.sub(r"['\u2019]s$", "", t).rstrip(".") for t in tokens]
+
+
+def deponent_key(name: str) -> str:
+    """What a cite and an exhibit's `deposition:` are matched on: the
+    surname (last word), case-insensitive. "Doe Dep." and "Jane Doe
+    Dep." both match `deposition: "Jane Doe"` and `deposition: "Doe"`.
+    Two deponents sharing a surname are not told apart; a false match
+    only suppresses a warning."""
+    tokens = _deponent_tokens(name)
+    return tokens[-1] if tokens else ""
+
+
+def deponent_matches(cited: str, declared: str) -> bool:
+    """Whether a cited name names the deponent an exhibit declares."""
+    key = deponent_key(cited)
+    return bool(key) and key == deponent_key(declared)
+
+
+def transcript_pages_in(refs: str) -> List[int]:
+    """Transcript pages a run of page:line references touches, in order:
+    "62:16-24, 94:20--96:3" -> [62, 94, 95, 96]."""
+    pages: List[int] = []
+    for m in _DEP_PAGE_LINE_RE.finditer(refs):
+        first = int(m.group("p1"))
+        last = int(m.group("p2")) if m.group("p2") else first
+        for p in range(first, max(first, last) + 1):
+            if p not in pages:
+                pages.append(p)
+    return pages
+
+
+def parse_transcript_pages(spec: str) -> List[int]:
+    """`transcript_pages: "21-24, 62-63, 94"` -> the page numbers it
+    names. Original transcript numbering, not the excerpt PDF's pages."""
+    pages: List[int] = []
+    for part in str(spec).split(","):
+        part = part.strip()
+        if not part:
+            continue
+        m = re.fullmatch(r"(\d+)(?:" + _DEP_RANGE_SEP + r"(\d+))?", part)
+        if not m:
+            raise ValueError(f"transcript_pages {spec!r}: {part!r} is not a page or range")
+        first = int(m.group(1))
+        last = int(m.group(2)) if m.group(2) else first
+        if last < first:
+            raise ValueError(f"transcript_pages {spec!r}: range {part!r} is reversed")
+        pages.extend(range(first, last + 1))
+    return pages
+
+
+def find_deposition_cites(raw: str) -> List[DepositionCite]:
+    """Every deposition cite in the body, in order.
+
+    A named cite is "<Name> Dep. <page:line>[, <page:line>...]". A
+    parenthetical that holds only page:line references ("(94:20-95:3.)",
+    "(Id. at 63:5.)") continues the most recent named cite before it in
+    the source and is attributed to that deponent; one with no named
+    cite before it is not a deposition cite this check can attribute,
+    and is skipped. Front matter, HTML comments and verbatim text are
+    not read (_body_lines_with_numbers)."""
+    cites: List[DepositionCite] = []
+    last: Optional[str] = None
+    for lineno, text in _body_paragraphs(raw):
+        found: List[Tuple[int, DepositionCite]] = []
+        for m in _DEP_NAMED_CITE_RE.finditer(text):
+            words = _deponent_tokens(m.group("name"))
+            if not words:
+                continue
+            # Keep the cited spelling of the words that survived.
+            shown = " ".join(m.group("name").split()[-len(words):])
+            found.append((m.start(), DepositionCite(
+                lineno, shown, m.group("refs").strip(),
+                transcript_pages_in(m.group("refs")))))
+        for m in _DEP_CONTINUATION_RE.finditer(text):
+            found.append((m.start(), DepositionCite(
+                lineno, "", m.group("refs").strip(),
+                transcript_pages_in(m.group("refs")), continuation=True)))
+        for _pos, cite in sorted(found, key=lambda f: f[0]):
+            if cite.continuation:
+                if last is None:
+                    continue
+                cite.deponent = last
+            else:
+                last = cite.deponent
+            cites.append(cite)
+    return cites
+
+
+def warn_deposition_cites_without_excerpt(raw: str, exhibits: List["Exhibit"],
+                                          source_name: str) -> List[str]:
+    """Warn on stderr for each deponent cited with no rule 3.1116 excerpt
+    exhibit, and for each cited page an excerpt's `transcript_pages:`
+    leaves out. Returns the warnings (for tests)."""
+    cites = find_deposition_cites(raw)
+    warnings: List[str] = []
+    by_deponent: Dict[str, List[DepositionCite]] = {}
+    for cite in cites:
+        key = deponent_key(cite.deponent)
+        by_deponent.setdefault(key, []).append(cite)
+    for _key, group in by_deponent.items():
+        name = group[0].deponent
+        listed = "; ".join(
+            f"{'' if c.continuation else c.deponent + ' Dep. '}{c.refs} (line {c.lineno})"
+            for c in group)
+        matching = [ex for ex in exhibits
+                    if ex.deposition and deponent_matches(name, ex.deposition)]
+        if not matching:
+            warnings.append(
+                f"WARNING: {source_name}: deposition testimony cited without a "
+                f"rule 3.1116 transcript excerpt exhibit: {name} Dep.: {listed}.\n"
+                f"         Attach the title page and the cited pages, testimony "
+                f"highlighted, as an exhibit declaring deposition: \"{name}\" "
+                f"(Cal. Rules of Court, rule 3.1116).")
+            continue
+        if any(ex.transcript_pages is None for ex in matching):
+            continue  # an excerpt that does not say what it holds
+        held = {p for ex in matching for p in parse_transcript_pages(ex.transcript_pages or "")}
+        cited: List[int] = []
+        for c in group:
+            cited.extend(p for p in c.pages if p not in cited)
+        missing = [p for p in cited if p not in held]
+        if missing:
+            names = ", ".join(f"`{ex.shortname}`" for ex in matching)
+            declared = "; ".join(str(ex.transcript_pages) for ex in matching)
+            warnings.append(
+                f"WARNING: {source_name}: {name} Dep. cites transcript "
+                f"page{'s' if len(missing) != 1 else ''} "
+                f"{', '.join(str(p) for p in missing)} that the excerpt "
+                f"({names}, transcript_pages: \"{declared}\") does not contain.\n"
+                f"         Rule 3.1116(b): attach every cited page.")
+    for w in warnings:
+        print(w, file=sys.stderr, flush=True)
+    return warnings
 
 
 # A heading that already carries an outline enumerator ("I.", "A.",
@@ -1260,8 +1461,46 @@ def spans_to_styled_words(spans: List[TextSpan],
     return words
 
 
-def tag_exhibit_links(words: List[StyledWord], exhibit_letters: set) -> None:
-    """Find 'Exhibit X' or 'Attachment X' word pairs and set link_target on them."""
+_DEP_LINK_REF_RE = re.compile(r"^\(?\d{1,4}:\d{1,3}")
+
+
+def tag_deposition_links(words: List[StyledWord],
+                         deposition_links: Dict[str, str]) -> None:
+    """Link each "<Name> Dep. <page:line>..." cite to the tab of the
+    transcript excerpt exhibit declaring that deponent. `deposition_links`
+    maps deponent_key() -> designator. The name, "Dep." and the run of
+    page:line references after it are linked; the run ends at the first
+    word that is not a reference (or "and"/"&" between two)."""
+    for i, word in enumerate(words):
+        if word.text != "Dep." or i == 0 or word.link_target:
+            continue
+        name = words[i - 1]
+        letter = deposition_links.get(deponent_key(name.text.strip("([{\"'\u201c")))
+        if letter is None or name.link_target:
+            continue
+        dest = f"exhibit_{letter}"
+        name.link_target = word.link_target = dest
+        for j in range(i + 1, len(words)):
+            w = words[j]
+            if w.link_target or w.line_break:
+                break
+            bare = w.text.strip(",;.)")
+            if _DEP_LINK_REF_RE.match(w.text) or (
+                    bare in ("Tr", "at", "and", "&") and j + 1 < len(words)
+                    and _DEP_LINK_REF_RE.match(words[j + 1].text)):
+                w.link_target = dest
+                if w.text.endswith((")", ".)")):
+                    break
+                continue
+            break
+
+
+def tag_exhibit_links(words: List[StyledWord], exhibit_letters: set,
+                      deposition_links: Optional[Dict[str, str]] = None) -> None:
+    """Find 'Exhibit X' or 'Attachment X' word pairs and set link_target on
+    them; with `deposition_links`, deposition cites too (tag_deposition_links)."""
+    if deposition_links:
+        tag_deposition_links(words, deposition_links)
     for i, word in enumerate(words):
         if word.link_target:
             continue  # already an explicit link (\doclink, \filelink, \bates)
@@ -1964,10 +2203,27 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
         inner_tab_pages = item_resolved.get("inner_tab_pages")
         if inner_tab_pages is not None:
             inner_tab_pages = str(inner_tab_pages).strip()
+        deposition = item_resolved.get("deposition")
+        if deposition is not None:
+            if not isinstance(deposition, str) or not deposition.strip():
+                raise ValueError(
+                    f"exhibits[{idx}] ({shortname}): deposition must name the "
+                    f"deponent as cited, e.g. deposition: \"Doe\"")
+            deposition = deposition.strip()
+        transcript_pages = item_resolved.get("transcript_pages")
+        if transcript_pages is not None:
+            transcript_pages = str(transcript_pages).strip()
+            if deposition is None:
+                raise ValueError(
+                    f"exhibits[{idx}] ({shortname}): transcript_pages needs "
+                    f"deposition: naming the deponent")
+            parse_transcript_pages(transcript_pages)  # validate the shape now
         if is_sealed:
             exhibits.append(Exhibit(shortname=shortname, title=title,
                                     path=None, letter=designator, sealed=True,
-                                    bates_first=bates_first))
+                                    bates_first=bates_first,
+                                    deposition=deposition,
+                                    transcript_pages=transcript_pages))
         else:
             if "path" not in item_resolved or not isinstance(item_resolved["path"], str) or not item_resolved["path"].strip():
                 raise ValueError(f"exhibits[{idx}] missing required string field: path")
@@ -2004,7 +2260,9 @@ def _parse_exhibits(meta: Dict, base_dir: Path, variant: str,
             exhibits.append(Exhibit(shortname=shortname, title=title,
                                     path=path, letter=designator, pages=pages_spec,
                                     bates_first=bates_first,
-                                    inner_tab_pages=inner_tab_pages))
+                                    inner_tab_pages=inner_tab_pages,
+                                    deposition=deposition,
+                                    transcript_pages=transcript_pages))
     return exhibits
 
 
@@ -3032,6 +3290,7 @@ def number_headings(blocks: List[Block]) -> List[Block]:
 def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
                            text_width: float = TEXT_WIDTH,
                            footnote_numbers: Optional[Dict[str, int]] = None,
+                           deposition_links: Optional[Dict[str, str]] = None,
                            ) -> List[Tuple[List[StyledWord], float]]:
     """Return list of (styled_words, indent) tuples for a block, plus a blank separator."""
     if block.kind == "heading":
@@ -3041,7 +3300,7 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
         for w in words:
             w.bold = True
         if exhibit_letters:
-            tag_exhibit_links(words, exhibit_letters)
+            tag_exhibit_links(words, exhibit_letters, deposition_links)
         wrapped = wrap_styled_words(words, width)
         result = [(line_words, indent) for line_words in wrapped]
         result.append(([], 0))  # blank separator line
@@ -3056,7 +3315,7 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
         hanging = pdfmetrics.stringWidth(prefix, FONT_NAME, FONT_SIZE)
         words = spans_to_styled_words(block.spans, footnote_numbers)
         if exhibit_letters:
-            tag_exhibit_links(words, exhibit_letters)
+            tag_exhibit_links(words, exhibit_letters, deposition_links)
         # The prefix stays its own word (regular font) so the first content
         # word keeps ALL of its style flags -- merging them into one
         # StyledWord used to drop mono/underline/highlight on the lead word.
@@ -3106,7 +3365,7 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
         indent = 36
         words = spans_to_styled_words(block.spans, footnote_numbers)
         if exhibit_letters:
-            tag_exhibit_links(words, exhibit_letters)
+            tag_exhibit_links(words, exhibit_letters, deposition_links)
         wrapped = wrap_styled_words(words, text_width - indent)
         result = [(line_words, indent) for line_words in wrapped]
         result.append(([], 0))
@@ -3115,7 +3374,7 @@ def _block_to_styled_lines(block: Block, exhibit_letters: Optional[set] = None,
     # paragraph
     words = spans_to_styled_words(block.spans, footnote_numbers)
     if exhibit_letters:
-        tag_exhibit_links(words, exhibit_letters)
+        tag_exhibit_links(words, exhibit_letters, deposition_links)
     wrapped = wrap_styled_words(words, text_width)
     result = [(line_words, 0.0) for line_words in wrapped]
     result.append(([], 0))
@@ -3558,11 +3817,13 @@ class PleadingPDF:
                  exhibit_letters: Optional[set] = None,
                  sign_name: Optional[str] = None,
                  sign_date: Optional[datetime.date] = None,
-                 footnote_defs: Optional[Dict[str, str]] = None) -> None:
+                 footnote_defs: Optional[Dict[str, str]] = None,
+                 deposition_links: Optional[Dict[str, str]] = None) -> None:
         self.meta = meta
         self.blocks = body_blocks
         self.output_path = output_path
         self.exhibit_letters = exhibit_letters or set()
+        self.deposition_links = deposition_links or {}
         self.sign_name = sign_name
         self.sign_date = sign_date
         self.is_letter = meta.get("doctype") == "letter"
@@ -4736,12 +4997,13 @@ class PleadingPDF:
         if block.kind in ("paragraph", "numbered", "bullet"):
             return len(_block_to_styled_lines(
                 block, self.exhibit_letters, self.text_width,
-                self.footnote_numbers)) <= SIG_LEAD_MAX_GRID_LINES
+                self.footnote_numbers, self.deposition_links)) <= SIG_LEAD_MAX_GRID_LINES
         return False
 
     def _block_grid_lines(self, block: Block) -> int:
         return len(_block_to_styled_lines(
-            block, self.exhibit_letters, self.text_width, self.footnote_numbers))
+            block, self.exhibit_letters, self.text_width, self.footnote_numbers,
+            self.deposition_links))
 
     def _sig_block_lines_needed(self, block: Block) -> int:
         if block.kind in self._NOTARIAL_KINDS:
@@ -4913,7 +5175,8 @@ class PleadingPDF:
                     current_line = 1
 
             block_lines = _block_to_styled_lines(block, self.exhibit_letters,
-                                                  self.text_width, self.footnote_numbers)
+                                                  self.text_width, self.footnote_numbers,
+                                                  self.deposition_links)
             # Tight spacing between consecutive list items of the same kind:
             # drop the trailing blank separator so items don't render double-spaced.
             next_block = self.blocks[i + 1] if i + 1 < len(self.blocks) else None
@@ -5760,6 +6023,12 @@ def main() -> None:
                 exhibit_map[ex.shortname] = ex
 
     doctype = meta.get("doctype", "pleading")
+    # Rule 3.1116 governs papers filed with the court, so letters and
+    # plain documents are not checked. An excerpt attached to the paper
+    # named by exhibit_source counts: it is before the court there.
+    if doctype == "pleading":
+        warn_deposition_cites_without_excerpt(raw, list(exhibit_map.values()),
+                                              input_path.name)
     attachment_label = exhibit_label_for_doctype(doctype, meta.get("exhibit_label"))
     list_mode = exhibit_list_mode(meta)
     # Set only when a parent document is rendering this one as its exhibit.
@@ -5802,8 +6071,15 @@ def main() -> None:
                 ex.letter for ex in exhibits
                 if not ex.sealed or variant == "public"
             }
+            # A deposition cite links to its transcript excerpt's tab when
+            # that exhibit is in this packet (the first excerpt per surname).
+            deposition_links: Dict[str, str] = {}
+            for ex in exhibits:
+                if ex.deposition and ex.letter in exhibit_letters:
+                    deposition_links.setdefault(deponent_key(ex.deposition), ex.letter)
             pleading = PleadingPDF(meta, blocks, str(main_pdf),
                                    exhibit_letters=exhibit_letters,
+                                   deposition_links=deposition_links,
                                    sign_name=sign_name, sign_date=sign_date,
                                    footnote_defs=footnote_defs)
             pleading.build()

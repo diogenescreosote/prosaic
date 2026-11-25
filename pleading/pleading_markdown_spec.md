@@ -922,6 +922,8 @@ Each exhibit entry in `exhibits` must be a YAML mapping with these fields:
 - `pages` — optional string; page range selector for PDF attachments (see below)
 - `inner_tab_pages` — optional string, page-range syntax over the **file's** pages; for a prebuilt PDF exhibit that carries exhibits of its own (a signed declaration with its Exhibit A behind it), the pages that are those inner exhibits' tab sheets. Each gets the parent-exhibit line stamped on the packet's copy; the file on disk is never touched. A page the `pages:` selection leaves out fails the build, and so does the key on a markdown exhibit (which marks its own tab sheets) or a non-PDF. See "Exhibits inside exhibits."
 - `bates_first` — optional string; the Bates token stamped on page 1 of the file (`CAPINAS00001`). Page *n* of the file carries the same prefix and digit width with the number advanced by *n*−1, whatever `pages:` selects, so a `\bates{TOKEN}` in the body resolves to the attached page carrying that stamp. Ends in the page-1 number or the build refuses it.
+- `deposition` — optional string; marks the exhibit as a deposition transcript excerpt (Cal. Rules of Court, rule 3.1116) and names the deponent as the body cites them (`"Doe"` or `"John Doe"`; matched on the surname, case-insensitive). A body cite `Doe Dep. 62:16-24` with no such exhibit draws a build warning; with one, the cite links to the exhibit's tab. See "Deposition cites need the transcript pages."
+- `transcript_pages` — optional string, requires `deposition`; the **original transcript** page numbers the excerpt contains (`"21-24, 62-63, 94-95"`), not the excerpt PDF's own page count. A cited page missing from it draws a build warning. A malformed or reversed range fails the build.
 - `sealed` — optional boolean (default `false`); if `true`, the exhibit is listed on the exhibit list page with a "[Lodged Conditionally Under Seal]" annotation but is **not attached** to the PDF. The `\exhibit{}` reference still resolves to the correct letter. No `path` is required for sealed exhibits. This is the direct attachment switch used by the active build variant. Tab sheets are asymmetric by design: in a **public** build the sealed exhibit gets a placeholder tab sheet labeled `LODGED CONDITIONALLY UNDER SEAL` (the public packet must show the gap); in a sealed-variant build the exhibit is skipped entirely — no tab sheet — because the packet is accompanied by the separately-lodged originals.
 - `public_disclosure` — optional string controlling what happens in the **public**
   build. Allowed values:
@@ -1216,6 +1218,44 @@ packet fails the build; a cite into an exhibit withheld in the current
 variant renders without a link. Like `\fixedwidth`, the contents are
 verbatim and exempt from every substitution and check. DOCX carries
 the token blue and underlined (no page link); TXT carries the token.
+
+**Deposition cites need the transcript pages.** Cal. Rules of Court,
+rule 3.1116 requires a paper citing deposition testimony to attach the
+cited pages: (a) a title page naming the deponent and the date of the
+deposition, (b) only the relevant pages, original page numbers
+showing, and (c) the cited testimony marked (highlighted). Without
+them the court has only the declarant's account of the testimony, and
+the other side can object that it is not before the court. In a
+`doctype: pleading` source the build reads the body for named cites,
+`<Name> Dep. <page>:<line>[-<line>|-<page>:<line>]` with further
+references after `,` `;` or `and` (`Doe Dep. 62:16-24, 63:5--8`), and
+for continuations, a parenthetical holding only page:line references
+(`(94:20-95:3.)`, `(Id. at 63:5.)`), which is attributed to the most
+recent named cite before it in the source. It warns on stderr, and
+still builds, when no exhibit (its own, or one reached through
+`exhibit_source`) declares `deposition:` for the cited surname, and
+when a matching excerpt's `transcript_pages:` lacks a cited page:
+
+```
+WARNING: decl.md: deposition testimony cited without a rule 3.1116 transcript excerpt exhibit: Doe Dep.: Doe Dep. 62:16-24 (line 17); 94:20-95:3 (line 17).
+WARNING: decl.md: Doe Dep. cites transcript page 95 that the excerpt (`doe_dep`, transcript_pages: "62-63, 94") does not contain.
+```
+
+```yaml
+exhibits:
+  - shortname: "doe_dep"
+    title: "Excerpts from the Deposition of John Doe (January 2, 2026), with the cited testimony highlighted"
+    path: "doe_dep_excerpt_highlighted.pdf"
+    deposition: "John Doe"
+    transcript_pages: "1, 62-63, 94-95"
+```
+
+With the excerpt attached in this packet, each named cite (name,
+`Dep.`, and its run of references) links to the exhibit's tab sheet;
+continuations are not linked. Not read: letters and `doctype:
+document`, front matter, HTML comments, verbatim text. A bare
+parenthetical with no named cite before it is not attributed. Make the
+excerpt with the `highlight` skill.
 
 **Case names must be italicized, and the build enforces it.** A case
 name in running text that is not inside an italic (or `<u>underlined</u>`)

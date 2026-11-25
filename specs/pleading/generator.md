@@ -220,6 +220,17 @@ sent to a court.
   to its first page. A cite to a page not in the packet fails the
   build; a cite into an exhibit withheld in this variant renders
   without a link. *(tested: pleading/tests/test_bates_links.py)*
+- **Deposition testimony cited in a court paper is attached as a
+  rule 3.1116 excerpt, or the build says so.** In a `doctype:
+  pleading` source, a cite `<Name> Dep. <page>:<line>...`, and a
+  parenthetical of bare page:line references continuing the last such
+  cite, draws a stderr warning (never a failure) when no exhibit, own
+  or through `exhibit_source`, declares `deposition:` for the cited
+  surname, and one naming each cited page a matching excerpt's
+  `transcript_pages:` lacks. `transcript_pages` without `deposition`,
+  or malformed, fails the build. With the excerpt in the packet, a
+  named cite links to the excerpt's tab sheet.
+  *(tested: pleading/tests/test_deposition_excerpts.py)*
 - **A case name in running text is italicized, and the build fails
   otherwise.** Every renderer (PDF, DOCX, TXT) refuses a source whose
   body sets a case name roman: a `Doe v. Roe`, `In re Doe`,

@@ -16,7 +16,10 @@
 # Nested keys are NOT linted. `forms:` holds a per-descriptor block
 # whose field names belong to the form registry, and `exhibits:` and
 # `redactions:` are lists of structured entries; those are validated by
-# the code that consumes them.
+# the code that consumes them. An exhibit entry's keys (shortname,
+# title, path, pages, sealed, public_disclosure, inner_tab_pages,
+# bates_first, deposition, transcript_pages) are documented in
+# pleading_markdown_spec.md, "Exhibit object schema".
 #
 # Adding a key here without wiring it up recreates the exact problem
 # this file exists to prevent. Wire it first.
