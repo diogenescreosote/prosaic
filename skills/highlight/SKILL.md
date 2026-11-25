@@ -78,6 +78,30 @@ mode that placed them. Then:
   `sc open <out.pdf>`. Each box must sit on the words named, nothing
   more. A box on the wrong line on a scan means `--mode image`.
 
+## A deposition excerpt (rule 3.1116)
+
+When a paper cites deposition testimony, the excerpt is required, not
+optional (Cal. Rules of Court, rule 3.1116), and has a fixed shape:
+
+- **Title page first**: the transcript's cover page naming the deponent
+  and the date of the deposition. Include its PDF page in `--pages`.
+- **Only the cited pages**, whole, original page numbers visible.
+  `--pages` counts PDF pages, not transcript pages: map each cited page
+  first, and cut from the full-size transcript, not a four-up condensed
+  one, when there is one.
+- **The cited lines highlighted**: one `--phrase` per cited passage,
+  quoting the testimony as printed (line numbers between words are
+  tolerated). A scanned or deskewed transcript takes `--mode image`.
+
+```bash
+<prosaic>/cli/sc highlight assets/doe_deposition.pdf exhibits/doe_dep_excerpt_highlighted.pdf \
+    --pages 1,64,65,96,97 --phrase "the gate was open" --phrase "it was closed by then"
+```
+
+Declare it with `deposition:` (the deponent as cited) and
+`transcript_pages:` (the original pages it holds), so the build checks
+every cite against it (`drafting-conventions`, judgment rules).
+
 ## Attach it
 
 Attach the output as an ordinary exhibit `path`; its page citations

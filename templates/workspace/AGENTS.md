@@ -137,6 +137,18 @@ case name in every renderer (ADR-0047), listing each line. The one
 exception is a title line that is nothing but the case name and
 number, such as the attachment opener below.
 
+## STOP. A deposition cite attaches the transcript pages
+
+A source that cites testimony (`Doe Dep. 62:16-24, 63:5-8`, or a bare
+`(94:20-95:3.)` continuing it) attaches the cited pages as an exhibit
+under Cal. Rules of Court, rule 3.1116: a title page naming the deponent
+and the date, only the cited pages with their original page numbers,
+the cited lines highlighted (the `highlight` skill). Without them the
+court has only the declarant's word for the testimony, and the other
+side objects that it is not before the court. The exhibit entry says
+`deposition: "Doe"` and `transcript_pages: "1, 62-63, 94-95"`; the
+build warns on a cite with no excerpt or to a page the excerpt lacks.
+
 ## Fixed-width and file links
 
 File paths, hashes, Bates tokens, code, email addresses →
@@ -507,6 +519,10 @@ stderr; do not filter it.
   YAML comment. Recognized keys:
   `<prosaic>/pleading/front_matter_keys.yaml`.
 - **`spaced dash`** — the em-dash rule, in a source.
+- **`deposition testimony cited without a rule 3.1116 transcript
+  excerpt exhibit`** (or **`cites transcript page N that the excerpt
+  ... does not contain`**) — attach or re-cut the excerpt; see the
+  deposition STOP above.
 - **`no --variant specified`** — output landed in `out/<envelope>/`
   rather than a variant subdirectory.
 

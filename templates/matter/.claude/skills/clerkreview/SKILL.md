@@ -27,7 +27,13 @@ between boxes and attachments; attachment numbering matching the form;
 signature and date lines; proof of service present, correct method and
 addresses, timing against the hearing date; page and word limits;
 exhibit tabs and references (and, in a paper answering the other side's,
-exhibit designators in the opposite scheme to theirs, `exhibit_numbering`); anything the local rules require to
+exhibit designators in the opposite scheme to theirs, `exhibit_numbering`); every
+deposition cite (`Doe Dep. 12:3-8`, and bare page:line parentheticals
+continuing one) backed by a transcript excerpt exhibit per Cal. Rules
+of Court, rule 3.1116 (title page naming deponent and date, only the
+cited pages with original numbering, cited lines highlighted), a cite
+with no excerpt or to a page the excerpt lacks flagged as an
+evidentiary objection waiting to happen; anything the local rules require to
 accompany this filing (blank orders, cover sheets, courtesy copies).
 Number findings, reject-at-the-window first, then would-be-continued,
 then cosmetic. Rules for every review: read the sources named above in full before writing

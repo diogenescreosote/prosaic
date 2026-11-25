@@ -21,21 +21,17 @@ Both render contents verbatim in Courier, exempt from the
 em-dash/en-dash/smart-quote substitutions — the construct for file
 paths, hashes, Bates tokens, code, and email addresses. A block form
 (`\fixedwidth{` on its own line, verbatim lines, `}` on its own
-line) handles multi-line material. `\filelink{path}{text}` renders
-the display text the same way, underlined, with a relative-file link
-annotation; relative links resolve only in desktop viewers with the
-target beside the PDF, so say that in the document when it matters.
+line) handles multi-line material; `\filelink{path}{text}` adds a
+relative-file link (desktop viewers only; see the spec).
 
 ## Headings are numbered for you (enforced — the build fails)
 
 The renderer numbers every heading itself: `#` → `I.`, `##` → `A.`,
 `###` → `1.`, restarting under each parent. **Never type a number into
 a heading** (`## I. The privilege applies` prints "A. I. ..." and the
-build refuses it). Pick the level by the printed outline you want; a
-document title is not a heading (`\center{**...**}`); cite your own
-sections by the printed outline. Detail and the `heading_numbers:
-false` escape: `pleading/pleading_markdown_spec.md`, "Automatic section
-numbering."
+build refuses it). A document title is not a heading
+(`\center{**...**}`). Detail and `heading_numbers: false`: the spec,
+"Automatic section numbering."
 
 ## Atomicity classes (enforced by the renderer)
 
@@ -53,6 +49,15 @@ pull orphan lines forward to justify a heading.
 
 ## Judgment rules (yours when composing)
 
+- **A deposition cite attaches the transcript pages** (Cal. Rules of
+  Court, rule 3.1116; the build warns). `Doe Dep. 62:16-24`, or a bare
+  `(94:20-95:3.)` continuing it, needs an exhibit: title page naming
+  deponent and date, only the cited pages with original numbering,
+  cited lines highlighted (`highlight` skill), declaring
+  `deposition: "Doe"` and `transcript_pages: "1, 62-63, 94-95"`
+  (original pages). Without it the court has only the declarant's word
+  and the testimony is not before it. Spec: "Deposition cites need the
+  transcript pages."
 - **One signature per signer per document.** A clause that recites
   the execution date owns its signature (`whereof`); never pair a
   prose execution clause with a separate dated block — that prints
@@ -82,20 +87,16 @@ pull orphan lines forward to justify a heading.
 
 ## Say what the instrument does; never banner what it doesn't
 
-Never open an instrument with a paragraph disclaiming what is NOT
-sought, asserted, or intended: the banner defines the document by its
-negative space, and the other side interprets the negative. A carve-out
-that is legally necessary is **one operative sentence** --- a command in
-the instructions or a scope line --- placed where it operates. Worked
-WRONG/RIGHT examples and the letter/declaration corollary:
-`docs/writing-style.md`, "Say what the instrument does."
+Never open with a paragraph disclaiming what is NOT sought: the other
+side interprets the negative. A necessary carve-out is **one operative
+sentence** placed where it operates. Examples: `docs/writing-style.md`,
+"Say what the instrument does."
 
 ## Release discipline (enforced)
 
-Every build is DRAFT-bannered by default; `--final` is the explicit
-act of releasing, per invocation, never persisted in a source. `sc docuseal send` refuses draft-stamped
-PDFs without `--allow-draft`. `notreal:` remains for hypotheticals
-and simulations whose banner should say what they are. Never build
+Every build is DRAFT-bannered; `--final` releases, per invocation,
+never persisted in a source, and `sc docuseal send` refuses a draft
+without `--allow-draft`. `notreal:` is for hypotheticals. Never build
 `--final` on your own initiative — releasing is the human's act.
 
 ## Filename carries status, once a document leaves `out/`
@@ -109,11 +110,10 @@ examples: `docs/conventions.md`, "Filename carries status."
 ## Source ranking, when conventions conflict
 
 Statutes / Rules of Court / local rules (validity — enforceable)
-> Judicial Council forms (California document grammar)
-> Butterick, *Typography for Lawyers* (pagination mechanics)
-> Garner, *The Redbook* (style) > Adams (contract execution
-structure). Don't use style guides to answer validity questions or
-statutes to answer typography questions.
+> Judicial Council forms (California document grammar) > Butterick,
+*Typography for Lawyers* (pagination) > Garner, *The Redbook* (style)
+> Adams (contract execution). Style guides never answer validity
+questions; statutes never answer typography ones.
 
 Estate execution: [estate-plan](../estate-plan/SKILL.md). References:
 `pleading/pleading_markdown_spec.md` (signature blocks, notarial

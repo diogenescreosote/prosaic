@@ -195,6 +195,15 @@ typewriter equivalent. The one line set roman is a title line that is
 nothing but the case name and number — the opener of a form
 attachment, `Smith v. Roe, 24CV00000` (ADR-0047).
 
+**Deposition testimony is cited by page and line, and the pages are
+attached.** `(Doe Dep. 62:16-24, 63:5--8.)`; a following
+`(94:20--95:3.)` continues the last named cite. Every paper that cites
+testimony attaches the cited pages as an exhibit (Cal. Rules of Court,
+rule 3.1116): a title page naming the deponent and date, only the cited
+pages with original numbering, the cited lines highlighted. The exhibit
+declares `deposition:` and `transcript_pages:`, and the build warns on
+a cite the excerpt does not cover (`skills/drafting-conventions`).
+
 **Statutes are not italicized at all:**
 
 ```md
