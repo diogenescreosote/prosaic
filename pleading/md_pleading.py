@@ -628,7 +628,7 @@ class Exhibit:
     letter: str        # the designator, "C" or "3" (see exhibit_numbering)
     sealed: bool = False
     pages: Optional[str] = None
-    # First Bates token stamped on page 1 of the file ("CAPINAS00001"):
+    # First Bates token stamped on page 1 of the file ("DOE00001"):
     # page n carries the same prefix and width with the number advanced
     # by n-1, so \bates{} references resolve to attached pages.
     bates_first: Optional[str] = None
@@ -1398,7 +1398,7 @@ _CLOSING_PUNCT_CHARS = set(")\u201d\u2019.,;:!?]")
 
 def bates_first_token(ref: str) -> str:
     """The page a \\bates reference links to: the first token of a range
-    ("CAPINAS00001--00002" -> "CAPINAS00001"), or the token itself."""
+    ("DOE00001--00002" -> "DOE00001"), or the token itself."""
     return re.split(r"--|\u2013", ref.strip(), maxsplit=1)[0].strip()
 
 

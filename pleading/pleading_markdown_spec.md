@@ -921,7 +921,7 @@ Each exhibit entry in `exhibits` must be a YAML mapping with these fields:
 - `path` — required string (unless `sealed: true`); relative or absolute pathname to the attachment file. This may also be a variant-aware mapping with `sealed` / `public` branches. Bare filenames default to the sibling `exhibits/` directory next to `src/`.
 - `pages` — optional string; page range selector for PDF attachments (see below)
 - `inner_tab_pages` — optional string, page-range syntax over the **file's** pages; for a prebuilt PDF exhibit that carries exhibits of its own (a signed declaration with its Exhibit A behind it), the pages that are those inner exhibits' tab sheets. Each gets the parent-exhibit line stamped on the packet's copy; the file on disk is never touched. A page the `pages:` selection leaves out fails the build, and so does the key on a markdown exhibit (which marks its own tab sheets) or a non-PDF. See "Exhibits inside exhibits."
-- `bates_first` — optional string; the Bates token stamped on page 1 of the file (`CAPINAS00001`). Page *n* of the file carries the same prefix and digit width with the number advanced by *n*−1, whatever `pages:` selects, so a `\bates{TOKEN}` in the body resolves to the attached page carrying that stamp. Ends in the page-1 number or the build refuses it.
+- `bates_first` — optional string; the Bates token stamped on page 1 of the file (`DOE00001`). Page *n* of the file carries the same prefix and digit width with the number advanced by *n*−1, whatever `pages:` selects, so a `\bates{TOKEN}` in the body resolves to the attached page carrying that stamp. Ends in the page-1 number or the build refuses it.
 - `deposition` — optional string; marks the exhibit as a deposition transcript excerpt (Cal. Rules of Court, rule 3.1116) and names the deponent as the body cites them (`"Doe"` or `"John Doe"`; matched on the surname, case-insensitive). A body cite `Doe Dep. 62:16-24` with no such exhibit draws a build warning; with one, the cite links to the exhibit's tab. See "Deposition cites need the transcript pages."
 - `transcript_pages` — optional string, requires `deposition`; the **original transcript** page numbers the excerpt contains (`"21-24, 62-63, 94-95"`), not the excerpt PDF's own page count. A cited page missing from it draws a build warning. A malformed or reversed range fails the build.
 - `sealed` — optional boolean (default `false`); if `true`, the exhibit is listed on the exhibit list page with a "[Lodged Conditionally Under Seal]" annotation but is **not attached** to the PDF. The `\exhibit{}` reference still resolves to the correct letter. No `path` is required for sealed exhibits. This is the direct attachment switch used by the active build variant. Tab sheets are asymmetric by design: in a **public** build the sealed exhibit gets a placeholder tab sheet labeled `LODGED CONDITIONALLY UNDER SEAL` (the public packet must show the gap); in a sealed-variant build the exhibit is skipped entirely — no tab sheet — because the packet is accompanied by the separately-lodged originals.
@@ -1208,10 +1208,10 @@ The generator supports standard Markdown inline emphasis:
 
 Use `*...*` for case citations, Latin phrases, and other conventionally italicized legal text.
 
-**Bates cites are links.** `\bates{CAPINAS00017}` renders the token
+**Bates cites are links.** `\bates{DOE00017}` renders the token
 verbatim in the fixed-width face, hyperlink blue and underlined, and
 the merged PDF carries an internal link to the attached exhibit page
-stamped with it; `\bates{CAPINAS00001--00002}` displays the range with
+stamped with it; `\bates{DOE00001--00002}` displays the range with
 an en dash and links to its first page. The exhibit supplies the map
 with `bates_first:` (schema below). A cite to a page that is not in the
 packet fails the build; a cite into an exhibit withheld in the current
