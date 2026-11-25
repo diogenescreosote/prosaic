@@ -833,6 +833,25 @@ def test_doclink_is_body_face_dark_blue_relative_file_link():
     assert all(x.link_target == t2 for x in w)
 
 
+def test_closed_exhibit_parenthetical_links_only_itself():
+    """'(Exhibit 6.)' closes on the designator; the link must not run on
+    through the next sentences to a later parenthetical's ')'."""
+    sys.path.insert(0, str(Path(__file__).resolve().parents[3] / "pleading"))
+    import md_pleading
+
+    text = "(Exhibit 6.) She testified. (Doe Dep. 62:16-24.)"
+    w = [md_pleading.StyledWord(t) for t in text.split()]
+    md_pleading.tag_exhibit_links(w, {"6"})
+    assert [x.text for x in w if x.link_target] == ["(Exhibit", "6.)"]
+
+    # An open parenthetical still links through its own close.
+    text = "(Exhibit 7, Responses 1-3.) Next."
+    w = [md_pleading.StyledWord(t) for t in text.split()]
+    md_pleading.tag_exhibit_links(w, {"7"})
+    assert [x.text for x in w if x.link_target] == [
+        "(Exhibit", "7,", "Responses", "1-3.)"]
+
+
 def test_bullet_absorbs_indented_continuation_lines():
     """A hard-wrapped bullet is one block, not a bullet plus a paragraph."""
     body = (

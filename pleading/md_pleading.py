@@ -1274,8 +1274,13 @@ def tag_exhibit_links(words: List[StyledWord], exhibit_letters: set) -> None:
                 words[i + 1].link_target = dest
                 # If the citation is parenthetical, keep the entire parenthetical
                 # clickable rather than only the tiny "Exhibit X" token pair.
-                if word.text != word_text:
+                # "(Exhibit 6.)" closes on the designator itself: extending
+                # past it would swallow the following sentences up to the
+                # next ")" anywhere, e.g. a later "(Smith Dep. 4:1-5.)".
+                if word.text != word_text and ")" not in words[i + 1].text:
                     for j in range(i + 2, len(words)):
+                        if words[j].link_target or words[j].line_break:
+                            break
                         words[j].link_target = dest
                         if ")" in words[j].text:
                             break
